@@ -213,6 +213,15 @@ This confirms the qualitative ingestion layer and hybrid check #8 successfully d
 - **Dual-Lens Reporting:** `render.py` rewritten to output side-by-side Buffett and Marks verdicts in the Executive Summary, dual Part-grouped tables (Sections 3 and 3.6), expanded Qualitative section (Section 3.5), and a new Dual-Lens Synthesis (Section 6) providing pattern interpretation.
 - **Test Suite Overhaul:** Expanded `test_marks.py` (41 tests), rewrote `test_buffett.py` for 14 checks, added `PROMPT_VERSION` caching tests, expanded fixture data, and automated snapshot regeneration (`regen_expected_report.py`). Total tests: 81 passing.
 
+### Correction (v0.3.1)
+The v0.3 build introduced `tests/regen_expected_report.py`, an automatic
+snapshot-regeneration script. This was a methodology error: the snapshot test
+exists to catch unintended `render.py` drift, and a script that captures
+pipeline output into the expected file defeats that purpose. The file has been
+deleted in v0.3.1. Expected snapshot files (`tests/expected_report.md`) are
+hand-edited only from this point forward; if a render change requires updating
+the expected output, edit the specific lines that changed by hand.
+
 ---
 
 ## 12. Marks Lens & Dual-Lens Synthesis
@@ -228,17 +237,33 @@ Sidwell now evaluates companies through two orthogonal lenses:
 
 ---
 
-## 13. v0.3 Asian Paints Results
+## 13. v0.3 / v0.3.1 Asian Paints Results
 
-The v0.3 pipeline was run against `ASIANPAINT.NS`. (Gemini API returned 503, so qualitative evaluation gracefully degraded and soft checks defaulted).
+The pipeline was run against `ASIANPAINT.NS` with a healthy Gemini API, fully populating the qualitative layer.
 
 **Buffett Lens Results (Score: 8/14, Verdict: SKIP):**
-- Failed checks: Moat (Gross margin volatility), Earnings predictability, Margin of Safety (1.9x intrinsic value).
-- Despite high ROIC and conservative balance sheet, it is too expensive and growth is slowing.
+- **Failed checks:** Moat (Gross margin volatility), Strong free-cash-flow generation, Earnings predictability, Liquidity cushion, Capital allocation track record, Margin of safety.
+- **Passed checks:** High ROIC, Conservative balance sheet, ROE without excess leverage, Anti-dilution discipline, Owner orientation, Management coherence, Understandable business, Holdability.
+- Despite the LLM positively identifying owner orientation and holdability, the numeric margin of safety (trading at 9.1x intrinsic value) and deteriorating financial/earnings trends keep it firmly at a SKIP.
 
 **Marks Lens Results (Score: 8/14, Verdict: SKIP):**
-- Failed checks: Deep MoS (Trading at premium), Asymmetric Payoff (Ratio < 3.0), Downside Protection (Equity/MCap low), Multiple Expansion (Trailing P/E > 25), Variant Perception (unavailable), Why Now (unavailable).
-- Lacks a contrarian edge or cyclical dislocation to justify a Marks-style asymmetric entry.
+- **Failed checks:** Deep MoS (Trading at premium), Asymmetric Payoff, Downside Protection (Equity/MCap low), Sector cycle position (late_cycle), Company earnings vs cyclical peak, Patient opportunism (why now: normal_cycle).
+- **Passed checks:** Multiple expansion not exhausted, Sentiment — going against the crowd, Capital structure resilience, FCF stability, Volatility / beta, No single-point failure mode, Variant perception, Management humility.
+- The real qualitative run flipped Variant perception and Management humility to PASS based on specific management statements, but failed Patient opportunism (normal cyclical volatility, not a unique dislocation) and Sector cycle position (late-cycle). Overall, the risk architecture is strong but there is no asymmetric edge.
 
-**Dual-Lens Synthesis:** Pattern: Both SKIP/SKIP — Monitor for change in conditions. The company does not currently pass either framework's rigorous standards.
+**Dual-Lens Synthesis:** Pattern: Both SKIP/SKIP — Monitor for change in conditions.
+
+---
+
+## 14. v0.3 → v0.3.1 Changelog
+
+- Deleted `tests/regen_expected_report.py` (see Section 11 correction).
+- Fixed `reports/render.py` Part ordering: lens sections now render
+  Part A → B → C → D in order, with all checks of each Part grouped together
+  (the v0.3 build emitted C-D-A-B-C-split due to dict-insertion-order iteration).
+- Hand-edited `tests/expected_report.md` to match the corrected Part ordering.
+  Numeric values unchanged; only Part block order and Part C consolidation.
+- Re-ran ASIANPAINT.NS with Gemini available (the v0.3 run had hit 503 and the
+  qualitative-layer end-to-end path was untested with real LLM output). Updated
+  Section 13 with the actual qualitative content.
 

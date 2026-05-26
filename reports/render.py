@@ -7,6 +7,26 @@ logger = logging.getLogger("sidwell.reports.render")
 
 SIDWELL_VERSION = "v0.3"
 
+_PART_ORDER = {"A": 0, "B": 1, "C": 2, "D": 3}
+
+def _sorted_checks(checks: dict) -> list:
+    """
+    Sort checks by (Part order A→D, numeric check index 1→14).
+    Falls back gracefully if a check is missing a 'part' field
+    (treats it as Part Z, sorts last).
+    """
+    def sort_key(item):
+        key, check = item
+        part = check.get("part", "Z")
+        part_idx = _PART_ORDER.get(part, 99)
+        # Extract leading numeric prefix from key (e.g. "12_variant" → 12)
+        try:
+            num = int(key.split("_")[0])
+        except (ValueError, IndexError):
+            num = 999
+        return (part_idx, num)
+    return sorted(checks.items(), key=sort_key)
+
 def format_currency(val: float, is_india: bool) -> str:
     """
     Formats numeric values as currency.
@@ -449,13 +469,12 @@ def _render_lens_table(md: list, lens_results: dict, current_price: float, intri
     }
 
     checks = lens_results["checks"]
-    keys = sorted(checks.keys())
+    sorted_items = _sorted_checks(checks)
 
     current_part = None
     table_open = False
 
-    for key in keys:
-        c = checks[key]
+    for key, c in sorted_items:
         part = c.get("part", "A")
 
         # Emit part header + table header when part changes
@@ -463,9 +482,9 @@ def _render_lens_table(md: list, lens_results: dict, current_price: float, intri
             if table_open:
                 md.append("")
                 # Show part subtotal
-                part_keys = [k for k in keys if checks[k].get("part") == current_part]
-                part_pass = sum(1 for k in part_keys if checks[k]["passed"])
-                md.append(f"_{part_labels.get(current_part, current_part)}: **{part_pass}/{len(part_keys)} passed**_")
+                part_items = [item for item in sorted_items if item[1].get("part") == current_part]
+                part_pass = sum(1 for k, chk in part_items if chk["passed"])
+                md.append(f"_{part_labels.get(current_part, current_part)}: **{part_pass}/{len(part_items)} passed**_")
                 md.append("")
             current_part = part
             md.append(f"### {part_labels.get(part, part)}")
@@ -515,7 +534,7 @@ def _render_lens_table(md: list, lens_results: dict, current_price: float, intri
     # Close last part
     if table_open and current_part:
         md.append("")
-        part_keys = [k for k in keys if checks[k].get("part") == current_part]
-        part_pass = sum(1 for k in part_keys if checks[k]["passed"])
-        md.append(f"_{part_labels.get(current_part, current_part)}: **{part_pass}/{len(part_keys)} passed**_")
+        part_items = [item for item in sorted_items if item[1].get("part") == current_part]
+        part_pass = sum(1 for k, chk in part_items if chk["passed"])
+        md.append(f"_{part_labels.get(current_part, current_part)}: **{part_pass}/{len(part_items)} passed**_")
         md.append("")

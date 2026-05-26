@@ -84,25 +84,6 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 ## 3. Buffett Investor Lens
 All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
 
-### Part C — Management & Capital Allocation
-
-| Check | Status | Value | Threshold | Detail |
-| :--- | :---: | :--- | :--- | :--- |
-| Owner orientation | ✅ | 0.0 / None | Insiders > 5% OR LLM = owner_oriented | Insider ownership: 0.00% (FAIL at >5%). LLM owner-orientation: unavailable |
-| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: SKIPPED (qualitative unavailable); defaulted PASS |
-
-_Part C — Management & Capital Allocation: **3/4 passed**_
-
-### Part D — Margin of Safety & Holdability
-
-| Check | Status | Value | Threshold | Detail |
-| :--- | :---: | :--- | :--- | :--- |
-| Margin of safety | ❌ | Trading at 9.1x intrinsic | > 25.0% | Trading at 9.1x intrinsic value (target ≤ 0.75x) (Price: 2657.80, Intrinsic: 291.69) |
-| Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
-| Holdability (20-year test) | ✅ | N/A | LLM verdict = holdable_20y | Holdability check skipped (qualitative unavailable); defaulted PASS |
-
-_Part D — Margin of Safety & Holdability: **2/3 passed**_
-
 ### Part A — Business Quality
 
 | Check | Status | Value | Threshold | Detail |
@@ -130,35 +111,60 @@ _Part B — Financial Health: **2/3 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Anti-dilution discipline | ✅ | [0 values] | <= 2% growth over 4y | Share count data unavailable; check defaulted PASS |
 | Capital allocation track record | ❌ | -0.0012769063339250764 / False | ROIC not declining > 3pp AND capital returned | ROIC trend (latter-2y vs earlier-2y): -0.13pp; capital returned to shareholders: no |
+| Owner orientation | ✅ | 0.0 / owner_oriented | Insiders > 5% OR LLM = owner_oriented | Insider ownership: 0.00% (FAIL at >5%). LLM owner-orientation: owner_oriented |
+| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: PASS (LLM coherence: coherent). The company's presentation and responses form a logical, unified strategy. They explain the volume-value gap coherently as a function of their deliberate dual-pronged approach to capture both premium luxury customers and lower-end economy upgrades, and the |
 
 _Part C — Management & Capital Allocation: **3/4 passed**_
+
+### Part D — Margin of Safety & Holdability
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Margin of safety | ❌ | Trading at 9.1x intrinsic | > 25.0% | Trading at 9.1x intrinsic value (target ≤ 0.75x) (Price: 2657.80, Intrinsic: 291.69) |
+| Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
+| Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. The core paint and beautification business is highly resilient to 20-year technology disruptions as the underlying consumer need to protect and design physical spaces remains persistent. With a massive retail footprint of over 1.6 lakh outlets and continuous ex |
+
+_Part D — Margin of Safety & Holdability: **2/3 passed**_
 
 **Total Buffett Score**: **8/14**
 
 ## 3.5 Qualitative Analysis
-_Qualitative analysis unavailable: Gemini error: ServerError: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}_
+Based on 1 document(s): 8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf. Model: `gemini-3.5-flash`.
+
+### Forward Guidance
+- **Q4 FY2026** (volume): Management targets maintaining a volume growth momentum in the high single-digit range of 8% to 10% under current market conditions. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+- **Q4 FY2026** (margin): Management expects to maintain their operating (PBDIT) margins within the established guidance band of 18% to 20%. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+- **Next few quarters** (revenue): Management indicates that a value growth rate of 5% to 6% is a realistic expectation in the upcoming quarters, assuming a volume-value gap of 4% to 5% persists. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+
+### Risk Callouts
+- **Competitive Intensity**: The competitive landscape remains intense with the entry of new players and the amalgamation of two existing competitors, which may drive pricing pressure. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+- **Raw Material Price Volatility**: Geopolitical uncertainties pose a risk to key raw material costs, as crude oil and Titanium Dioxide (TiO2) pricing structures remain highly volatile. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+- **Shift in Discretionary Spending**: Changes in lifestyle patterns, such as destination weddings and increased travel, have temporarily deferred traditional home painting frequencies. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+
+### Strategic Themes
+- **Regionalization**: Management has customized product offerings and packaging for 8 to 9 states, driving localized brand equity and consumer connection. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+- **B2B and Industrial Pivot**: Management is heavily capitalizing on the infrastructure boom and private capex through expanding industrial JVs and launching B2B digital service platforms. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+- **Cost Efficiency & Backward Integration**: The company continues its backward integration journey, including a white cement plant, to generate structural cost advantages and preserve margins. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+
+### Tone & Coherence
+- **Tone (current)**: confident
+- **Tone (trajectory)**: stable
+- **Coherence verdict**: coherent
+
+_Management exhibits strong confidence in their proprietary cost-saving models and technology-led service differentiation. Despite near-term challenges like a compressed festive period and muted retail demand, they remain highly optimistic about industrial coatings and B2B growth. They present a clear, steady strategy for defending market share against new competitive entrants without resorting to artificial pricing strategies._
+
+_The company's presentation and responses form a logical, unified strategy. They explain the volume-value gap coherently as a function of their deliberate dual-pronged approach to capture both premium luxury customers and lower-end economy upgrades, and their cost-efficiency narrative aligns perfectly with their margin outperformance._
+
+### Marks-Relevant Signals
+- **Owner orientation**: owner_oriented — Management demonstrates an owner-oriented mindset by rejecting artificial channel-filling practices at quarter-ends to boost paper figures, calling them unproductive. Furthermore, they display exceptional candor by openly highlighting that their Home Decor business expansion has had 'limiting' progr
+- **Holdability (20y)**: holdable_20y — The core paint and beautification business is highly resilient to 20-year technology disruptions as the underlying consumer need to protect and design physical spaces remains persistent. With a massive retail footprint of over 1.6 lakh outlets and continuous expansion into waterproofing and industri
+- **Sector cycle**: late_cycle / Company cycle: mid — The retail decorative paint sector is in a late-cycle phase, characterized by mature real estate trends and a temporary postponement in discretionary home consumer painting cycles. However, the industrial and infrastructure sectors remain highly active. The company is in a mature mid-cycle phase, ag
+- **Variant perception**: present=True, specificity=high. Consensus: 'The market consensus fears that aggressive well-funded new entrants will trigger a price war, significantly eroding Asian Paints' market share and ope'
+- **Management humility**: humble — Management demonstrates humility by openly admitting past underperformance, such as the 'limiting' growth of the Home Decor segment and the direct impairment hits on White Teak. Rather than offering speculative multi-year forecasts or making bold macroeconomic assertions, they honestly declare that 
+- **Why now**: normal_cycle — Normal cyclical volatility and entry of new competitive players.
 
 ## 3.6 Marks Investor Lens
 All 14 checks per Howard Marks's risk-first framework across 4 Parts (frameworks/marks.md):
-
-### Part C — Risk Architecture
-
-| Check | Status | Value | Threshold | Detail |
-| :--- | :---: | :--- | :--- | :--- |
-| Volatility / beta | ✅ | 1.000 | < 1.5 | Beta = 1.00 (< 1.5) |
-| No single-point failure mode | ✅ | 0 | <= 1 concentration/regulatory risk flagged | Concentration/regulatory risks identified: 0 |
-
-_Part C — Risk Architecture: **4/4 passed**_
-
-### Part D — Second-Level Thinking & Contrarianism
-
-| Check | Status | Value | Threshold | Detail |
-| :--- | :---: | :--- | :--- | :--- |
-| Variant perception | ❌ | False | variant_present=true AND specificity=high | Variant perception unavailable; defaulted FAIL |
-| Management humility (knowing what you don't know) | ✅ | N/A | verdict = humble | Management humility check skipped; defaulted PASS |
-| Patient opportunism (why now) | ❌ | N/A | verdict = dislocation_present | Why-now signal unavailable; defaulted FAIL |
-
-_Part D — Second-Level Thinking & Contrarianism: **1/3 passed**_
 
 ### Part A — Margin of Safety & Asymmetric Payoff
 
@@ -175,11 +181,11 @@ _Part A — Margin of Safety & Asymmetric Payoff: **1/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Sector cycle position | ✅ | N/A | trough | early_recovery | mid_cycle | Cycle position unavailable; defaulted PASS (mid_cycle assumed) |
+| Sector cycle position | ❌ | late_cycle | trough | early_recovery | mid_cycle | LLM sector cycle: late_cycle. The retail decorative paint sector is in a late-cycle phase, characterized by mature real estate trends and a temporary postponement in discretionary home consumer painting cycles. However, the industrial and infrastructure sectors remain highly active. The company is i |
 | Company earnings vs cyclical peak | ❌ | 67.16% | > 70% of peak | Latest NI / Peak NI = 67.2% |
 | Sentiment — going against the crowd | ✅ | N/A | Mean rating 2.5-4.0 (mixed/cautious consensus) | Consensus rating unavailable; defaulted PASS |
 
-_Part B — Cycle Position: **2/3 passed**_
+_Part B — Cycle Position: **1/3 passed**_
 
 ### Part C — Risk Architecture
 
@@ -187,8 +193,20 @@ _Part B — Cycle Position: **2/3 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Capital structure resilience | ✅ | 0.36 / 23.48 | Debt/EBITDA < 4x AND Coverage > 4x | Debt/EBITDA = 0.36x, Coverage = 23.48x |
 | FCF stability through downturn | ✅ | 4357900000.000 | All 4 years positive FCF | 4y FCF: [4357900000.0, 27478200000.0, 36075200000.0, 25938900000.0] |
+| Volatility / beta | ✅ | 1.000 | < 1.5 | Beta = 1.00 (< 1.5) |
+| No single-point failure mode | ✅ | 0 | <= 1 concentration/regulatory risk flagged | Concentration/regulatory risks identified: 0 |
 
 _Part C — Risk Architecture: **4/4 passed**_
+
+### Part D — Second-Level Thinking & Contrarianism
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Variant perception | ✅ | True | variant_present=true AND specificity=high | Variant: True, Specificity: high. Consensus: 'The market consensus fears that aggressive well-funded new entrants will trigger a price war, significantly eroding Asian Paints' market share and operating margins.' | Company view: 'Management believes they can sustain high margins and defend their mar |
+| Management humility (knowing what you don't know) | ✅ | humble | verdict = humble | LLM humility verdict: humble. Management demonstrates humility by openly admitting past underperformance, such as the 'limiting' growth of the Home Decor segment and the direct impairment hits on White Teak. Rather than offering speculative multi-year forecasts or making bold macroeconomic assertion |
+| Patient opportunism (why now) | ❌ | normal_cycle | verdict = dislocation_present | Why-now: normal_cycle. Event: Normal cyclical volatility and entry of new competitive players.. The company's current environment reflects standard cyclical fluctuations rather than an asset distress or a unique regulatory dislocation. The muted growth was driven by normal seasonal shifts like a del |
+
+_Part D — Second-Level Thinking & Contrarianism: **2/3 passed**_
 
 **Total Marks Score**: **8/14**
 

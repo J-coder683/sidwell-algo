@@ -78,25 +78,6 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 ## 3. Buffett Investor Lens
 All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
 
-### Part C — Management & Capital Allocation
-
-| Check | Status | Value | Threshold | Detail |
-| :--- | :---: | :--- | :--- | :--- |
-| Owner orientation | ✅ | 0.1 / owner_oriented | Insiders > 5% OR LLM = owner_oriented | Insider ownership: 10.00% (PASS at >5%). LLM owner-orientation: owner_oriented |
-| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: PASS (LLM coherence: coherent). Numeric claims tie out across documents and strategy is consistent. |
-
-_Part C — Management & Capital Allocation: **4/4 passed**_
-
-### Part D — Margin of Safety & Holdability
-
-| Check | Status | Value | Threshold | Detail |
-| :--- | :---: | :--- | :--- | :--- |
-| Margin of safety | ❌ | Trading at 1.9x intrinsic | > 25.0% | Trading at 1.9x intrinsic value (target ≤ 0.75x) (Price: 50.00, Intrinsic: 27.02) |
-| Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
-| Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. Demand category structurally enduring; no single-technology dependence identified in documents. |
-
-_Part D — Margin of Safety & Holdability: **2/3 passed**_
-
 ### Part A — Business Quality
 
 | Check | Status | Value | Threshold | Detail |
@@ -124,8 +105,20 @@ _Part B — Financial Health: **3/3 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Anti-dilution discipline | ✅ | [4 values] | <= 2% growth over 4y | Share count growth (4y): +0.00% (threshold: <= +2%) |
 | Capital allocation track record | ✅ | 0.010928017051142658 / True | ROIC not declining > 3pp AND capital returned | ROIC trend (latter-2y vs earlier-2y): +1.09pp; capital returned to shareholders: yes |
+| Owner orientation | ✅ | 0.1 / owner_oriented | Insiders > 5% OR LLM = owner_oriented | Insider ownership: 10.00% (PASS at >5%). LLM owner-orientation: owner_oriented |
+| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: PASS (LLM coherence: coherent). Numeric claims tie out across documents and strategy is consistent. |
 
 _Part C — Management & Capital Allocation: **4/4 passed**_
+
+### Part D — Margin of Safety & Holdability
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Margin of safety | ❌ | Trading at 1.9x intrinsic | > 25.0% | Trading at 1.9x intrinsic value (target ≤ 0.75x) (Price: 50.00, Intrinsic: 27.02) |
+| Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
+| Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. Demand category structurally enduring; no single-technology dependence identified in documents. |
+
+_Part D — Margin of Safety & Holdability: **2/3 passed**_
 
 **Total Buffett Score**: **13/14**
 
@@ -161,25 +154,6 @@ _Numeric claims tie out across documents and strategy is consistent._
 ## 3.6 Marks Investor Lens
 All 14 checks per Howard Marks's risk-first framework across 4 Parts (frameworks/marks.md):
 
-### Part C — Risk Architecture
-
-| Check | Status | Value | Threshold | Detail |
-| :--- | :---: | :--- | :--- | :--- |
-| Volatility / beta | ✅ | 0.850 | < 1.5 | Beta = 0.85 (< 1.5) |
-| No single-point failure mode | ✅ | 0 | <= 1 concentration/regulatory risk flagged | Concentration/regulatory risks identified: 0 |
-
-_Part C — Risk Architecture: **4/4 passed**_
-
-### Part D — Second-Level Thinking & Contrarianism
-
-| Check | Status | Value | Threshold | Detail |
-| :--- | :---: | :--- | :--- | :--- |
-| Variant perception | ✅ | True | variant_present=true AND specificity=high | Variant: True, Specificity: high. Consensus: 'Market expects continued strong growth driven by premiumisation.' | Company view: 'Management guides modest growth, citing cyclical headwinds and competitive intensity.' |
-| Management humility (knowing what you don't know) | ✅ | humble | verdict = humble | LLM humility verdict: humble. Management declines multi-year forecast; acknowledges raw material visibility limited to 2 quarters; references two past allocation errors by name. |
-| Patient opportunism (why now) | ✅ | dislocation_present | verdict = dislocation_present | Why-now: dislocation_present. Event: Post-Q3 FY26 commodity-cost shock has compressed multiples temporarily.. Sector has de-rated 25% in trailing 12 months; entry timing favorable due to forced selling from FII redemptions, not fundamental deterioration. |
-
-_Part D — Second-Level Thinking & Contrarianism: **3/3 passed**_
-
 ### Part A — Margin of Safety & Asymmetric Payoff
 
 | Check | Status | Value | Threshold | Detail |
@@ -207,8 +181,20 @@ _Part B — Cycle Position: **3/3 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Capital structure resilience | ✅ | 0.65 / 13.31 | Debt/EBITDA < 4x AND Coverage > 4x | Debt/EBITDA = 0.65x, Coverage = 13.31x |
 | FCF stability through downturn | ✅ | 11.500 | All 4 years positive FCF | 4y FCF: [11.5, 12.8, 14.23, 15.8] |
+| Volatility / beta | ✅ | 0.850 | < 1.5 | Beta = 0.85 (< 1.5) |
+| No single-point failure mode | ✅ | 0 | <= 1 concentration/regulatory risk flagged | Concentration/regulatory risks identified: 0 |
 
 _Part C — Risk Architecture: **4/4 passed**_
+
+### Part D — Second-Level Thinking & Contrarianism
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Variant perception | ✅ | True | variant_present=true AND specificity=high | Variant: True, Specificity: high. Consensus: 'Market expects continued strong growth driven by premiumisation.' | Company view: 'Management guides modest growth, citing cyclical headwinds and competitive intensity.' |
+| Management humility (knowing what you don't know) | ✅ | humble | verdict = humble | LLM humility verdict: humble. Management declines multi-year forecast; acknowledges raw material visibility limited to 2 quarters; references two past allocation errors by name. |
+| Patient opportunism (why now) | ✅ | dislocation_present | verdict = dislocation_present | Why-now: dislocation_present. Event: Post-Q3 FY26 commodity-cost shock has compressed multiples temporarily.. Sector has de-rated 25% in trailing 12 months; entry timing favorable due to forced selling from FII redemptions, not fundamental deterioration. |
+
+_Part D — Second-Level Thinking & Contrarianism: **3/3 passed**_
 
 **Total Marks Score**: **11/14**
 
