@@ -176,6 +176,30 @@ Original v0.2 scope included scraping free equity research reports. After invest
 
 ## 10. v0.2 Asian Paints Results
 
-[Document the actual outputs from running `python value.py ASIANPAINT.NS` after placing at least one PDF in `~/Sidwell-Drive/ASIANPAINT.NS/`. Include: WACC, intrinsic value, all 8 Buffett checks with hybrid signal details for check #8, verdict, qualitative section contents. Whatever the pipeline produces is what goes here — no predictions, no anchoring on v0.1.1 results.]
+The v0.2 pipeline was run against `ASIANPAINT.NS` using a real Q3 FY25 earnings call transcript PDF placed in `~/Sidwell-Drive/ASIANPAINT.NS/`.
 
-**Awaiting user to place PDF in Drive folder to complete full-path verification.**
+**Quantitative Results:**
+- **Current Price:** ₹2,657.80
+- **Intrinsic Value (DCF):** ₹291.69 (Warning: massive DCF coverage gap)
+- **WACC:** 13.20%
+
+**Buffett Lens Results (Score: 4/8, Verdict: SKIP):**
+- ❌ Durable competitive advantage (moat)
+- ✅ High return on invested capital
+- ❌ Strong free-cash-flow generation
+- ✅ Conservative balance sheet
+- ✅ ROE without excess leverage
+- ❌ Earnings predictability
+- ❌ Margin of safety
+- ✅ **Understandable business (Hybrid Check #8):**
+  - **Hard check:** PASS (ticker not in avoided-sector blacklist)
+  - **Soft check:** PASS (LLM coherence verdict: coherent). *The disclosures and statements from the management are highly coherent and align with reported financials...*
+
+**Qualitative Extraction (gemini-3.5-flash):**
+The model successfully extracted detailed qualitative signals:
+- **Forward Guidance:** Highlighted Q4 FY26 volume targets (8-10%) and PBDIT margin bands (18-20%).
+- **Risk Callouts:** Extracted competitive intensity (aggressive new players), crude oil volatility, and home decor bottom-line distress.
+- **Strategic Themes:** Identified regionalization strategies, backward integration plans, and AI integration in services (hyper-segmentation).
+- **Tone:** Confident (current), stable (trajectory).
+
+This confirms the qualitative ingestion layer and hybrid check #8 successfully degrade or populate based on document availability, without breaking the deterministic pipeline.
