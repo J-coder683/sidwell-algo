@@ -1,7 +1,7 @@
-# Sidwell — Personal Investment-Decision Engine (v0.1)
+# Sidwell — Personal Investment-Decision Engine (v0.3)
 
 Sidwell is a Python tool that values companies and applies investor frameworks to produce investment recommendations.
-Version 0.1 (v0.1) implements the core **DCF (Discounted Cash Flow)** valuation engine and **Warren Buffett's 8 investment checks** for public market equities. Version 0.2 adds a **qualitative ingestion layer** that reads PDF documents (concall transcripts, investor decks, MD&A sections) from a Drive-synced folder and runs structured Gemini extraction, integrating a coherence signal into Buffett check #8.
+Version 0.3 (v0.3) implements the core **DCF (Discounted Cash Flow)** valuation engine, **Warren Buffett's 14 investment checks**, and **Howard Marks's 14 risk-first checks** for public market equities. Version 0.3 includes a **qualitative ingestion layer** that reads PDF documents (concall transcripts, investor decks, MD&A sections) from a Drive-synced folder and runs structured Gemini extraction, integrating a coherence signal, management humility, cycle position, and more into the respective checks.
 
 ## Directory Structure
 

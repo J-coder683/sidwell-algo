@@ -200,6 +200,45 @@ The model successfully extracted detailed qualitative signals:
 - **Forward Guidance:** Highlighted Q4 FY26 volume targets (8-10%) and PBDIT margin bands (18-20%).
 - **Risk Callouts:** Extracted competitive intensity (aggressive new players), crude oil volatility, and home decor bottom-line distress.
 - **Strategic Themes:** Identified regionalization strategies, backward integration plans, and AI integration in services (hyper-segmentation).
-- **Tone:** Confident (current), stable (trajectory).
-
 This confirms the qualitative ingestion layer and hybrid check #8 successfully degrade or populate based on document availability, without breaking the deterministic pipeline.
+
+---
+
+## 11. v0.2 → v0.3 Changelog
+
+- **Added Howard Marks Investor Lens:** Implemented 14 risk-first checks across 4 parts (MoS & Asymmetric Payoff, Cycle Position, Risk Architecture, Contrarianism). Verdict thresholds: BUY>=11+MoS+Asymmetry, WAIT>=9+!MoS, WATCH>=9, SKIP.
+- **Refactored Buffett Lens (8 → 14 checks):** Expanded the original 8 checks into 14 across 4 parts (Business Quality, Financial Health, Management & Capital Allocation, Margin of Safety & Holdability) matching `frameworks/buffett.md`. Verdict thresholds updated.
+- **Expanded Qualitative Schema:** Upgraded prompt to `v0.3` to extract 9 fields, adding `owner_orientation_signal`, `holdability_assessment`, `cycle_position`, `variant_perception`, `management_humility`, and `why_now_signal`. Cache keys are now strictly versioned (`PROMPT_VERSION="v0.3"`) to auto-invalidate stale extractions on schema change.
+- **Expanded Financial Data (`data/public.py`):** Fetched 6 new yfinance indicators (`insider_ownership`, `stock_beta`, `trailing_pe`, `recommendation_mean`, `dividend_yield`, `historical_shares`).
+- **Dual-Lens Reporting:** `render.py` rewritten to output side-by-side Buffett and Marks verdicts in the Executive Summary, dual Part-grouped tables (Sections 3 and 3.6), expanded Qualitative section (Section 3.5), and a new Dual-Lens Synthesis (Section 6) providing pattern interpretation.
+- **Test Suite Overhaul:** Expanded `test_marks.py` (41 tests), rewrote `test_buffett.py` for 14 checks, added `PROMPT_VERSION` caching tests, expanded fixture data, and automated snapshot regeneration (`regen_expected_report.py`). Total tests: 81 passing.
+
+---
+
+## 12. Marks Lens & Dual-Lens Synthesis
+
+Sidwell now evaluates companies through two orthogonal lenses:
+1. **Warren Buffett Lens (Section 3):** Seeks durable compounders (high ROIC, stable moat, pristine balance sheet) to buy at a fair price and hold forever.
+2. **Howard Marks Lens (Section 3.6):** Seeks asymmetric mispricings and cyclical dislocations. Emphasizes downside protection, capital structure resilience, variant perception, and patient opportunism.
+
+**The disagreement between lenses IS the insight:**
+- **Both BUY:** Rare, high-conviction signal. Quality compounder available at deep distress.
+- **Buffett favors / Marks SKIP:** Quality business at fair price but no cyclical edge or asymmetric payoff. Suitable for permanent-capital, long-horizon holders.
+- **Marks favors / Buffett SKIP:** Cyclical opportunity at deep discount but business quality fails Buffett's quality bars. Tradeable trough opportunity; not a forever-hold.
+
+---
+
+## 13. v0.3 Asian Paints Results
+
+The v0.3 pipeline was run against `ASIANPAINT.NS`. (Gemini API returned 503, so qualitative evaluation gracefully degraded and soft checks defaulted).
+
+**Buffett Lens Results (Score: 8/14, Verdict: SKIP):**
+- Failed checks: Moat (Gross margin volatility), Earnings predictability, Margin of Safety (1.9x intrinsic value).
+- Despite high ROIC and conservative balance sheet, it is too expensive and growth is slowing.
+
+**Marks Lens Results (Score: 8/14, Verdict: SKIP):**
+- Failed checks: Deep MoS (Trading at premium), Asymmetric Payoff (Ratio < 3.0), Downside Protection (Equity/MCap low), Multiple Expansion (Trailing P/E > 25), Variant Perception (unavailable), Why Now (unavailable).
+- Lacks a contrarian edge or cyclical dislocation to justify a Marks-style asymmetric entry.
+
+**Dual-Lens Synthesis:** Pattern: Both SKIP/SKIP — Monitor for change in conditions. The company does not currently pass either framework's rigorous standards.
+
