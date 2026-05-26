@@ -3,10 +3,12 @@ import sys
 import argparse
 import logging
 from data import public
+from data import documents as doc_module
 from valuation import dcf
 from lenses import buffett
 from reports import render
 from reports.render import SIDWELL_VERSION
+from analysis import qualitative
 
 # Setup logging
 logging.basicConfig(
@@ -67,12 +69,21 @@ def main():
         
         # Step 4: Run DCF Valuation Engine
         dcf_results = dcf.run_dcf_valuation(financials, damodaran_data, rf_rate)
-        
-        # Step 5: Evaluate Buffett Investor Lens
-        buffett_results = buffett.evaluate_buffett_lens(financials, dcf_results)
-        
-        # Step 6: Render Markdown Report and Save
-        report_path = render.render_markdown_report(dcf_results, buffett_results, financials)
+
+        # Step 5: Discover documents and run qualitative analysis (graceful degrade)
+        docs = doc_module.discover_documents(ticker)
+        qualitative_results = qualitative.extract_qualitative(ticker, docs)
+
+        # Step 6: Evaluate Buffett Investor Lens (hybrid check #8 uses qualitative)
+        buffett_results = buffett.evaluate_buffett_lens(
+            financials, dcf_results, qualitative_results=qualitative_results
+        )
+
+        # Step 7: Render Markdown Report and Save
+        report_path = render.render_markdown_report(
+            dcf_results, buffett_results, financials,
+            qualitative_results=qualitative_results,
+        )
         
         # Print a short console summary
         print("\n" + "="*50)
@@ -84,6 +95,15 @@ def main():
         print(f"Buffett Score   : {buffett_results['score']}/8")
         print(f"Verdict         : {buffett_results['verdict']}")
         print(f"Reasoning       : {buffett_results['reason']}")
+        if qualitative_results.get("status") == "available":
+            print(
+                f"Qualitative     : {len(docs)} doc(s) analyzed via "
+                f"{qualitative_results.get('model')}"
+            )
+        else:
+            print(
+                f"Qualitative     : unavailable ({qualitative_results.get('reason')})"
+            )
         print("="*50)
         print(f"Full report written to: {report_path}")
         print("="*50 + "\n")

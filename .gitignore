@@ -50,3 +50,11 @@ desktop.ini
 
 # Antigravity / agent artifacts that aren't part of the project
 .antigravity/
+
+# Knowledge base — reference materials, mostly copyrighted (books, articles,
+# transcripts). Used locally to inform framework specs, but never committed.
+# Treat as an Obsidian vault — lives on disk, stays out of git.
+knowledge/
+
+# Local helper scripts that aren't part of the production pipeline
+convert_reference.py

@@ -83,9 +83,30 @@ All 8 checks per Warren Buffett's framework (distilled from annual letters):
 | ROE without excess leverage | ✅ | 22.82% / 60.00% | ROE > 15% & Equity/Assets > 40% | 4y avg ROE = 22.82%, Equity/Assets = 60.00% |
 | Earnings predictability | ✅ | 10.00% / 0.00% | 5% < CAGR < 30% & YoY Growth StDev < 10.0% | Revenue CAGR = 10.00%, YoY Growth StDev = 0.00% |
 | Margin of safety | ❌ | Trading at 1.9x intrinsic value (target ≤ 0.75x) | > 25.0% | Trading at 1.9x intrinsic value (target ≤ 0.75x) (Price: 50.00, Intrinsic: 27.02) |
-| Understandable business | ✅ | True | True | Business is within standard circle of competence |
+| Understandable business | ✅ | Hard: PASS / Soft: PASS | Both signals must pass | Hard check: PASS (ticker not in avoided-sector blacklist). Soft check: PASS (LLM coherence verdict: coherent). Numeric claims tie out across documents and strategy is consistent. |
 
 **Total Buffett Score**: **7/8**
+
+## 3.5 Qualitative Analysis
+Based on 1 document(s): fixture_concall.pdf. Model: `gemini-1.5-flash`.
+
+### Forward Guidance
+- **FY27** (revenue): Management expects 10% revenue growth driven by capacity expansion. _[fixture_concall.pdf]_
+
+### Risk Callouts
+- **input cost volatility**: Raw material prices remain a watchpoint. _[fixture_concall.pdf]_
+
+### Strategic Themes
+- **premium product mix**: Mix shift toward premium SKUs continues. _[fixture_concall.pdf]_
+
+### Tone & Coherence
+- **Tone (current)**: confident
+- **Tone (trajectory)**: stable
+- **Coherence verdict**: coherent
+
+_Management remained confident across the period, with a stable narrative._
+
+_Numeric claims tie out across documents and strategy is consistent._
 
 ## 4. Margin-of-Safety Check
 Current Stock Price: **₹50.00**

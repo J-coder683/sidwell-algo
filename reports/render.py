@@ -25,6 +25,7 @@ def render_markdown_report(
     dcf_results: dict,
     buffett_results: dict,
     financials: dict,
+    qualitative_results: dict = None,
     generated_at: datetime = None,
     output_dir: Path = None
 ) -> Path:
@@ -227,6 +228,14 @@ def render_markdown_report(
                 v_str = f"Trading at {current_price/intrinsic_val:.1f}x intrinsic value (target ≤ 0.75x)"
             else:
                 v_str = f"{(intrinsic_val - current_price)/intrinsic_val*100:.2f}%"
+        elif key == "8_understandable":
+            # value is (hard_pass: bool, soft_pass: bool)
+            if isinstance(v, tuple) and len(v) == 2:
+                hard_s = "PASS" if v[0] else "FAIL"
+                soft_s = "PASS" if v[1] else "FAIL" if v[1] is False else "SKIPPED"
+                v_str = f"Hard: {hard_s} / Soft: {soft_s}"
+            else:
+                v_str = str(v)
         elif isinstance(v, float):
             v_str = f"{v*100:.2f}%" if "%" in c["threshold_str"] else f"{v:.2f}"
         elif isinstance(v, tuple):
@@ -245,8 +254,74 @@ def render_markdown_report(
     md.append("")
     md.append(f"**Total Buffett Score**: **{buffett_results['score']}/8**")
     md.append("")
-    
-    # 4. Margin of Safety
+
+    # 3.5 Qualitative Analysis (v0.2)
+    md.append("## 3.5 Qualitative Analysis")
+    if qualitative_results is None or qualitative_results.get("status") != "available":
+        reason = (qualitative_results or {}).get("reason", "Not run")
+        md.append(f"_Qualitative analysis unavailable: {reason}_")
+        md.append("")
+    else:
+        docs = qualitative_results.get("documents_used", [])
+        md.append(
+            f"Based on {len(docs)} document(s): "
+            f"{', '.join(docs)}. Model: `{qualitative_results.get('model')}`."
+        )
+        md.append("")
+
+        # Forward guidance
+        md.append("### Forward Guidance")
+        guidance = qualitative_results.get("forward_guidance", [])
+        if guidance:
+            for g in guidance:
+                md.append(
+                    f"- **{g.get('period', '?')}** ({g.get('metric', '?')}): "
+                    f"{g.get('statement', '')} _[{g.get('source_doc', '?')}]_"
+                )
+        else:
+            md.append("_No forward guidance extracted._")
+        md.append("")
+
+        # Risk callouts
+        md.append("### Risk Callouts")
+        risks = qualitative_results.get("risk_callouts", [])
+        if risks:
+            for r in risks:
+                md.append(
+                    f"- **{r.get('risk', '?')}**: {r.get('context', '')} "
+                    f"_[{r.get('source_doc', '?')}]_"
+                )
+        else:
+            md.append("_No risks extracted._")
+        md.append("")
+
+        # Strategic themes
+        md.append("### Strategic Themes")
+        themes = qualitative_results.get("strategic_themes", [])
+        if themes:
+            for t in themes:
+                md.append(
+                    f"- **{t.get('theme', '?')}**: {t.get('evidence', '')} "
+                    f"_[{t.get('source_doc', '?')}]_"
+                )
+        else:
+            md.append("_No strategic themes extracted._")
+        md.append("")
+
+        # Tone & coherence
+        tone = qualitative_results.get("tone_assessment", {}) or {}
+        coh = qualitative_results.get("coherence_assessment", {}) or {}
+        md.append("### Tone & Coherence")
+        md.append(f"- **Tone (current)**: {tone.get('current', '?')}")
+        md.append(f"- **Tone (trajectory)**: {tone.get('trajectory', '?')}")
+        md.append(f"- **Coherence verdict**: {coh.get('verdict', '?')}")
+        md.append("")
+        if tone.get("notes"):
+            md.append(f"_{tone['notes']}_")
+            md.append("")
+        if coh.get("reasoning"):
+            md.append(f"_{coh['reasoning']}_")
+            md.append("")
     md.append("## 4. Margin-of-Safety Check")
     checks = buffett_results["checks"]
     mos = checks["7_margin_of_safety"]["value"]

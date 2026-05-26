@@ -185,3 +185,65 @@ Sum of PV of Explicit Cash Flows = `16.9490 + 16.6024 + 16.2627 + 15.9301 + 15.6
 
 **Total Buffett Score**: `7/8`
 **Final Verdict**: `WAIT` (Quality business at wrong price. Alert when price drops to ₹20.27)
+
+---
+
+## 6. Qualitative Mock (Section 3.5 — v0.2)
+
+The `mock_qualitative` pytest fixture (defined in `tests/conftest.py`) has
+`status = "available"`, so the "available" branch of the renderer fires.
+
+### Fixture values and what render.py produces from them
+
+**Header line** (from `documents_used` and `model`):
+```
+Based on 1 document(s): fixture_concall.pdf. Model: `gemini-1.5-flash`.
+```
+
+**Forward Guidance** (1 item):
+```
+- **FY27** (revenue): Management expects 10% revenue growth driven by capacity expansion. _[fixture_concall.pdf]_
+```
+
+**Risk Callouts** (1 item):
+```
+- **input cost volatility**: Raw material prices remain a watchpoint. _[fixture_concall.pdf]_
+```
+
+**Strategic Themes** (1 item):
+```
+- **premium product mix**: Mix shift toward premium SKUs continues. _[fixture_concall.pdf]_
+```
+
+**Tone & Coherence header lines**:
+```
+- **Tone (current)**: confident
+- **Tone (trajectory)**: stable
+- **Coherence verdict**: coherent
+```
+
+**Tone notes paragraph** (italic, from `tone_assessment.notes`):
+```
+_Management remained confident across the period, with a stable narrative._
+```
+
+**Coherence reasoning paragraph** (italic, from `coherence_assessment.reasoning`):
+```
+_Numeric claims tie out across documents and strategy is consistent._
+```
+
+**Check #8 in the Buffett lens table** — with `mock_qualitative` having
+`coherence_assessment.verdict = "coherent"`:
+- `hard_pass = True` (FICTITIOUS.NS not in blacklist)
+- `soft_pass = True` (verdict == "coherent")
+- `check_8_passed = True`
+- `value = (True, True)` → renders as `Hard: PASS / Soft: PASS`
+- `detail` = "Hard check: PASS (ticker not in avoided-sector blacklist). Soft check: PASS (LLM coherence verdict: coherent). Numeric claims tie out across documents and strategy is consistent."
+
+So the check #8 row in the Buffett table changes from v0.1.1 to v0.2 as follows:
+```
+Before: | Understandable business | ✅ | True | True | Business is within standard circle of competence |
+After:  | Understandable business | ✅ | Hard: PASS / Soft: PASS | Both signals must pass | Hard check: PASS (ticker not in avoided-sector blacklist). Soft check: PASS (LLM coherence verdict: coherent). Numeric claims tie out across documents and strategy is consistent. |
+```
+
+Score remains 7/8 (check #8 still passes). Verdict remains WAIT.

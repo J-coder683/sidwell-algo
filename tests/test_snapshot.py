@@ -7,15 +7,15 @@ from lenses.buffett import evaluate_buffett_lens
 from reports.render import render_markdown_report
 from tests.fixture_company import FIXTURE_INPUTS, FIXTURE_MACRO, FIXTURE_RISK_FREE_RATE
 
-def test_regression_snapshot():
+def test_regression_snapshot(mock_qualitative):
     financials = FIXTURE_INPUTS.copy()
     macro = FIXTURE_MACRO.copy()
     rf = FIXTURE_RISK_FREE_RATE
-    
+
     # Run pipeline
     dcf_res = run_dcf_valuation(financials, macro, rf)
-    buffett_res = evaluate_buffett_lens(financials, dcf_res)
-    
+    buffett_res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=mock_qualitative)
+
     # Freeze the generated_at date to 2026-01-01 00:00:00
     frozen_date = datetime(2026, 1, 1, 0, 0, 0)
     
@@ -27,6 +27,7 @@ def test_regression_snapshot():
     with patch("builtins.open", mock_open()) as mock_file:
         report_path = render_markdown_report(
             dcf_res, buffett_res, financials,
+            qualitative_results=mock_qualitative,
             generated_at=frozen_date,
             output_dir=Path("output")
         )

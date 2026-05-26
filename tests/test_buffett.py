@@ -76,3 +76,95 @@ def test_buffett_lens_skip():
     
     assert res["score"] < 6
     assert res["verdict"] == "SKIP"
+
+
+# ---------------------------------------------------------------------------
+# Hybrid check #8 tests (v0.2)
+# ---------------------------------------------------------------------------
+
+def _make_unavailable_qualitative():
+    return {
+        "status": "unavailable",
+        "reason": "No documents found in Drive folder",
+        "forward_guidance": [],
+        "risk_callouts": [],
+        "strategic_themes": [],
+        "tone_assessment": {"current": None, "trajectory": None, "notes": None},
+        "coherence_assessment": {"verdict": None, "reasoning": None},
+        "documents_used": [],
+        "model": None,
+    }
+
+
+def _make_available_qualitative(verdict: str):
+    return {
+        "status": "available",
+        "model": "gemini-1.5-flash",
+        "documents_used": ["test.pdf"],
+        "forward_guidance": [],
+        "risk_callouts": [],
+        "strategic_themes": [],
+        "tone_assessment": {"current": "confident", "trajectory": "stable", "notes": "Fine."},
+        "coherence_assessment": {"verdict": verdict, "reasoning": "Because."},
+    }
+
+
+def test_check8_qualitative_unavailable_behaves_like_v011():
+    """When qualitative is unavailable, check #8 uses hard blacklist only (v0.1.1 behavior)."""
+    financials = get_perfect_financials()  # ticker = "PERFECT", not in blacklist
+    dcf_res = get_perfect_dcf(100.0)
+    qualitative = _make_unavailable_qualitative()
+
+    res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
+    check8 = res["checks"]["8_understandable"]
+
+    assert check8["passed"] is True, "Hard-only should pass for PERFECT ticker"
+    assert "SKIPPED" in check8["detail"]
+
+
+def test_check8_coherent_verdict_passes():
+    """When qualitative available and verdict is coherent, hard+soft both pass → check passes."""
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+    qualitative = _make_available_qualitative("coherent")
+
+    res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
+    check8 = res["checks"]["8_understandable"]
+
+    assert check8["passed"] is True
+    hard_pass, soft_pass = check8["value"]
+    assert hard_pass is True
+    assert soft_pass is True
+    assert "PASS" in check8["detail"]
+
+
+def test_check8_incoherent_verdict_fails_even_if_hard_passes():
+    """When qualitative available and verdict is incoherent, check #8 fails even though
+    ticker is not in the hard blacklist."""
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+    qualitative = _make_available_qualitative("incoherent")
+
+    res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
+    check8 = res["checks"]["8_understandable"]
+
+    assert check8["passed"] is False
+    hard_pass, soft_pass = check8["value"]
+    assert hard_pass is True   # ticker not in blacklist
+    assert soft_pass is False  # LLM said incoherent
+
+
+def test_check8_blacklisted_ticker_fails_regardless_of_soft():
+    """Ticker in blacklist → hard FAIL → check #8 fails even if LLM says coherent."""
+    financials = get_perfect_financials()
+    financials["ticker"] = "BTC-USD"
+    dcf_res = get_perfect_dcf(100.0)
+    qualitative = _make_available_qualitative("coherent")
+
+    res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
+    check8 = res["checks"]["8_understandable"]
+
+    assert check8["passed"] is False
+    hard_pass, soft_pass = check8["value"]
+    assert hard_pass is False  # BTC is in blacklist
+    assert soft_pass is True   # LLM said coherent but it doesn't matter

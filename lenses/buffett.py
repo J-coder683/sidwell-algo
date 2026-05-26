@@ -3,13 +3,19 @@ import logging
 
 logger = logging.getLogger("sidwell.lenses.buffett")
 
-def evaluate_buffett_lens(financials: dict, dcf_results: dict) -> dict:
+def evaluate_buffett_lens(
+    financials: dict,
+    dcf_results: dict,
+    qualitative_results: dict = None,
+) -> dict:
     """
     Evaluates a company's financials and DCF results against Warren Buffett's 8 checks.
-    
+
     financials: dict of historical financials (from public.fetch_financials)
     dcf_results: dict of DCF calculations (from dcf.run_dcf_valuation)
-    
+    qualitative_results: optional dict from analysis.qualitative (v0.2+).
+        When None or status='unavailable', check #8 uses hard blacklist only.
+
     Returns a dict with check details, total score, and verdict.
     """
     hist_revenue = financials["revenue"]
@@ -180,23 +186,42 @@ def evaluate_buffett_lens(financials: dict, dcf_results: dict) -> dict:
         "detail": mos_detail
     }
     
-    # 8. Understandable business
-    # Test: Default True unless specific sector/industry checks fail (manual list)
-    # We can inspect the ticker to flag complex companies
+    # 8. Understandable business — hybrid check (v0.2)
+    # Hard signal: deterministic blacklist of avoided sectors.
+    # Soft signal: LLM-based coherence assessment from qualitative analysis.
+    # Check passes only if BOTH signals pass.
+
     avoided_prefixes = ["BTC", "ETH", "COIN"]
-    avoided = False
-    for pref in avoided_prefixes:
-        if financials["ticker"].startswith(pref):
-            avoided = True
-            break
-            
+    hard_pass = not any(financials["ticker"].startswith(p) for p in avoided_prefixes)
+    hard_detail = (
+        "Hard check: PASS (ticker not in avoided-sector blacklist)" if hard_pass
+        else "Hard check: FAIL (ticker in avoided-sector blacklist)"
+    )
+
+    # Soft signal: defaults to PASS if qualitative unavailable
+    # (preserves v0.1.1 behavior when no PDFs / no API key).
+    if qualitative_results and qualitative_results.get("status") == "available":
+        coherence = qualitative_results.get("coherence_assessment", {})
+        soft_verdict = coherence.get("verdict", "coherent")
+        soft_pass = (soft_verdict == "coherent")
+        reasoning = (coherence.get("reasoning") or "No reasoning provided.")[:300]
+        soft_detail = (
+            f"Soft check: {'PASS' if soft_pass else 'FAIL'} "
+            f"(LLM coherence verdict: {soft_verdict}). {reasoning}"
+        )
+    else:
+        soft_pass = True  # default pass when qualitative unavailable
+        soft_detail = "Soft check: SKIPPED (qualitative analysis unavailable)"
+
+    check_8_passed = hard_pass and soft_pass
+
     checks["8_understandable"] = {
         "name": "Understandable business",
-        "metric_name": "Circle of Competence Flag",
-        "value": not avoided,
-        "threshold_str": "True",
-        "passed": not avoided,
-        "detail": "Business is within standard circle of competence" if not avoided else "Business is outside circle of competence"
+        "metric_name": "Hard blacklist AND Soft LLM coherence",
+        "value": (hard_pass, soft_pass),
+        "threshold_str": "Both signals must pass",
+        "passed": check_8_passed,
+        "detail": f"{hard_detail}. {soft_detail}",
     }
     
     # Scoring

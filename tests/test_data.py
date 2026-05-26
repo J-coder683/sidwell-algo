@@ -257,3 +257,57 @@ def test_no_duplicate_reports(tmp_path, mock_financials):
     matches = list(tmp_path.glob("*_report.md"))
     assert len(matches) == 1, f"Expected exactly one report file, found: {matches}"
 
+
+# ---------------------------------------------------------------------------
+# data/documents.py tests (v0.2)
+# ---------------------------------------------------------------------------
+
+from data.documents import discover_documents, _classify, _extract_text, get_drive_path
+from pathlib import Path
+
+
+def test_discover_documents_missing_folder_returns_empty(tmp_path, monkeypatch):
+    """Non-existent ticker folder → empty list, no exception."""
+    monkeypatch.setenv("SIDWELL_DRIVE_PATH", str(tmp_path))
+    result = discover_documents("NOTEXIST.NS")
+    assert result == []
+
+
+def test_discover_documents_finds_pdfs(tmp_path, monkeypatch):
+    """Folder with PDFs → list with correct length."""
+    monkeypatch.setenv("SIDWELL_DRIVE_PATH", str(tmp_path))
+    ticker_dir = tmp_path / "TEST.NS"
+    ticker_dir.mkdir()
+
+    # Create minimal "PDFs" (pdfplumber will fail gracefully on non-PDF bytes)
+    (ticker_dir / "test_concall.pdf").write_bytes(b"%PDF fake")
+    (ticker_dir / "test_deck.pdf").write_bytes(b"%PDF fake")
+
+    # Mock _extract_text to avoid pdfplumber parsing real bytes
+    with patch("data.documents._extract_text", return_value="extracted text"):
+        result = discover_documents("TEST.NS")
+
+    assert len(result) == 2
+    filenames = [d["filename"] for d in result]
+    assert "test_concall.pdf" in filenames
+    assert "test_deck.pdf" in filenames
+    assert all("hash" in d for d in result)
+    assert all("text" in d for d in result)
+
+
+def test_classify_all_keyword_types():
+    """_classify correctly identifies each document type by keyword."""
+    assert _classify("q4fy25_concall_transcript.pdf") == "transcript"
+    assert _classify("investor_presentation_2025.pdf") == "investor_deck"
+    assert _classify("annual_report_mda_section.pdf") == "mda"
+    assert _classify("unknown_document.pdf") == "unknown"
+    # Case insensitive
+    assert _classify("EARNINGS_CALL_Q3.pdf") == "transcript"
+
+
+def test_extract_text_failure_returns_empty_string(tmp_path):
+    """_extract_text returns '' on any pdfplumber failure — no exception."""
+    bad_pdf = tmp_path / "not_a_real.pdf"
+    bad_pdf.write_bytes(b"this is not a valid PDF")
+    result = _extract_text(bad_pdf)
+    assert result == ""

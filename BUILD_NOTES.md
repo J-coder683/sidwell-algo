@@ -1,6 +1,6 @@
-# BUILD NOTES — Sidwell v0.1.1
+# BUILD NOTES — Sidwell v0.2
 
-This document outlines key technical assumptions, calculation methods, architectural justifications, statistical conventions, model limitations, and migration notes for Sidwell v0.1 / v0.1.1.
+This document outlines key technical assumptions, calculation methods, architectural justifications, statistical conventions, model limitations, and migration notes for Sidwell v0.1 / v0.1.1 / v0.2.
 
 ## 1. Valuation Assumptions (DCF & WACC)
 
@@ -136,3 +136,46 @@ OK - all 9 mapping values exist in their respective Damodaran sheets
 ```
 
 Note: The cached `betaGlobal.xls` does not have separate emerging-markets/US sheets — it has a single `'Industry Averages'` sheet used for all tickers. The `get_beta_sheet_name()` helper falls through to the `'Industry Averages'` fallback for all current tickers. This is correct behavior given the current Damodaran global beta file structure.
+
+---
+
+## 7. v0.1.1 → v0.2 Changelog
+
+- **Added qualitative ingestion layer:**
+  - `data/documents.py` for PDF discovery from Drive-synced folder (`~/Sidwell-Drive/<TICKER>/`)
+  - `analysis/qualitative.py` for Gemini-based structured extraction with 30-day TTL cache keyed on document hash
+  - `analysis/prompts/qualitative_extraction.md` as the version-controlled Gemini prompt
+- **Modified Buffett check #8** to be hybrid: hard deterministic blacklist AND soft LLM coherence signal. Both signals must pass. Defaults to hard-only when qualitative unavailable (v0.1.1 behavior).
+- **Added `## 3.5 Qualitative Analysis`** section to the markdown report (forward guidance, risks, strategic themes, tone & coherence).
+- **Gemini output cache** with 30-day TTL keyed on combined document hash. Cache invalidates automatically when document bytes change.
+- **New `tests/test_qualitative.py`** with 5 mock-based tests (zero live API calls).
+- **Updated `tests/test_snapshot.py`** to pass `mock_qualitative` fixture into both `evaluate_buffett_lens` and `render_markdown_report`.
+- **Hand-edited `tests/expected_calculations.md`** (Section 6) and `tests/expected_report.md` (Section 3.5) to include qualitative section before running snapshot test.
+- **Migrated from deprecated `google-generativeai` to `google-genai`** (new SDK, `google.genai.Client` pattern).
+- **4 new hybrid check #8 tests** in `tests/test_buffett.py`.
+- **4 new documents tests** in `tests/test_data.py`.
+
+---
+
+## 8. LLM Determinism Boundary
+
+- Quantitative pipeline (DCF, Buffett checks 1-7) remains **pure deterministic Python**. Same inputs always produce same outputs.
+- Only **check #8** and the **qualitative report section** depend on LLM output.
+- Verdict may shift run-to-run for the same inputs if Gemini's coherence read drifts. This is the cost of incorporating qualitative judgment.
+- **Mitigation:** The prompt is locked in `analysis/prompts/qualitative_extraction.md` and version-controlled. Any change to the prompt is a deliberate edit, tracked in git history.
+- Report displays both hard and soft signals for check #8 so the user can see WHY a verdict shifted between runs.
+- **Cache prevents drift for 30 days:** Once a set of documents has been analyzed, the result is cached by combined document hash. The LLM is only called when document bytes actually change (new or modified PDF).
+
+---
+
+## 9. Why "Free Equity Research" Was Dropped
+
+Original v0.2 scope included scraping free equity research reports. After investigation, quality free equity research on Indian and US stocks barely exists — Moneycontrol/Trendlyne free tiers are retail-grade, broker research is paywalled, and aggregators have variable quality. Adding this would either fail to find sources or pollute the analysis with low-quality material. The four document types we already ingest (concall transcripts, IR decks, MD&A sections, annual reports) are the high-quality free corpus.
+
+---
+
+## 10. v0.2 Asian Paints Results
+
+[Document the actual outputs from running `python value.py ASIANPAINT.NS` after placing at least one PDF in `~/Sidwell-Drive/ASIANPAINT.NS/`. Include: WACC, intrinsic value, all 8 Buffett checks with hybrid signal details for check #8, verdict, qualitative section contents. Whatever the pipeline produces is what goes here — no predictions, no anchoring on v0.1.1 results.]
+
+**Awaiting user to place PDF in Drive folder to complete full-path verification.**

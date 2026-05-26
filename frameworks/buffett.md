@@ -41,13 +41,34 @@ Buffett's investment philosophy across his Berkshire letters (1977–2024), dist
 **Source:** "Intelligent Investor" ch. 20; Berkshire 1992 letter.
 
 ### 8. Understandable business
-**Test:** Manual flag — requires user judgment. Default `True` unless the company is in a category Buffett historically avoids:
-  - Fast-changing tech (semis, consumer hardware)
-  - Pre-revenue biotech
-  - Complex financials (derivatives books, opaque insurers)
-  - Heavy commodity exposure (airlines pre-2016, miners)
-**Logic:** "Circle of competence." If you can't model 5-year cash flows confidently, skip.
-**Source:** Berkshire 1996 letter.
+**Hybrid test (v0.2+):** Hard deterministic blacklist AND soft LLM-based
+coherence assessment. Check passes only if both signals pass.
+
+**Hard signal (deterministic):** Ticker not in avoided-sector blacklist
+(currently: BTC, ETH, COIN prefixes — fast-changing or speculative
+categories Buffett historically avoids).
+
+**Soft signal (LLM-based, v0.2+):** When qualitative analysis is available,
+Gemini reads concall transcripts, IR decks, and MD&A sections and produces
+a binary "coherent | incoherent" judgment based on:
+  - Whether management commentary is internally consistent
+  - Whether numeric claims across the documents tie out
+  - Whether strategy shifts are acknowledged
+  - Whether evasion or contradiction is evident
+Defaults to "coherent" when qualitative analysis is unavailable, preserving
+pre-v0.2 behavior.
+
+**Logic:** Buffett's "circle of competence" requires both — a business in
+a category you can model (hard), AND management whose statements you can
+trust as a basis for that modeling (soft).
+
+**Source:** Berkshire 1996 letter (circle of competence); Berkshire 2003
+letter on management quality.
+
+**Determinism note:** This is the ONLY Buffett check with LLM dependence.
+Checks 1-7 remain pure deterministic Python. Verdicts may shift run-to-run
+for the same inputs if the LLM's coherence read drifts. Report displays
+BOTH signals so non-determinism is visible, not hidden.
 
 ## Scoring & verdict logic
 

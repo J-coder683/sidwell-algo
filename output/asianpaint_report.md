@@ -1,5 +1,5 @@
 # Investment Analysis Report: ASIANPAINT.NS
-**Generated on**: May 25, 2026
+**Generated on**: May 26, 2026
 **Valuation Engine**: Discounted Cash Flow (DCF)
 **Investor Lens**: Warren Buffett (v0.1)
 
@@ -89,9 +89,12 @@ All 8 checks per Warren Buffett's framework (distilled from annual letters):
 | ROE without excess leverage | ✅ | 23.92% / 63.88% | ROE > 15% & Equity/Assets > 40% | 4y avg ROE = 23.92%, Equity/Assets = 63.88% |
 | Earnings predictability | ❌ | 5.32% / 11.90% | 5% < CAGR < 30% & YoY Growth StDev < 10.0% | Revenue CAGR = 5.32%, YoY Growth StDev = 11.90% |
 | Margin of safety | ❌ | Trading at 9.1x intrinsic value (target ≤ 0.75x) | > 25.0% | Trading at 9.1x intrinsic value (target ≤ 0.75x) (Price: 2657.80, Intrinsic: 291.69) |
-| Understandable business | ✅ | True | True | Business is within standard circle of competence |
+| Understandable business | ✅ | Hard: PASS / Soft: PASS | Both signals must pass | Hard check: PASS (ticker not in avoided-sector blacklist). Soft check: SKIPPED (qualitative analysis unavailable) |
 
 **Total Buffett Score**: **4/8**
+
+## 3.5 Qualitative Analysis
+_Qualitative analysis unavailable: No documents found in Drive folder_
 
 ## 4. Margin-of-Safety Check
 Current Stock Price: **₹2,657.80**
