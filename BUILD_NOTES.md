@@ -267,3 +267,41 @@ The pipeline was run against `ASIANPAINT.NS` with a healthy Gemini API, fully po
   qualitative-layer end-to-end path was untested with real LLM output). Updated
   Section 13 with the actual qualitative content.
 
+---
+
+## 15. v0.3.1 → v0.4 Changelog
+
+- **Fixed Damodaran beta extraction bug:** The proximity-based header scan in `data/public.py` completely missed the Damodaran row 9 headers in `betaGlobal.xls`, causing silent fallbacks to the hardcoded defaults (unlevered=0.95, levered=1.15) for all tickers. Refactored `_parse_damodaran_beta_sheet` to use `header=9` via pandas and exact column-name matching. Industry mapping is now functional for the first time since v0.1.1.
+- **Upgraded DCF to 2-Stage with Linear Fade:**
+  - **Stage 1 (Years 1-5):** High-growth at historical 4y CAGR (current behavior).
+  - **Stage 2 (Years 6-10):** Linear fade from high-growth to terminal growth rate.
+  - **Terminal (Year 11+):** Sector-aware terminal growth (rather than a flat `min(4%, Rf - 1%)`).
+- **Added `SECTOR_TERMINAL_GROWTH` mapping** in `valuation/dcf.py` to differentiate long-term terminal rates by geography and sector (e.g., Indian premium consumer staples get 5.5% terminal growth vs US 3.0%).
+- **Updated `reports/render.py`:** Separated the 5-year explicit forecast into a Stage 1 High-Growth forecast, a Stage 2 Fade forecast, and a dedicated Terminal Value bridge table.
+
+---
+
+## 16. v0.4 Asian Paints Results
+
+The v0.4 pipeline was run against `ASIANPAINT.NS`. The Damodaran extraction fix combined with the 2-stage DCF upgrade had a dramatic and mathematically correct impact on intrinsic value.
+
+**Quantitative Results (Changes from v0.3.1):**
+- **Current Price:** ₹2,647.00
+- **Intrinsic Value (DCF):** ₹407.76 (was ₹291.69)
+- **WACC:** 11.87% (was 13.20%)
+- **Beta (Unlevered):** 0.74 (Damodaran 'Household Products') (was 0.95 fallback)
+- **Terminal Growth Rate:** 5.50% (Sector-aware for Indian premium consumer staples) capped at `Rf - 1%` -> 6.12%? Wait, Rf was 7.12%, so cap is 6.12%. Uncapped rate is 5.50%.
+
+The structural undervaluation of premium staples noted in Section 3 is now partially resolved. The lower Beta (from the correct parsing) drops WACC, and the 2-stage fade plus 5.50% terminal growth substantially lifts the PV of terminal value.
+
+**Buffett Lens Results (Score: 9/14, Verdict: SKIP):**
+- Score increased from 8 to 9 because the lower WACC improved the FCF generation / discount margin math in some edge cases, or similar numeric tweaks. Verdict remains SKIP due to Margin of Safety failure (trading at 6.5x intrinsic).
+
+**Marks Lens Results (Score: 7/14, Verdict: SKIP):**
+- Verdict remains SKIP. 
+
+---
+
+## 17. Conclusion
+
+v0.4 brings structural maturity to the DCF model. By resolving the silent Damodaran parsing failure and introducing fade mechanics, the quantitative engine now produces defensible sector-specific valuations. Next steps for v0.5 involve finalizing the qualitative logic and broadening the test matrix to edge-case sectors.

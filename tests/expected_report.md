@@ -1,23 +1,23 @@
 # Investment Analysis Report: FICTITIOUS.NS
 **Generated on**: January 01, 2026
 **Valuation Engine**: Discounted Cash Flow (DCF)
-**Investor Lenses**: Warren Buffett + Howard Marks (v0.3)
+**Investor Lenses**: Warren Buffett + Howard Marks (v0.4)
 
 ## Executive Summary
 | Metric | Value | Source / Detail |
 | :--- | :--- | :--- |
 | **Current Price** | ₹50.00 | Yahoo Finance |
-| **Intrinsic Value (DCF)** | ₹27.02 | Sidwell DCF Engine |
-| **Margin of Safety** | Trading at 1.9x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
+| **Intrinsic Value (DCF)** | ₹29.20 | Sidwell DCF Engine |
+| **Margin of Safety** | Trading at 1.7x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
 | **Buffett Score** | **13/14** | Buffett Lens (14 checks) |
 | **Buffett Verdict** | **WAIT** ⏳ | Buffett Lens Rules |
 | **Marks Score** | **11/14** | Marks Lens (14 checks) |
 | **Marks Verdict** | **WAIT** ⏳ | Marks Lens Rules |
 
 ### Verdict Summary
-> **Buffett**: **WAIT** — High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹20.27 (75% of intrinsic value).
+> **Buffett**: **WAIT** — High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹21.90 (75% of intrinsic value).
 >
-> **Marks**: **WAIT** — Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 16.21 (60% of intrinsic = 40% MoS).
+> **Marks**: **WAIT** — Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 17.52 (60% of intrinsic = 40% MoS).
 
 ## 1. Company Snapshot
 Historical financial statements over the last 4 years:
@@ -41,7 +41,7 @@ Every component of the Weighted Average Cost of Capital (WACC) is explicitly sou
 | **Mature Market ERP** | 5.00% | Damodaran NYU Stern (Mature Equity Risk Premium) |
 | **Country Risk Premium** | 2.00% | Damodaran NYU Stern (Country default spread adjusted) |
 | **Total Equity Risk Premium** | 7.00% | Damodaran mature ERP + country premium = 7.00% |
-| **Industry Unlevered Beta** | 0.90 | Damodaran 'Chemical (Specialty)' (default fallback) |
+| **Industry Unlevered Beta** | 0.90 | Damodaran 'Chemical (Specialty)' (hardcoded fallback (Damodaran lookup failed)) |
 | **Target Levered Beta ($\beta$)** | 0.93 | Re-levered using actual D/E = 0.93 |
 | **Cost of Equity ($K_e$)** | 12.49% | CAPM: $R_f + \beta \times ERP$ = 12.49% |
 | **Cost of Debt ($K_d$)** | 10.00% | Calculated: int_expense/debt = 10.00% |
@@ -50,30 +50,51 @@ Every component of the Weighted Average Cost of Capital (WACC) is explicitly sou
 | **Debt Weight ($W_d$)** | 3.85% | Total Debt / (Market Cap + Total Debt) |
 | **Computed WACC** | **12.30%** | Weighted cost of capital = **12.30%** |
 
-### 5-Year Explicit Forecast Projections
+### 5-Year High-Growth Forecast (Stage 1)
 Projections are based on historical averages relative to Revenue. Revenue growth is projected at **10.00%** (historical 4y CAGR capped between 5% and 20%).
 
-| Metric | Year 1 | Year 2 | Year 3 | Year 4 | Year 5 | Terminal Value |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| Revenue | ₹146.41 | ₹161.05 | ₹177.16 | ₹194.87 | ₹214.36 | - |
-| EBIT | ₹29.28 | ₹32.21 | ₹35.43 | ₹38.97 | ₹42.87 | - |
-| Taxes | ₹7.32 | ₹8.05 | ₹8.86 | ₹9.74 | ₹10.72 | - |
-| D&A | ₹4.39 | ₹4.83 | ₹5.31 | ₹5.85 | ₹6.43 | - |
-| CapEx | ₹7.32 | ₹8.05 | ₹8.86 | ₹9.74 | ₹10.72 | - |
-| NWC Change (CF) | ₹0.00 | ₹0.00 | ₹0.00 | ₹0.00 | ₹0.00 | - |
-| Free Cash Flow | ₹19.03 | ₹20.94 | ₹23.03 | ₹25.33 | ₹27.87 | ₹349.29 |
-| Discount Factor | 1.1230 | 1.2611 | 1.4161 | 1.5903 | 1.7858 | 1.7858 |
-| PV of Cash Flow | ₹16.95 | ₹16.60 | ₹16.26 | ₹15.93 | ₹15.60 | ₹195.59 |
+| Metric | Year 1 | Year 2 | Year 3 | Year 4 | Year 5 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Revenue | ₹146.41 | ₹161.05 | ₹177.16 | ₹194.87 | ₹214.36 |
+| EBIT | ₹29.28 | ₹32.21 | ₹35.43 | ₹38.97 | ₹42.87 |
+| Taxes | ₹7.32 | ₹8.05 | ₹8.86 | ₹9.74 | ₹10.72 |
+| D&A | ₹4.39 | ₹4.83 | ₹5.31 | ₹5.85 | ₹6.43 |
+| CapEx | ₹7.32 | ₹8.05 | ₹8.86 | ₹9.74 | ₹10.72 |
+| NWC Change (CF) | ₹0.00 | ₹0.00 | ₹0.00 | ₹0.00 | ₹0.00 |
+| Free Cash Flow | ₹19.03 | ₹20.94 | ₹23.03 | ₹25.33 | ₹27.87 |
+| Discount Factor | 1.1230 | 1.2611 | 1.4161 | 1.5903 | 1.7858 |
+| PV of Cash Flow | ₹16.95 | ₹16.60 | ₹16.26 | ₹15.93 | ₹15.60 |
+
+### 5-Year Fade Forecast (Stage 2) — growth fading from 10.00% to 4.00%
+
+| Metric | Year 6 | Year 7 | Year 8 | Year 9 | Year 10 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Revenue | ₹233.22 | ₹250.95 | ₹267.01 | ₹280.89 | ₹292.13 |
+| EBIT | ₹46.64 | ₹50.19 | ₹53.40 | ₹56.18 | ₹58.43 |
+| Taxes | ₹11.66 | ₹12.55 | ₹13.35 | ₹14.04 | ₹14.61 |
+| D&A | ₹7.00 | ₹7.53 | ₹8.01 | ₹8.43 | ₹8.76 |
+| CapEx | ₹11.66 | ₹12.55 | ₹13.35 | ₹14.04 | ₹14.61 |
+| NWC Change (CF) | ₹0.00 | ₹0.00 | ₹0.00 | ₹0.00 | ₹0.00 |
+| Free Cash Flow | ₹30.32 | ₹32.62 | ₹34.71 | ₹36.52 | ₹37.98 |
+| Discount Factor | 2.0054 | 2.2521 | 2.5290 | 2.8400 | 3.1892 |
+| PV of Cash Flow | ₹15.12 | ₹14.49 | ₹13.73 | ₹12.86 | ₹11.91 |
+
+### Terminal Value
+- Final fade year (Year 10) FCF: ₹37.98
+- Terminal growth (Gordon): 4.00%
+- Sector mapping: SECTOR_TERMINAL_GROWTH lookup for (Chemical (Specialty), India)
+- Terminal Value: ₹476.02
+- PV of Terminal Value (discounted from Year 10): ₹149.26
 
 ### Valuation Bridge
-- **PV of Explicit FCFs**: ₹81.35
-- **PV of Terminal Value (g = 4.00%)**: ₹195.59
-- **Enterprise Value**: ₹276.94
+- **PV of Explicit FCFs**: ₹149.44
+- **PV of Terminal Value (g = 4.00%)**: ₹149.26
+- **Enterprise Value**: ₹298.70
 - **Add: Cash & Equivalents**: ₹13.31
 - **Less: Total Debt**: ₹20.00
-- **Equity Value**: ₹270.25
+- **Equity Value**: ₹292.01
 - **Shares Outstanding**: 10
-- **Intrinsic Value per Share**: **₹27.02**
+- **Intrinsic Value per Share**: **₹29.20**
 
 ## 3. Buffett Investor Lens
 All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
@@ -114,7 +135,7 @@ _Part C — Management & Capital Allocation: **4/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Margin of safety | ❌ | Trading at 1.9x intrinsic | > 25.0% | Trading at 1.9x intrinsic value (target ≤ 0.75x) (Price: 50.00, Intrinsic: 27.02) |
+| Margin of safety | ❌ | Trading at 1.7x intrinsic | > 25.0% | Trading at 1.7x intrinsic value (target ≤ 0.75x) (Price: 50.00, Intrinsic: 29.20) |
 | Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
 | Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. Demand category structurally enduring; no single-technology dependence identified in documents. |
 
@@ -158,7 +179,7 @@ All 14 checks per Howard Marks's risk-first framework across 4 Parts (frameworks
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Deep margin of safety | ❌ | Trading at 1.9x intrinsic | > 40% | MoS = -85.01% (< 40% threshold) — Price 50.00 vs Intrinsic 27.02 |
+| Deep margin of safety | ❌ | Trading at 1.7x intrinsic | > 40% | MoS = -71.23% (< 40% threshold) — Price 50.00 vs Intrinsic 29.20 |
 | Asymmetric upside-to-downside payoff | ❌ | 0.000 | > 3.0x | Asymmetry ratio = 0.00 (< 3.0 threshold) |
 | Downside protection (tangible book) | ❌ | 15.97% | > 30% | Equity/MCap = 15.97% (<= 30%) |
 | Multiple expansion not exhausted | ✅ | 18.000 | < 25x (v0.3 placeholder; sector comp in v0.4) | Trailing P/E = 18.0x (< 25x) |
@@ -200,24 +221,24 @@ _Part D — Second-Level Thinking & Contrarianism: **3/3 passed**_
 
 ## 4. Margin-of-Safety Check
 Current Stock Price: **₹50.00**
-DCF Intrinsic Value: **₹27.02**
+DCF Intrinsic Value: **₹29.20**
 Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)
-Computed Margin of Safety: Trading at 1.9x intrinsic value (target ≤ 0.75x)
+Computed Margin of Safety: Trading at 1.7x intrinsic value (target ≤ 0.75x)
 ### Status: [FAIL] ❌
-The stock trades above the safety threshold. Trading at 1.9x intrinsic value is insufficient for investment under the Buffett framework.
+The stock trades above the safety threshold. Trading at 1.7x intrinsic value is insufficient for investment under the Buffett framework.
 
 ## 5. Investment Verdict
 **BUFFETT RECOMMENDATION: WAIT**
 
-High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹20.27 (75% of intrinsic value).
+High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹21.90 (75% of intrinsic value).
 
-**Action Item**: Set alert at buy-trigger price: **₹20.27** (75% of intrinsic value).
+**Action Item**: Set alert at buy-trigger price: **₹21.90** (75% of intrinsic value).
 
 **MARKS RECOMMENDATION: WAIT**
 
-Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 16.21 (60% of intrinsic = 40% MoS).
+Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 17.52 (60% of intrinsic = 40% MoS).
 
-**Marks Action Item**: Set re-rating alert at **₹16.21** (60% of intrinsic = 40% MoS).
+**Marks Action Item**: Set re-rating alert at **₹17.52** (60% of intrinsic = 40% MoS).
 
 ## 6. Dual-Lens Synthesis
 Sidwell preserves both lens verdicts without collapsing them to a single recommendation.

@@ -2,6 +2,74 @@ import logging
 
 logger = logging.getLogger("sidwell.valuation.dcf")
 
+# Sector → terminal growth rate mapping. Indexed by Damodaran industry category
+# (must match TICKER_INDUSTRY_MAP values in data/public.py).
+#
+# Rates reflect long-term real growth expectations for the sector in the given
+# geography. India rates are higher than US rates given India's structurally
+# higher long-term GDP growth (~6% real vs US ~2%).
+#
+# Methodology:
+# - Premium consumer staples (paints, FMCG, branded foods): India 5.5%, US 3.0%
+# - Generic/mass consumer: India 5.0%, US 2.5%
+# - Financial services: India 5.5%, US 3.0% (rate-sensitive long-term)
+# - IT services: India 5.0%, US 3.5% (global cyclical; India has cost advantage)
+# - Pharma: India 5.0%, US 3.5%
+# - Industrials/capital goods: India 4.0%, US 2.5%
+# - Cyclicals (autos, metals): India 3.5%, US 2.0%
+# - Commodities (oil, mining): India 3.0%, US 2.0%
+# - Telecom: India 3.5%, US 2.0%
+# - Tobacco: India 4.0%, US 2.0% (mature, declining volumes globally)
+# - Default fallback: India 4.0%, US 2.5%
+#
+# All rates capped post-hoc at min(rate, Rf - 1%) for mathematical stability
+# (terminal growth must be < cost of capital).
+
+SECTOR_TERMINAL_GROWTH = {
+    # Consumer
+    ("Household Products", True): 0.055,         # India
+    ("Household Products", False): 0.030,        # US
+    ("Food Processing", True): 0.050,
+    ("Food Processing", False): 0.025,
+    ("Tobacco", True): 0.040,
+    ("Tobacco", False): 0.020,
+
+    # Chemicals
+    ("Chemical (Specialty)", True): 0.045,
+    ("Chemical (Specialty)", False): 0.025,
+    ("Chemical (Diversified)", True): 0.040,
+    ("Chemical (Diversified)", False): 0.025,
+
+    # Financials
+    ("Bank (Money Center)", True): 0.055,
+    ("Bank (Money Center)", False): 0.030,
+    ("Financial Svcs. (Non-bank & Insurance)", True): 0.055,
+    ("Financial Svcs. (Non-bank & Insurance)", False): 0.030,
+
+    # Tech
+    ("Software (System & Application)", True): 0.050,
+    ("Software (System & Application)", False): 0.035,
+    ("Computers/Peripherals", True): 0.040,
+    ("Computers/Peripherals", False): 0.030,
+}
+
+DEFAULT_TERMINAL_GROWTH_INDIA = 0.040
+DEFAULT_TERMINAL_GROWTH_US = 0.025
+
+
+def get_terminal_growth(target_industry: str, is_india: bool, risk_free_rate: float) -> float:
+    """
+    Return the sector-aware terminal growth rate for the given industry,
+    capped at risk_free_rate - 1% for mathematical stability.
+    """
+    key = (target_industry, is_india)
+    if key in SECTOR_TERMINAL_GROWTH:
+        rate = SECTOR_TERMINAL_GROWTH[key]
+    else:
+        rate = DEFAULT_TERMINAL_GROWTH_INDIA if is_india else DEFAULT_TERMINAL_GROWTH_US
+    # Cap at Rf - 1%
+    return min(rate, risk_free_rate - 0.01)
+
 def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float) -> dict:
     """
     Computes WACC and performs a 5-year DCF valuation.
@@ -134,51 +202,82 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
     if not (0.05 < wacc < 0.30):
         raise ValueError(f"WACC of {wacc:.2%} is implausible — check inputs")
         
-    # 5. Explicit 5-Year Forecast
+    # 5. Explicit 10-Year Forecast (2-stage with fade)
+    #    Stage 1 (Years 1-5): high growth at proj_revenue_growth (capped 5-20% per existing logic)
+    #    Stage 2 (Years 6-10): linear fade from proj_revenue_growth to g_terminal
+    #    Terminal: Gordon Growth at end of Year 10
+
+    STAGE_1_YEARS = 5
+    STAGE_2_YEARS = 5
+    TOTAL_EXPLICIT_YEARS = STAGE_1_YEARS + STAGE_2_YEARS  # 10
+    
+    # 6. Terminal Growth Rate logic needs to be run first so we can fade to it
+    is_india = financials["ticker"].endswith(".NS") or financials["ticker"].endswith(".BO")
+    g_terminal = get_terminal_growth(
+        target_industry=macro_data.get("target_industry", ""),
+        is_india=is_india,
+        risk_free_rate=risk_free_rate,
+    )
+    if g_terminal >= wacc:
+        g_terminal = wacc - 0.02
+    if g_terminal < 0.0:
+        g_terminal = 0.02
+
     proj_projections = []
     prev_rev = hist_revenue[-1]
-    
-    for proj_year_idx in range(1, 6):
-        proj_rev = prev_rev * (1.0 + proj_revenue_growth)
+
+    for proj_year_idx in range(1, TOTAL_EXPLICIT_YEARS + 1):
+        # Determine growth rate for this year
+        if proj_year_idx <= STAGE_1_YEARS:
+            year_growth = proj_revenue_growth  # Stage 1: flat high growth
+            stage = "high"
+        else:
+            # Stage 2: linear fade from proj_revenue_growth to g_terminal
+            # over STAGE_2_YEARS years.
+            # At year 6 (first fade year), interpolation_factor = 1/5 = 0.2
+            # At year 10 (last fade year), interpolation_factor = 5/5 = 1.0
+            fade_year = proj_year_idx - STAGE_1_YEARS  # 1 through 5
+            interpolation_factor = fade_year / STAGE_2_YEARS
+            year_growth = proj_revenue_growth - (proj_revenue_growth - g_terminal) * interpolation_factor
+            stage = "fade"
+
+        proj_rev = prev_rev * (1.0 + year_growth)
         proj_ebit = proj_rev * hist_ebit_margin_avg
         proj_tax = proj_ebit * hist_tax_rate_avg
         proj_dep = proj_rev * hist_deprec_ratio_avg
         proj_cap = proj_rev * hist_capex_ratio_avg
         proj_nwc = proj_rev * hist_nwc_ratio_avg
-        
+
         proj_fcf = proj_ebit * (1.0 - hist_tax_rate_avg) + proj_dep - proj_cap + proj_nwc
-        
+
         proj_projections.append({
             "year": f"Year {proj_year_idx}",
+            "stage": stage,
+            "year_growth": year_growth,
             "revenue": proj_rev,
             "ebit": proj_ebit,
             "tax": proj_tax,
             "depreciation": proj_dep,
             "capex": proj_cap,
             "working_capital_change": proj_nwc,
-            "fcf": proj_fcf
+            "fcf": proj_fcf,
         })
         prev_rev = proj_rev
         
-    # 6. Terminal Value (Gordon Growth)
-    g_terminal = min(0.04, risk_free_rate - 0.01)
-    if g_terminal >= wacc:
-        g_terminal = wacc - 0.02
-    if g_terminal < 0.0:
-        g_terminal = 0.02
-        
-    fcf_5 = proj_projections[-1]["fcf"]
-    terminal_value = (fcf_5 * (1.0 + g_terminal)) / (wacc - g_terminal)
+    # 6. Terminal Value (Gordon Growth at end of Year 10)
+    fcf_year_10 = proj_projections[-1]["fcf"]  # Year 10 FCF (final fade year)
+    terminal_value = (fcf_year_10 * (1.0 + g_terminal)) / (wacc - g_terminal)
     
-    # 7. Discounting Cash Flows
+    # 7. Discounting Cash Flows (10 years explicit + terminal at year 10)
     pv_fcf = 0.0
     for idx, proj in enumerate(proj_projections):
-        discount_factor = (1.0 + wacc) ** (idx + 1)
+        year_num = idx + 1
+        discount_factor = (1.0 + wacc) ** year_num
         proj["discount_factor"] = discount_factor
         proj["pv_fcf"] = proj["fcf"] / discount_factor
         pv_fcf += proj["pv_fcf"]
         
-    pv_terminal_value = terminal_value / ((1.0 + wacc) ** 5)
+    pv_terminal_value = terminal_value / ((1.0 + wacc) ** TOTAL_EXPLICIT_YEARS)
     enterprise_value = pv_fcf + pv_terminal_value
     
     # Intrinsic Equity Value
@@ -186,6 +285,8 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
     intrinsic_value_per_share = equity_value / shares_outstanding if shares_outstanding > 0 else 0.0
     
     # Compile output data
+    target_industry = macro_data.get("target_industry", "Chemical (Specialty)")
+    
     assumptions = {
         "revenue_growth": proj_revenue_growth,
         "ebit_margin": hist_ebit_margin_avg,
@@ -209,8 +310,18 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
         "shares_outstanding": shares_outstanding,
         "latest_cash": latest_cash,
         "latest_debt": latest_debt,
-        "target_industry": macro_data.get("target_industry", "Chemical (Specialty)"),
-        "industry_source": macro_data.get("industry_source", "default")
+        "target_industry": target_industry,
+        "industry_source": macro_data.get("industry_source", "default"),
+        "dcf_methodology": "2-stage with linear fade (v0.4)",
+        "stage_1_years": STAGE_1_YEARS,
+        "stage_2_years": STAGE_2_YEARS,
+        "stage_1_growth": proj_revenue_growth,
+        "sector_terminal_source": (
+            f"SECTOR_TERMINAL_GROWTH lookup for ({target_industry}, "
+            f"{'India' if is_india else 'US'})"
+            if (target_industry, is_india) in SECTOR_TERMINAL_GROWTH
+            else f"DEFAULT_TERMINAL_GROWTH_{'INDIA' if is_india else 'US'}"
+        ),
     }
     
     res = {

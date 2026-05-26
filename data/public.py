@@ -126,6 +126,86 @@ def fetch_risk_free_rate(ticker: str) -> float:
         logger.error(f"Error fetching risk-free rate from FRED: {e}")
         raise
 
+def _find_column(columns, candidates):
+    """Find first column whose name (lowercased) contains any candidate substring."""
+    for col in columns:
+        col_low = col.lower().strip()
+        for cand in candidates:
+            if cand in col_low:
+                return col
+    return None
+
+
+def _hardcoded_beta_defaults() -> dict:
+    """Last-resort defaults if Damodaran parsing fails entirely."""
+    return {
+        "industry_unlevered_beta": 0.95,
+        "industry_levered_beta": 1.15,
+        "industry_de_ratio": 0.25,
+    }
+
+def _parse_damodaran_beta_sheet(beta_path: str, target_industry: str, is_india: bool) -> dict:
+    """
+    Parse the Damodaran beta spreadsheet using fixed header row (row 9)
+    and exact column-name matching. Replaces the proximity-scan logic.
+
+    Returns:
+        dict with industry_unlevered_beta, industry_levered_beta, industry_de_ratio.
+        Falls back to documented defaults ONLY if exact match fails — logs a
+        warning rather than silently using defaults.
+    """
+    sheet_name = get_beta_sheet_name(beta_path, is_india)
+
+    # Header row is consistently at index 9 in Damodaran's published format.
+    # Read the sheet with header=9 so pandas uses row 9 as column headers.
+    df = pd.read_excel(beta_path, sheet_name=sheet_name, header=9)
+
+    # Strip whitespace from column names
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Find the row where the industry-name column matches target_industry exactly.
+    # The first column typically contains industry names.
+    industry_col = df.columns[0]
+    df[industry_col] = df[industry_col].astype(str).str.strip()
+    matches = df[df[industry_col] == target_industry]
+
+    if matches.empty:
+        logger.warning(
+            f"Damodaran exact match failed for '{target_industry}' in sheet "
+            f"'{sheet_name}'. Falling back to hardcoded defaults. "
+            f"Available industries (sample): {df[industry_col].dropna().head(5).tolist()}"
+        )
+        return _hardcoded_beta_defaults()
+
+    row = matches.iloc[0]
+
+    # Find Unlevered Beta column by name (case-insensitive partial match)
+    # Damodaran's naming has been "Unlevered Beta" or "Unlevered beta" consistently.
+    unlevered_col = _find_column(df.columns, ["unlevered beta", "unlevered_beta"])
+    levered_col = _find_column(df.columns, ["average levered beta", "levered beta", "average beta"])
+    de_col = _find_column(df.columns, ["d/e ratio", "debt/equity", "d/e"])
+
+    def _safe_float(val, default=0.0):
+        try:
+            if isinstance(val, str):
+                val = val.replace("%", "").strip()
+            return float(val)
+        except (ValueError, TypeError):
+            return default
+
+    unlevered_beta = _safe_float(row[unlevered_col], 0.95) if unlevered_col else 0.95
+    levered_beta = _safe_float(row[levered_col], 1.15) if levered_col else 1.15
+    de_ratio_raw = _safe_float(row[de_col], 0.25) if de_col else 0.25
+    # Damodaran sometimes stores D/E as percentage (e.g., 25.0 means 25%)
+    de_ratio = de_ratio_raw / 100.0 if de_ratio_raw > 5.0 else de_ratio_raw
+
+    return {
+        "industry_unlevered_beta": unlevered_beta,
+        "industry_levered_beta": levered_beta,
+        "industry_de_ratio": de_ratio,
+    }
+
+
 def fetch_damodaran_data(ticker: str) -> dict:
     """
     Downloads and parses Damodaran's Country Risk Premium (ctryprem.xlsx) and
@@ -318,96 +398,10 @@ def fetch_damodaran_data(ticker: str) -> dict:
             total_erp = 0.0423
             
     # 4. Parse Betas
-    try:
-        sheet_beta = get_beta_sheet_name(beta_path, is_india)
-            
-        df_beta = pd.read_excel(beta_path, sheet_name=sheet_beta)
-        
-        # Scan for target_industry row
-        ind_row_idx = None
-        for col in df_beta.columns:
-            matches = df_beta[df_beta[col].astype(str).str.strip().str.lower().str.contains(target_industry.lower(), na=False)]
-            if not matches.empty:
-                ind_row_idx = matches.index[0]
-                break
-                
-        if ind_row_idx is None:
-            # Try a broader search for "Chemical"
-            for col in df_beta.columns:
-                matches = df_beta[df_beta[col].astype(str).str.strip().str.lower().str.contains("chemical", na=False)]
-                if not matches.empty:
-                    ind_row_idx = matches.index[0]
-                    break
-                    
-        if ind_row_idx is None:
-            raise ValueError(f"Could not find industry matching '{target_industry}' in Damodaran beta spreadsheet.")
-            
-        row_data = df_beta.loc[ind_row_idx]
-        
-        # Scan the row for numbers to extract levered beta, D/E ratio, and unlevered beta.
-        # Typically:
-        # Columns in Damodaran beta sheet are:
-        # Industry Name, Number of Firms, Beta (Levered), D/E Ratio, Effective Tax Rate, Unlevered Beta...
-        # Let's extract numbers.
-        nums = []
-        for val in row_data:
-            try:
-                fval = float(val)
-                nums.append(fval)
-            except:
-                pass
-                
-        # Let's map columns by searching headers.
-        # We find headers row:
-        header_row_idx = None
-        for i in range(max(0, ind_row_idx - 5), ind_row_idx):
-            row_str = df_beta.iloc[i].astype(str).str.lower().values
-            if any("beta" in val or "unlevered" in val or "d/e" in val for val in row_str):
-                header_row_idx = i
-                break
-                
-        headers = []
-        if header_row_idx is not None:
-            headers = df_beta.iloc[header_row_idx].astype(str).str.strip().tolist()
-            
-        levered_beta = 1.15      # Specialty Chemical EM default
-        unlevered_beta = 0.95    # Specialty Chemical EM default
-        de_ratio = 0.25
-        
-        levered_idx = None
-        unlevered_idx = None
-        de_idx = None
-        
-        for idx, h in enumerate(headers):
-            h_low = h.lower()
-            if "unlevered" in h_low and "beta" in h_low:
-                unlevered_idx = idx
-            elif "levered" in h_low and "beta" in h_low:
-                levered_idx = idx
-            elif "beta" in h_low and not "unlevered" in h_low and not "total" in h_low:
-                # If both levered and unlevered exist, the simple "beta" or "average beta" is the levered beta.
-                if levered_idx is None:
-                    levered_idx = idx
-            elif "d/e" in h_low or "debt/equity" in h_low:
-                de_idx = idx
-                
-        if levered_idx is not None:
-            levered_beta = float(row_data.iloc[levered_idx])
-        if unlevered_idx is not None:
-            unlevered_beta = float(row_data.iloc[unlevered_idx])
-        if de_idx is not None:
-            # D/E ratio might be percentage or decimal.
-            val = row_data.iloc[de_idx]
-            de_ratio = float(val.replace("%", "").strip()) / 100.0 if isinstance(val, str) else float(val)
-            if de_ratio > 10.0:  # e.g., 25% written as 25.0
-                de_ratio = de_ratio / 100.0
-                
-    except Exception as e:
-        logger.error(f"Error parsing Damodaran Beta Excel: {e}")
-        # Default fallbacks
-        levered_beta = 1.15
-        unlevered_beta = 0.95
-        de_ratio = 0.25
+    beta_data = _parse_damodaran_beta_sheet(beta_path, target_industry, is_india)
+    levered_beta = beta_data["industry_levered_beta"]
+    unlevered_beta = beta_data["industry_unlevered_beta"]
+    de_ratio = beta_data["industry_de_ratio"]
         
     res = {
         "mature_market_erp": mature_erp,

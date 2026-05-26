@@ -1,5 +1,5 @@
 import numpy as np
-from valuation.dcf import run_dcf_valuation
+from valuation.dcf import run_dcf_valuation, get_terminal_growth
 
 def get_base_mock_financials():
     return {
@@ -59,7 +59,7 @@ def test_explicit_projections():
     res = run_dcf_valuation(financials, macro, rf)
     projections = res["projections"]
     
-    assert len(projections) == 5
+    assert len(projections) == 10
     # Year 1 revenue should be 146.41 * 1.10 = 161.051
     assert abs(projections[0]["revenue"] - 161.051) < 1e-3
     # Year 1 EBIT = 161.051 * 15% = 24.15765
@@ -68,39 +68,65 @@ def test_explicit_projections():
     # Check that growth rate is correctly identified as 10%
     assert abs(res["assumptions"]["revenue_growth"] - 0.10) < 1e-4
 
+def test_get_terminal_growth():
+    # Known sectors
+    assert abs(get_terminal_growth("Household Products", True, 0.08) - 0.055) < 1e-4
+    assert abs(get_terminal_growth("Household Products", False, 0.08) - 0.030) < 1e-4
+    assert abs(get_terminal_growth("Software (System & Application)", True, 0.08) - 0.050) < 1e-4
+    
+    # Unmapped sectors
+    assert abs(get_terminal_growth("Random Unmapped", True, 0.08) - 0.040) < 1e-4
+    assert abs(get_terminal_growth("Random Unmapped", False, 0.08) - 0.025) < 1e-4
+    
+    # Cap at Rf - 1%
+    assert abs(get_terminal_growth("Household Products", True, 0.06) - 0.05) < 1e-4
+    assert abs(get_terminal_growth("Tobacco", False, 0.02) - 0.01) < 1e-4
+
+def test_degenerate_fade_case():
+    financials = get_base_mock_financials()
+    # Force history to 2.5% CAGR so it matches US terminal
+    financials["revenue"] = [100.0, 102.5, 105.0625, 107.689] # ~2.5% CAGR
+    # But wait, proj_growth is capped at 5% floor! So it will be 5%.
+    # If growth is 5%, and we want g_terminal to be 5%, we can set Rf = 0.06, India mapped to Food Processing (5%).
+    macro = get_base_mock_macro()
+    macro["target_industry"] = "Food Processing" # 5% terminal in India
+    financials["ticker"] = "TEST.NS" # India
+    rf = 0.06
+    
+    res = run_dcf_valuation(financials, macro, rf)
+    projs = res["projections"]
+    assert len(projs) == 10
+    
+    # Stage 1 should be 5%, terminal is 5%, so Stage 2 should also be 5%
+    for p in projs:
+        assert abs(p["year_growth"] - 0.05) < 1e-4
+
 def test_dcf_hand_calculation():
-    # Known-answer hand calculation test
+    # Known-answer hand calculation test for 2-stage DCF
     # Inputs:
     # Revenue_0 = 146.41, Growth = 10% (0.10), EBIT Margin = 15%, Tax = 25.17%,
     # D&A Ratio = 2%, CapEx Ratio = 3%, NWC Change Ratio = 0%
     # Ke = 9%, Kd = 6% (Rf + 2% fallback), WACC = 9%
-    # Terminal Growth = min(4%, Rf - 1%) = min(4%, 3%) = 3% (0.03)
+    # Target industry default = "Chemical (Specialty)", is_india = False -> Terminal Growth = 0.025 (2.5%)
+    # Rf = 0.04 -> cap is 0.03, so 0.025 is used.
     #
-    # Explicit cash flows:
-    # Year 1 FCF = Revenue_1 * [EBIT_margin*(1-t) + D&A_ratio - CapEx_ratio]
-    #            = 161.051 * [0.15*(1-0.2517) + 0.02 - 0.03]
-    #            = 161.051 * [0.112245 + 0.02 - 0.03]
-    #            = 161.051 * [0.102245]
-    #            = 16.46666
-    # Present Value Factor for Year 1 = 1 / 1.09 = 0.917431
-    # PV of FCF Year 1 = 16.46666 * 0.917431 = 15.1070
+    # FCF effective margin = EBIT*(1-t) + D&A - CapEx = 0.15*(1-0.2517) + 0.02 - 0.03 = 0.102245
     #
-    # Let's do the same for Years 2 to 5 growing at 10%:
-    # FCF_t = FCF_1 * (1.10)^(t-1)
-    # FCF = [16.46666, 18.11333, 19.92466, 21.91712, 24.10884]
-    # Discount Factors = [1.09, 1.1881, 1.29503, 1.41158, 1.53862]
-    # PV_FCFs = [15.10703, 15.24563, 15.38553, 15.52671, 15.66904]
-    # Sum PV_FCFs = 76.93394
+    # explicit revenues:
+    # Stage 1 (Y1-Y5): 10%
+    # Stage 2 (Y6-Y10) fade:
+    # Y6: 10% - (10%-2.5%)*0.2 = 8.5%
+    # Y7: 10% - (10%-2.5%)*0.4 = 7.0%
+    # Y8: 10% - (10%-2.5%)*0.6 = 5.5%
+    # Y9: 10% - (10%-2.5%)*0.8 = 4.0%
+    # Y10: 10% - (10%-2.5%)*1.0 = 2.5%
     #
-    # Terminal Value:
-    # TV = FCF_5 * (1 + g_terminal) / (WACC - g_terminal)
-    #    = 24.10884 * (1.03) / (0.09 - 0.03)
-    #    = 24.83211 / 0.06 = 413.8684
-    # PV of TV = 413.8684 / 1.53862 = 268.9867
-    #
-    # Enterprise Value = PV_FCFs + PV_TV = 76.93394 + 268.9867 = 345.9206
-    # Equity Value = EV + Cash - Debt = 345.9206 + 20 - 0 = 365.9206
-    # Intrinsic Value per share = 365.9206 / 10 = 36.592
+    # Sum PV_FCFs (Years 1-10) = 150.1045
+    # Terminal Value = Y10_FCF * (1 + 0.025) / (0.09 - 0.025) = 31.47752 * 1.025 / 0.065 = 496.3763
+    # PV of TV = 496.3763 / 1.09^10 = 209.6747
+    # Enterprise Value = 150.1045 + 209.6747 = 359.7792
+    # Equity Value = 359.7792 + 20 - 0 = 379.7792
+    # Intrinsic Value per share = 37.978
     
     financials = get_base_mock_financials()
     macro = get_base_mock_macro()
@@ -109,9 +135,13 @@ def test_dcf_hand_calculation():
     res = run_dcf_valuation(financials, macro, rf)
     
     assert abs(res["projections"][0]["fcf"] - 16.46666) < 1e-4
-    assert abs(res["pv_fcf"] - 76.93394) < 1e-3
-    assert abs(res["terminal_value"] - 413.8684) < 1e-2
-    assert abs(res["pv_terminal_value"] - 268.9867) < 1e-2
-    assert abs(res["enterprise_value"] - 345.9206) < 1e-2
-    assert abs(res["equity_value"] - 365.9206) < 1e-2
-    assert abs(res["intrinsic_value_per_share"] - 36.592) < 1e-2
+    # Check fade rates
+    assert abs(res["projections"][5]["year_growth"] - 0.085) < 1e-4
+    assert abs(res["projections"][9]["year_growth"] - 0.025) < 1e-4
+    
+    assert abs(res["pv_fcf"] - 150.1045) < 1e-2
+    assert abs(res["terminal_value"] - 496.3763) < 1e-2
+    assert abs(res["pv_terminal_value"] - 209.6747) < 1e-2
+    assert abs(res["enterprise_value"] - 359.7792) < 1e-2
+    assert abs(res["equity_value"] - 379.7792) < 1e-2
+    assert abs(res["intrinsic_value_per_share"] - 37.978) < 1e-2

@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 import pandas as pd
 from data import public
+from data.public import _find_column, _parse_damodaran_beta_sheet
 
 @patch("data.public.get_fred_api_key")
 @patch("data.public.Fred")
@@ -98,6 +99,38 @@ def test_fetch_financials(mock_set_json, mock_get_json, mock_ticker_class):
     assert res["revenue"] == [82.64, 90.91, 100.0, 110.0]
     assert res["capex"] == [2.48, 2.73, 3.0, 3.3] # converted absolute value
     assert res["fcf"] == pytest.approx([5.92, 6.56, 7.22, 7.94]) # CFO - CapEx: 10.22 - 3.0 = 7.22, 11.24 - 3.3 = 7.94
+
+def test_find_column():
+    cols = ["Industry Name", "Number of firms", "Beta", "D/E Ratio", "Effective Tax rate", "Unlevered beta", "Cash/Firm value", "Unlevered beta corrected for cash", "HiLo Risk"]
+    
+    assert _find_column(cols, ["unlevered beta", "unlevered_beta"]) == "Unlevered beta"
+    assert _find_column(cols, ["average levered beta", "levered beta", "average beta", "beta"]) == "Beta"
+    assert _find_column(cols, ["d/e ratio", "debt/equity", "d/e"]) == "D/E Ratio"
+
+@patch("pandas.read_excel")
+@patch("data.public.get_beta_sheet_name")
+def test_parse_damodaran_beta_sheet(mock_get_sheet, mock_read_excel):
+    mock_get_sheet.return_value = "Emerging Markets"
+    
+    # Mock dataframe with some data
+    df = pd.DataFrame({
+        "Industry Name": ["Advertising", "Aerospace/Defense", "Chemical (Specialty)", "Shoe"],
+        "Number of firms": [50, 40, 100, 20],
+        "Average Beta": [1.1, 1.2, 1.35, 0.9],
+        "D/E Ratio": ["10.0%", "20.0%", "30.0%", "40.0%"],
+        "Unlevered beta": [1.0, 1.1, 1.15, 0.8]
+    })
+    mock_read_excel.return_value = df
+    
+    res = _parse_damodaran_beta_sheet("dummy.xlsx", "Chemical (Specialty)", True)
+    assert abs(res["industry_levered_beta"] - 1.35) < 1e-4
+    assert abs(res["industry_unlevered_beta"] - 1.15) < 1e-4
+    assert abs(res["industry_de_ratio"] - 0.3) < 1e-4
+    
+    # Exact match failure -> fallback to default
+    res_fail = _parse_damodaran_beta_sheet("dummy.xlsx", "Chemical (Nonexistent)", True)
+    assert res_fail["industry_unlevered_beta"] == 0.95
+    assert res_fail["industry_levered_beta"] == 1.15
 
 @patch("builtins.open", new_callable=MagicMock)
 @patch("os.makedirs")

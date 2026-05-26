@@ -5,7 +5,7 @@ from datetime import datetime
 
 logger = logging.getLogger("sidwell.reports.render")
 
-SIDWELL_VERSION = "v0.3"
+SIDWELL_VERSION = "v0.4"
 
 _PART_ORDER = {"A": 0, "B": 1, "C": 2, "D": 3}
 
@@ -185,7 +185,7 @@ def render_markdown_report(
     md.append(f"| **Mature Market ERP** | {assumptions['mature_market_erp']*100:.2f}% | Damodaran NYU Stern (Mature Equity Risk Premium) |")
     md.append(f"| **Country Risk Premium** | {assumptions['country_risk_premium']*100:.2f}% | Damodaran NYU Stern (Country default spread adjusted) |")
     md.append(f"| **Total Equity Risk Premium** | {assumptions['total_erp']*100:.2f}% | Damodaran mature ERP + country premium = {assumptions['total_erp']*100:.2f}% |")
-    source_tag = "ticker-mapped" if assumptions.get('industry_source') == 'mapped' else 'default fallback'
+    source_tag = "from Damodaran sheet" if assumptions.get('industry_source') == 'mapped' else 'hardcoded fallback (Damodaran lookup failed)'
     md.append(f"| **Industry Unlevered Beta** | {assumptions['beta_unlevered']:.2f} | Damodaran '{assumptions.get('target_industry', 'Chemical (Specialty)')}' ({source_tag}) |")
     md.append(f"| **Target Levered Beta ($\\beta$)** | {assumptions['beta_levered']:.2f} | Re-levered using actual D/E = {assumptions['beta_levered']:.2f} |")
     md.append(f"| **Cost of Equity ($K_e$)** | {assumptions['cost_of_equity']*100:.2f}% | CAPM: $R_f + \\beta \\times ERP$ = {assumptions['cost_of_equity']*100:.2f}% |")
@@ -196,37 +196,78 @@ def render_markdown_report(
     md.append(f"| **Computed WACC** | **{assumptions['wacc']*100:.2f}%** | Weighted cost of capital = **{assumptions['wacc']*100:.2f}%** |")
     md.append("")
 
-    md.append("### 5-Year Explicit Forecast Projections")
+    md.append("### 5-Year High-Growth Forecast (Stage 1)")
     md.append("Projections are based on historical averages relative to Revenue. Revenue growth is projected at **{:.2f}%** (historical 4y CAGR capped between 5% and 20%).".format(assumptions["revenue_growth"]*100))
     md.append("")
 
-    proj_headers = ["Metric"] + [p["year"] for p in dcf_results["projections"]] + ["Terminal Value"]
+    stage1_projs = [p for p in dcf_results["projections"] if p.get("stage", "high") == "high"]
+    proj_headers = ["Metric"] + [p["year"] for p in stage1_projs]
     md.append("| " + " | ".join(proj_headers) + " |")
     md.append("| " + " | ".join([":---"] * len(proj_headers)) + " |")
 
-    rev_p = ["Revenue"] + [format_currency(p["revenue"], is_india) for p in dcf_results["projections"]] + ["-"]
+    rev_p = ["Revenue"] + [format_currency(p["revenue"], is_india) for p in stage1_projs]
     md.append("| " + " | ".join(rev_p) + " |")
-    ebit_p = ["EBIT"] + [format_currency(p["ebit"], is_india) for p in dcf_results["projections"]] + ["-"]
+    ebit_p = ["EBIT"] + [format_currency(p["ebit"], is_india) for p in stage1_projs]
     md.append("| " + " | ".join(ebit_p) + " |")
-    tax_p = ["Taxes"] + [format_currency(p["tax"], is_india) for p in dcf_results["projections"]] + ["-"]
+    tax_p = ["Taxes"] + [format_currency(p["tax"], is_india) for p in stage1_projs]
     md.append("| " + " | ".join(tax_p) + " |")
-    dep_p = ["D&A"] + [format_currency(p["depreciation"], is_india) for p in dcf_results["projections"]] + ["-"]
+    dep_p = ["D&A"] + [format_currency(p["depreciation"], is_india) for p in stage1_projs]
     md.append("| " + " | ".join(dep_p) + " |")
-    cap_p = ["CapEx"] + [format_currency(p["capex"], is_india) for p in dcf_results["projections"]] + ["-"]
+    cap_p = ["CapEx"] + [format_currency(p["capex"], is_india) for p in stage1_projs]
     md.append("| " + " | ".join(cap_p) + " |")
-    nwc_p = ["NWC Change (CF)"] + [format_currency(p["working_capital_change"], is_india) for p in dcf_results["projections"]] + ["-"]
+    nwc_p = ["NWC Change (CF)"] + [format_currency(p["working_capital_change"], is_india) for p in stage1_projs]
     md.append("| " + " | ".join(nwc_p) + " |")
-    fcf_p = ["Free Cash Flow"] + [format_currency(p["fcf"], is_india) for p in dcf_results["projections"]] + [format_currency(dcf_results["terminal_value"], is_india)]
+    fcf_p = ["Free Cash Flow"] + [format_currency(p["fcf"], is_india) for p in stage1_projs]
     md.append("| " + " | ".join(fcf_p) + " |")
-    df_p = ["Discount Factor"] + [f"{p['discount_factor']:.4f}" for p in dcf_results["projections"]] + [f"{(1.0 + dcf_results['wacc'])**5:.4f}"]
+    df_p = ["Discount Factor"] + [f"{p['discount_factor']:.4f}" for p in stage1_projs]
     md.append("| " + " | ".join(df_p) + " |")
-    pv_p = ["PV of Cash Flow"] + [format_currency(p["pv_fcf"], is_india) for p in dcf_results["projections"]] + [format_currency(dcf_results["pv_terminal_value"], is_india)]
+    pv_p = ["PV of Cash Flow"] + [format_currency(p["pv_fcf"], is_india) for p in stage1_projs]
     md.append("| " + " | ".join(pv_p) + " |")
+    md.append("")
+    
+    stage2_projs = [p for p in dcf_results["projections"] if p.get("stage") == "fade"]
+    if stage2_projs:
+        md.append(f"### 5-Year Fade Forecast (Stage 2) — growth fading from {assumptions['stage_1_growth']*100:.2f}% to {assumptions['terminal_growth_rate']*100:.2f}%")
+        md.append("")
+        
+        proj_headers2 = ["Metric"] + [p["year"] for p in stage2_projs]
+        md.append("| " + " | ".join(proj_headers2) + " |")
+        md.append("| " + " | ".join([":---"] * len(proj_headers2)) + " |")
+
+        rev_p2 = ["Revenue"] + [format_currency(p["revenue"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(rev_p2) + " |")
+        ebit_p2 = ["EBIT"] + [format_currency(p["ebit"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(ebit_p2) + " |")
+        tax_p2 = ["Taxes"] + [format_currency(p["tax"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(tax_p2) + " |")
+        dep_p2 = ["D&A"] + [format_currency(p["depreciation"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(dep_p2) + " |")
+        cap_p2 = ["CapEx"] + [format_currency(p["capex"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(cap_p2) + " |")
+        nwc_p2 = ["NWC Change (CF)"] + [format_currency(p["working_capital_change"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(nwc_p2) + " |")
+        fcf_p2 = ["Free Cash Flow"] + [format_currency(p["fcf"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(fcf_p2) + " |")
+        df_p2 = ["Discount Factor"] + [f"{p['discount_factor']:.4f}" for p in stage2_projs]
+        md.append("| " + " | ".join(df_p2) + " |")
+        pv_p2 = ["PV of Cash Flow"] + [format_currency(p["pv_fcf"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(pv_p2) + " |")
+        md.append("")
+
+    md.append("### Terminal Value")
+    last_year_num = len(dcf_results["projections"])
+    fcf_final = dcf_results["projections"][-1]["fcf"] if dcf_results["projections"] else 0.0
+    g_term = assumptions.get('terminal_growth_rate', 0.0)
+    md.append(f"- Final fade year (Year {last_year_num}) FCF: {format_currency(fcf_final, is_india)}")
+    md.append(f"- Terminal growth (Gordon): {g_term*100:.2f}%")
+    md.append(f"- Sector mapping: {assumptions.get('sector_terminal_source', 'Unknown')}")
+    md.append(f"- Terminal Value: {format_currency(dcf_results['terminal_value'], is_india)}")
+    md.append(f"- PV of Terminal Value (discounted from Year {last_year_num}): {format_currency(dcf_results['pv_terminal_value'], is_india)}")
     md.append("")
 
     md.append("### Valuation Bridge")
     md.append(f"- **PV of Explicit FCFs**: {format_currency(dcf_results['pv_fcf'], is_india)}")
-    md.append(f"- **PV of Terminal Value (g = {assumptions['terminal_growth_rate']*100:.2f}%)**: {format_currency(dcf_results['pv_terminal_value'], is_india)}")
+    md.append(f"- **PV of Terminal Value (g = {g_term*100:.2f}%)**: {format_currency(dcf_results['pv_terminal_value'], is_india)}")
     md.append(f"- **Enterprise Value**: {format_currency(dcf_results['enterprise_value'], is_india)}")
     md.append(f"- **Add: Cash & Equivalents**: {format_currency(assumptions['latest_cash'], is_india)}")
     md.append(f"- **Less: Total Debt**: {format_currency(assumptions['latest_debt'], is_india)}")

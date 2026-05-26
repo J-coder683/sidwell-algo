@@ -57,7 +57,7 @@ This document lists the step-by-step manual derivations and math formulas for th
 
 ---
 
-## 2. Projections (Explicit 5-Year Forecast)
+## 2. Projections (Explicit 10-Year Forecast, 2-Stage Fade)
 Historical ratios as % of Revenue:
 - EBIT Margin: `20.00%` (0.20)
 - Tax Rate: `25.00%` (0.25)
@@ -65,81 +65,83 @@ Historical ratios as % of Revenue:
 - CapEx Ratio: `5.00%` (0.05)
 - Working Capital Change Ratio: `0.00%` (0.00)
 - Net cash flow margin coefficient = `0.20 * (1 - 0.25) + 0.03 - 0.05 + 0.00 = 0.13` (13.00% of Revenue).
-- Revenue growth rate: `10.00%` (0.10) (CAGR is exactly 10%, in the 5%-20% cap range).
+- Stage 1 Revenue growth rate: `10.00%` (0.10) (CAGR is exactly 10%, in the 5%-20% cap range).
+- Terminal Growth Rate ($g_{terminal}$): Target industry default mapping in India = `4.00%` (0.040).
+- Stage 2 fade interpolates linearly from 10.00% to 4.00% over Years 6-10.
 
 Projections relative to Revenue:
-- **Year 1 (2026)**:
+- **Year 1 (2026)**: (Stage 1, 10.00% growth)
   - Revenue: `133.1 * 1.10 = 146.41`
-  - EBIT: `146.41 * 0.20 = 29.282`
-  - Taxes: `29.282 * 0.25 = 7.3205`
-  - D&A: `146.41 * 0.03 = 4.3923`
-  - CapEx: `146.41 * 0.05 = 7.3205`
-  - NWC change: `0.00`
   - FCF: `146.41 * 0.13 = 19.0333`
   - Discount Factor: `(1 + WACC) ** 1 = 1.122971`
   - PV of FCF: `19.0333 / 1.122971 = 16.9490`
-- **Year 2 (2027)**:
+- **Year 2 (2027)**: (Stage 1, 10.00% growth)
   - Revenue: `146.41 * 1.10 = 161.051`
-  - EBIT: `32.2102`
-  - Taxes: `8.05255`
-  - D&A: `4.83153`
-  - CapEx: `8.05255`
-  - NWC change: `0.00`
   - FCF: `161.051 * 0.13 = 20.93663`
   - Discount Factor: `(1 + WACC) ** 2 = 1.261064`
   - PV of FCF: `20.93663 / 1.261064 = 16.6024`
-- **Year 3 (2028)**:
+- **Year 3 (2028)**: (Stage 1, 10.00% growth)
   - Revenue: `161.051 * 1.10 = 177.1561`
-  - EBIT: `35.43122`
-  - Taxes: `8.857805`
-  - D&A: `5.314683`
-  - CapEx: `8.857805`
-  - NWC change: `0.00`
-  - FCF: `177.1561 * 0.13 = 23.030293`
+  - FCF: `177.1561 * 0.13 = 23.03029`
   - Discount Factor: `(1 + WACC) ** 3 = 1.416139`
-  - PV of FCF: `23.030293 / 1.416139 = 16.2627`
-- **Year 4 (2029)**:
-  - Revenue: `177.1561 * 1.10 = 194.87171`
-  - EBIT: `38.974342`
-  - Taxes: `9.7435855`
-  - D&A: `5.8461513`
-  - CapEx: `9.7435855`
-  - NWC change: `0.00`
-  - FCF: `194.87171 * 0.13 = 25.3333223`
+  - PV of FCF: `23.03029 / 1.416139 = 16.2627`
+- **Year 4 (2029)**: (Stage 1, 10.00% growth)
+  - Revenue: `177.1561 * 1.10 = 194.8717`
+  - FCF: `194.8717 * 0.13 = 25.33332`
   - Discount Factor: `(1 + WACC) ** 4 = 1.590284`
-  - PV of FCF: `25.3333223 / 1.590284 = 15.9301`
-- **Year 5 (2030)**:
-  - Revenue: `194.87171 * 1.10 = 214.358881`
-  - EBIT: `42.8717762`
-  - Taxes: `10.71794405`
-  - D&A: `6.43076643`
-  - CapEx: `10.71794405`
-  - NWC change: `0.00`
-  - FCF: `214.358881 * 0.13 = 27.86665453`
+  - PV of FCF: `25.33332 / 1.590284 = 15.9301`
+- **Year 5 (2030)**: (Stage 1, 10.00% growth)
+  - Revenue: `194.8717 * 1.10 = 214.3589`
+  - FCF: `214.3589 * 0.13 = 27.86665`
   - Discount Factor: `(1 + WACC) ** 5 = 1.785842`
-  - PV of FCF: `27.86665453 / 1.785842 = 15.6042`
+  - PV of FCF: `27.86665 / 1.785842 = 15.6042`
+- **Year 6 (2031)**: (Stage 2 fade: 10% - 1.2% = 8.80%)
+  - Revenue: `214.3589 * 1.088 = 233.2225`
+  - FCF: `233.2225 * 0.13 = 30.31892`
+  - Discount Factor: `(1 + WACC) ** 6 = 2.005445`
+  - PV of FCF: `30.31892 / 2.005445 = 15.1183`
+- **Year 7 (2032)**: (Stage 2 fade: 10% - 2.4% = 7.60%)
+  - Revenue: `233.2225 * 1.076 = 250.9474`
+  - FCF: `250.9474 * 0.13 = 32.62316`
+  - Discount Factor: `(1 + WACC) ** 7 = 2.252058`
+  - PV of FCF: `32.62316 / 2.252058 = 14.4859`
+- **Year 8 (2033)**: (Stage 2 fade: 10% - 3.6% = 6.40%)
+  - Revenue: `250.9474 * 1.064 = 267.0080`
+  - FCF: `267.0080 * 0.13 = 34.71104`
+  - Discount Factor: `(1 + WACC) ** 8 = 2.528987`
+  - PV of FCF: `34.71104 / 2.528987 = 13.7253`
+- **Year 9 (2034)**: (Stage 2 fade: 10% - 4.8% = 5.20%)
+  - Revenue: `267.0080 * 1.052 = 280.8924`
+  - FCF: `280.8924 * 0.13 = 36.51601`
+  - Discount Factor: `(1 + WACC) ** 9 = 2.839988`
+  - PV of FCF: `36.51601 / 2.839988 = 12.8578`
+- **Year 10 (2035)**: (Stage 2 fade: 10% - 6.0% = 4.00%)
+  - Revenue: `280.8924 * 1.040 = 292.1281`
+  - FCF: `292.1281 * 0.13 = 37.97666`
+  - Discount Factor: `(1 + WACC) ** 10 = 3.189225`
+  - PV of FCF: `37.97666 / 3.189225 = 11.9078`
 
-Sum of PV of Explicit Cash Flows = `16.9490 + 16.6024 + 16.2627 + 15.9301 + 15.6042 = 81.3484`
+Sum of PV of Explicit Cash Flows (10 Years) = `149.4435`
 
 ---
 
-## 3. Terminal Value (Gordon Growth)
-- Terminal growth rate ($g_{terminal}$): `min(0.04, Rf - 0.01) = min(0.04, 0.05) = 4.00%` (0.04)
+## 3. Terminal Value (Gordon Growth at Year 10)
+- Terminal growth rate ($g_{terminal}$): `4.00%` (0.04)
 - Terminal Value (TV):
-  $$TV = \frac{FCF_5 \times (1 + g_{terminal})}{WACC - g_{terminal}}$$
-  $$TV = \frac{27.86665453 \times 1.04}{0.12297115 - 0.04} = \frac{28.9813207}{0.08297115} = 349.2939$$
+  $$TV = \frac{FCF_{10} \times (1 + g_{terminal})}{WACC - g_{terminal}}$$
+  $$TV = \frac{37.97666 \times 1.04}{0.12297115 - 0.04} = \frac{39.4957}{0.08297115} = 476.0175$$
 - PV of Terminal Value:
-  $$PV(TV) = \frac{TV}{(1 + WACC) ** 5} = \frac{349.2939}{1.785842} = 195.5906$$
+  $$PV(TV) = \frac{TV}{(1 + WACC) ** 10} = \frac{476.0175}{3.189225} = 149.2580$$
 
 ---
 
 ## 4. Valuation Bridge
-- Enterprise Value (EV) = PV of explicit FCFs + PV of TV = `81.3484 + 195.5906 = 276.9390`
+- Enterprise Value (EV) = PV of explicit FCFs + PV of TV = `149.4435 + 149.2580 = 298.7015`
 - Add: latest Cash: `13.31`
 - Less: latest Debt: `20.00`
-- Equity Value = EV + Cash - Debt = `276.9390 + 13.31 - 20.00 = 270.2490`
+- Equity Value = EV + Cash - Debt = `298.7015 + 13.31 - 20.00 = 292.0115`
 - Shares Outstanding: `10.0`
-- Intrinsic Value per Share: `270.2490 / 10 = 27.0249` $\approx$ `₹27.02`
+- Intrinsic Value per Share: `292.0115 / 10 = 29.2012` $\approx$ `₹29.20`
 
 ---
 
@@ -178,8 +180,8 @@ Sum of PV of Explicit Cash Flows = `16.9490 + 16.6024 + 16.2627 + 15.9301 + 15.6
    - `hist_growth_std = 0.00%`
    - Target: `5% < CAGR < 30% & YoY Growth StDev < 10.0%`. Status: **PASS**
 7. **Margin of safety**:
-   - Intrinsic Value = `27.02`, Current Price = `50.00`
-   - Target: `> 25.0%`. Status: **FAIL** (Trading at 1.9x intrinsic value (target ≤ 0.75x))
+   - Intrinsic Value = `29.20`, Current Price = `50.00`
+   - Target: `> 25.0%`. Status: **FAIL** (Trading at 1.7x intrinsic value (target ≤ 0.75x))
 8. **Understandable business**:
    - Target: `True`. Status: **PASS**
 
