@@ -1,7 +1,9 @@
 import pytest
 from lenses.buffett import evaluate_buffett_lens
 
+
 def get_perfect_financials():
+    """Fixture company that passes all 14 Buffett checks."""
     return {
         "ticker": "PERFECT",
         "current_price": 50.0,
@@ -10,7 +12,7 @@ def get_perfect_financials():
         "years": ["2021-12-31", "2022-12-31", "2023-12-31", "2024-12-31"],
         # Revenue growing at exactly 6%
         "revenue": [106.0, 112.36, 119.1016, 126.2477],
-        # Gross margin exactly 50%
+        # Gross margin exactly 50% — stable → moat PASS
         "gross_profit": [53.0, 56.18, 59.5508, 63.1238],
         # EBIT margin 25%
         "ebit": [26.5, 28.09, 29.7754, 31.5619],
@@ -20,13 +22,22 @@ def get_perfect_financials():
         "net_income": [19.875, 21.0675, 22.3315, 23.6714],
         "total_assets": [106.0, 112.36, 119.1016, 126.2477],
         "total_equity": [74.2, 78.652, 83.3711, 88.3734],
+        # Cash > 50% of debt → liquidity PASS
         "cash": [31.8, 33.708, 35.7305, 37.8743],
         "debt": [10.0, 10.0, 10.0, 10.0],
         "capex": [5.3, 5.618, 5.9551, 6.3124],
         "depreciation": [2.12, 2.2472, 2.3820, 2.5250],
         "working_capital_change": [0.0, 0.0, 0.0, 0.0],
-        "fcf": [21.2, 22.472, 23.8203, 25.2495]
+        "fcf": [21.2, 22.472, 23.8203, 25.2495],
+        # v0.3 additional fields
+        "insider_ownership": 0.10,           # > 5% → owner orientation hard PASS
+        "stock_beta": 0.85,
+        "trailing_pe": 18.0,
+        "recommendation_mean": 3.0,
+        "dividend_yield": 0.02,              # > 0 → capital returned
+        "historical_shares": [10.0, 10.0, 10.0, 10.0],  # flat → anti-dilution PASS
     }
+
 
 def get_perfect_dcf(intrinsic_value=100.0):
     return {
@@ -38,49 +49,6 @@ def get_perfect_dcf(intrinsic_value=100.0):
         }
     }
 
-def test_buffett_lens_buy():
-    financials = get_perfect_financials()
-    dcf_res = get_perfect_dcf(100.0)
-    
-    res = evaluate_buffett_lens(financials, dcf_res)
-    
-    assert res["score"] == 8
-    assert res["verdict"] == "BUY"
-
-def test_buffett_lens_wait():
-    financials = get_perfect_financials()
-    dcf_res = get_perfect_dcf(100.0)
-    dcf_res["current_price"] = 90.0
-    
-    res = evaluate_buffett_lens(financials, dcf_res)
-    
-    assert res["score"] == 7
-    assert res["verdict"] == "WAIT"
-
-def test_buffett_lens_skip():
-    financials = get_perfect_financials()
-    # Intentionally ruin some checks to get a low score
-    # Ruin Moat: Volatile Gross Margin
-    financials["gross_profit"] = [10.0, 45.0, 10.0, 60.0]
-    # Ruin FCF Growth: Negative growth
-    financials["fcf"] = [30.0, 20.0, 15.0, 10.0]
-    # Ruin Leverage: Extremely high debt
-    financials["debt"] = [200.0, 200.0, 200.0, 200.0]
-    # Ruin ROE & Leverage: Equity to Assets < 40% (Equity = 10, Assets = 126 -> 7.9%)
-    financials["total_equity"] = [10.0, 10.0, 10.0, 10.0]
-    
-    dcf_res = get_perfect_dcf(100.0)
-    dcf_res["current_price"] = 95.0
-    
-    res = evaluate_buffett_lens(financials, dcf_res)
-    
-    assert res["score"] < 6
-    assert res["verdict"] == "SKIP"
-
-
-# ---------------------------------------------------------------------------
-# Hybrid check #8 tests (v0.2)
-# ---------------------------------------------------------------------------
 
 def _make_unavailable_qualitative():
     return {
@@ -91,80 +59,287 @@ def _make_unavailable_qualitative():
         "strategic_themes": [],
         "tone_assessment": {"current": None, "trajectory": None, "notes": None},
         "coherence_assessment": {"verdict": None, "reasoning": None},
+        "owner_orientation_signal": {"verdict": None, "evidence": None},
+        "holdability_assessment": {"verdict": None, "reasoning": None},
+        "cycle_position": {"sector_cycle": None, "company_cycle": None, "reasoning": None},
+        "variant_perception": {"consensus_view": None, "company_view": None,
+                               "variant_present": None, "specificity": None, "notes": None},
+        "management_humility": {"verdict": None, "evidence": None},
+        "why_now_signal": {"verdict": None, "specific_event": None, "notes": None},
         "documents_used": [],
         "model": None,
     }
 
 
-def _make_available_qualitative(verdict: str):
+def _make_available_qualitative(
+    coherence_verdict="coherent",
+    owner_verdict="owner_oriented",
+    holdability_verdict="holdable_20y",
+):
     return {
         "status": "available",
-        "model": "gemini-1.5-flash",
+        "model": "gemini-3.5-flash",
         "documents_used": ["test.pdf"],
         "forward_guidance": [],
         "risk_callouts": [],
         "strategic_themes": [],
         "tone_assessment": {"current": "confident", "trajectory": "stable", "notes": "Fine."},
-        "coherence_assessment": {"verdict": verdict, "reasoning": "Because."},
+        "coherence_assessment": {"verdict": coherence_verdict, "reasoning": "Because."},
+        "owner_orientation_signal": {"verdict": owner_verdict, "evidence": "Partners framing."},
+        "holdability_assessment": {"verdict": holdability_verdict, "reasoning": "Durable demand."},
+        "cycle_position": {"sector_cycle": "mid_cycle", "company_cycle": "mid", "reasoning": "Mid band."},
+        "variant_perception": {"consensus_view": "Strong growth.", "company_view": "Modest.",
+                               "variant_present": True, "specificity": "high", "notes": "Specific mechanism."},
+        "management_humility": {"verdict": "humble", "evidence": "No multi-year forecasts."},
+        "why_now_signal": {"verdict": "dislocation_present", "specific_event": "Sector de-rated.", "notes": "FII selling."},
     }
 
 
-def test_check8_qualitative_unavailable_behaves_like_v011():
-    """When qualitative is unavailable, check #8 uses hard blacklist only (v0.1.1 behavior)."""
-    financials = get_perfect_financials()  # ticker = "PERFECT", not in blacklist
+# ---------------------------------------------------------------------------
+# BUY / WAIT / SKIP verdict tests (no qualitative)
+# ---------------------------------------------------------------------------
+
+def test_buffett_lens_buy():
+    """Perfect company at 50% of intrinsic value → score 14, BUY."""
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+
+    assert res["score"] == 14
+    assert res["verdict"] == "BUY"
+
+
+def test_buffett_lens_wait():
+    """Perfect company but price > intrinsic → MoS fails → WAIT."""
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+    dcf_res["current_price"] = 90.0  # MoS fails
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+
+    assert res["checks"]["12_margin_of_safety"]["passed"] is False
+    assert res["score"] == 13  # all pass except MoS
+    assert res["verdict"] == "WAIT"
+
+
+def test_buffett_lens_skip():
+    """Ruin multiple checks → score < 10 → SKIP."""
+    financials = get_perfect_financials()
+    # Ruin moat: volatile gross margin
+    financials["gross_profit"] = [10.0, 45.0, 10.0, 60.0]
+    # Ruin FCF margin: < 10%
+    financials["fcf"] = [1.0, 1.0, 1.0, 1.0]
+    # Ruin balance sheet: excessive debt
+    financials["debt"] = [200.0, 200.0, 200.0, 200.0]
+    # Ruin ROE: low equity
+    financials["total_equity"] = [10.0, 10.0, 10.0, 10.0]
+    # Ruin anti-dilution: shares grew 20%
+    financials["historical_shares"] = [10.0, 10.5, 11.5, 12.0]
+
+    dcf_res = get_perfect_dcf(100.0)
+    dcf_res["current_price"] = 95.0
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+
+    assert res["score"] < 10
+    assert res["verdict"] == "SKIP"
+
+
+# ---------------------------------------------------------------------------
+# Part B — Financial Health checks
+# ---------------------------------------------------------------------------
+
+def test_check7_liquidity_cushion_pass():
+    """Cash > 50% of debt → check 7 passes."""
+    financials = get_perfect_financials()
+    # cash[-1] = 37.87, debt[-1] = 10.0 → ratio = 3.79 > 0.5
+    dcf_res = get_perfect_dcf(100.0)
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+    assert res["checks"]["7_liquidity_cushion"]["passed"] is True
+
+
+def test_check7_liquidity_cushion_fail():
+    """Cash < 50% of debt → check 7 fails."""
+    financials = get_perfect_financials()
+    financials["cash"] = [1.0, 1.0, 1.0, 1.0]   # tiny cash
+    financials["debt"] = [100.0, 100.0, 100.0, 100.0]  # large debt
+    dcf_res = get_perfect_dcf(100.0)
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+    assert res["checks"]["7_liquidity_cushion"]["passed"] is False
+
+
+# ---------------------------------------------------------------------------
+# Part C — Management checks
+# ---------------------------------------------------------------------------
+
+def test_check8_anti_dilution_pass():
+    """Flat share count → check 8 passes."""
+    financials = get_perfect_financials()
+    financials["historical_shares"] = [10.0, 10.0, 10.0, 10.0]
+    dcf_res = get_perfect_dcf(100.0)
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+    assert res["checks"]["8_anti_dilution"]["passed"] is True
+
+
+def test_check8_anti_dilution_fail():
+    """Share count grew 20% → check 8 fails."""
+    financials = get_perfect_financials()
+    financials["historical_shares"] = [10.0, 10.0, 11.0, 12.0]
+    dcf_res = get_perfect_dcf(100.0)
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+    assert res["checks"]["8_anti_dilution"]["passed"] is False
+
+
+def test_check8_anti_dilution_no_data():
+    """No share count data → defaults PASS."""
+    financials = get_perfect_financials()
+    financials["historical_shares"] = []
+    dcf_res = get_perfect_dcf(100.0)
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+    assert res["checks"]["8_anti_dilution"]["passed"] is True
+    assert "defaulted PASS" in res["checks"]["8_anti_dilution"]["detail"]
+
+
+def test_check9_capital_allocation_pass():
+    """ROIC stable and dividend_yield > 0 → check 9 passes."""
+    financials = get_perfect_financials()
+    financials["dividend_yield"] = 0.02
+    dcf_res = get_perfect_dcf(100.0)
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+    assert res["checks"]["9_capital_allocation"]["passed"] is True
+
+
+def test_check10_owner_orientation_hard_pass():
+    """Insider ownership > 5% → check 10 passes regardless of soft."""
+    financials = get_perfect_financials()
+    financials["insider_ownership"] = 0.10
     dcf_res = get_perfect_dcf(100.0)
     qualitative = _make_unavailable_qualitative()
 
     res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
-    check8 = res["checks"]["8_understandable"]
-
-    assert check8["passed"] is True, "Hard-only should pass for PERFECT ticker"
-    assert "SKIPPED" in check8["detail"]
+    assert res["checks"]["10_owner_orientation"]["passed"] is True
 
 
-def test_check8_coherent_verdict_passes():
-    """When qualitative available and verdict is coherent, hard+soft both pass → check passes."""
+def test_check10_owner_orientation_soft_pass():
+    """Insider ownership < 5% but LLM says owner_oriented → check 10 passes."""
     financials = get_perfect_financials()
+    financials["insider_ownership"] = 0.01  # < 5% → hard FAIL
     dcf_res = get_perfect_dcf(100.0)
-    qualitative = _make_available_qualitative("coherent")
+    qualitative = _make_available_qualitative(owner_verdict="owner_oriented")
 
     res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
-    check8 = res["checks"]["8_understandable"]
-
-    assert check8["passed"] is True
-    hard_pass, soft_pass = check8["value"]
-    assert hard_pass is True
-    assert soft_pass is True
-    assert "PASS" in check8["detail"]
+    assert res["checks"]["10_owner_orientation"]["passed"] is True
 
 
-def test_check8_incoherent_verdict_fails_even_if_hard_passes():
-    """When qualitative available and verdict is incoherent, check #8 fails even though
-    ticker is not in the hard blacklist."""
+def test_check10_owner_orientation_both_fail():
+    """Insider < 5% AND LLM says management_class → check 10 fails."""
     financials = get_perfect_financials()
+    financials["insider_ownership"] = 0.01
     dcf_res = get_perfect_dcf(100.0)
-    qualitative = _make_available_qualitative("incoherent")
+    qualitative = _make_available_qualitative(owner_verdict="management_class")
 
     res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
-    check8 = res["checks"]["8_understandable"]
-
-    assert check8["passed"] is False
-    hard_pass, soft_pass = check8["value"]
-    assert hard_pass is True   # ticker not in blacklist
-    assert soft_pass is False  # LLM said incoherent
+    assert res["checks"]["10_owner_orientation"]["passed"] is False
 
 
-def test_check8_blacklisted_ticker_fails_regardless_of_soft():
-    """Ticker in blacklist → hard FAIL → check #8 fails even if LLM says coherent."""
+def test_check11_mgmt_coherence_passes_when_unavailable():
+    """When qualitative unavailable, check 11 defaults PASS."""
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+    qualitative = _make_unavailable_qualitative()
+
+    res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
+    check11 = res["checks"]["11_mgmt_coherence"]
+    assert check11["passed"] is True
+    assert "SKIPPED" in check11["detail"]
+
+
+def test_check11_mgmt_coherence_fails_on_incoherent():
+    """When qualitative says incoherent, check 11 fails."""
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+    qualitative = _make_available_qualitative(coherence_verdict="incoherent")
+
+    res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
+    assert res["checks"]["11_mgmt_coherence"]["passed"] is False
+
+
+# ---------------------------------------------------------------------------
+# Part D — Price & Holdability checks
+# ---------------------------------------------------------------------------
+
+def test_check13_blacklist_fail():
+    """Ticker starting with BTC fails hard blacklist."""
     financials = get_perfect_financials()
     financials["ticker"] = "BTC-USD"
     dcf_res = get_perfect_dcf(100.0)
-    qualitative = _make_available_qualitative("coherent")
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+    assert res["checks"]["13_hard_blacklist"]["passed"] is False
+
+
+def test_check14_holdability_passes_when_unavailable():
+    """When qualitative unavailable, check 14 defaults PASS."""
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+    qualitative = _make_unavailable_qualitative()
 
     res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
-    check8 = res["checks"]["8_understandable"]
+    assert res["checks"]["14_holdability"]["passed"] is True
 
-    assert check8["passed"] is False
-    hard_pass, soft_pass = check8["value"]
-    assert hard_pass is False  # BTC is in blacklist
-    assert soft_pass is True   # LLM said coherent but it doesn't matter
+
+def test_check14_holdability_fails_on_not_holdable():
+    """When qualitative says not_holdable_20y, check 14 fails."""
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+    qualitative = _make_available_qualitative(holdability_verdict="not_holdable_20y")
+
+    res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
+    assert res["checks"]["14_holdability"]["passed"] is False
+
+
+# ---------------------------------------------------------------------------
+# Structural invariants
+# ---------------------------------------------------------------------------
+
+def test_score_is_14_max():
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+    qualitative = _make_available_qualitative()
+
+    res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
+    assert 0 <= res["score"] <= 14
+
+
+def test_verdict_in_valid_set():
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+    assert res["verdict"] in {"BUY", "WAIT", "WATCH", "SKIP"}
+
+
+def test_all_checks_have_required_keys():
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+    required_keys = {"name", "metric_name", "value", "threshold_str", "passed", "detail", "part"}
+    for key, check in res["checks"].items():
+        for k in required_keys:
+            assert k in check, f"Check {key} missing key '{k}'"
+
+
+def test_14_checks_present():
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+
+    res = evaluate_buffett_lens(financials, dcf_res)
+    assert len(res["checks"]) == 14

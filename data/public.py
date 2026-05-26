@@ -465,6 +465,15 @@ def fetch_financials(ticker: str) -> dict:
             shares_outstanding = market_cap / current_price
         elif market_cap == 0.0 and shares_outstanding > 0.0 and current_price > 0.0:
             market_cap = shares_outstanding * current_price
+
+        # Additional fields for v0.3 lens checks (Buffett 8/9/10, Marks 7/10)
+        insider_ownership = float(info.get("heldPercentInsiders", 0.0) or 0.0)
+        stock_beta = float(info.get("beta", info.get("beta3Year", 1.0)) or 1.0)
+        trailing_pe_raw = info.get("trailingPE", None)
+        trailing_pe = float(trailing_pe_raw) if trailing_pe_raw is not None else None
+        rec_mean_raw = info.get("recommendationMean", None)  # 1=Strong Buy ... 5=Sell
+        recommendation_mean = float(rec_mean_raw) if rec_mean_raw is not None else None
+        dividend_yield = float(info.get("dividendYield", 0.0) or 0.0)
             
         # Get statements
         # yfinance returns dataframes where columns are the fiscal year end dates (newest first).
@@ -536,7 +545,16 @@ def fetch_financials(ticker: str) -> dict:
         cfo_row = get_row(cashflow, ["Operating Cash Flow", "Cash Flow From Operating Activities"])
         capex_row = get_row(cashflow, ["Capital Expenditure", "Net PPE Purchase And Sale", "Purchase Of Property Plant And Equipment"])
         deprec_row = get_row(cashflow, ["Depreciation And Amortization", "Depreciation Amortization Depletion"])
-        
+
+        # Historical share count — for Buffett check 8 (anti-dilution)
+        shares_row = get_row(balance, [
+            "Ordinary Shares Number",
+            "Share Issued",
+            "Common Stock",
+        ])
+        historical_shares_raw = [float(shares_row.get(d, 0.0)) for d in sorted_dates]
+        historical_shares_raw = historical_shares_raw[-4:]
+
         # NWC change
         nwc_change_row = get_row(cashflow, ["Change In Working Capital", "Working Capital"])
         
@@ -649,6 +667,13 @@ def fetch_financials(ticker: str) -> dict:
             "depreciation": depreciation,
             "working_capital_change": working_capital_change,
             "fcf": fcf,
+            # v0.3 additional fields (degrade to safe defaults if yfinance unavailable)
+            "insider_ownership": insider_ownership,
+            "stock_beta": stock_beta,
+            "trailing_pe": trailing_pe,
+            "recommendation_mean": recommendation_mean,
+            "dividend_yield": dividend_yield,
+            "historical_shares": historical_shares_raw,
             "source": "Yahoo Finance (yfinance)"
         }
         

@@ -29,5 +29,12 @@ FIXTURE_INPUTS = {
     "capex": [5.0, 5.5, 6.05, 6.655],
     "depreciation": [3.0, 3.3, 3.63, 3.993],
     "working_capital_change": [0.0, 0.0, 0.0, 0.0],
-    "fcf": [11.5, 12.8, 14.23, 15.803]
+    "fcf": [11.5, 12.8, 14.23, 15.803],
+    # v0.3 additional fields
+    "insider_ownership": 0.10,       # 10% > 5% threshold → Buffett check 10 hard PASS
+    "stock_beta": 0.85,              # < 1.5 → Marks check 10 PASS
+    "trailing_pe": 18.0,             # < 25x → Marks check 4 PASS
+    "recommendation_mean": 3.2,      # 2.5-4.0 mixed/cautious → Marks check 7 PASS
+    "dividend_yield": 0.02,          # 2% dividend → capital returned PASS
+    "historical_shares": [10.0, 10.0, 10.0, 10.0],  # flat share count → anti-dilution PASS
 }

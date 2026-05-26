@@ -1,6 +1,6 @@
 """
 Qualitative analysis layer. Sends document text to Gemini and parses
-structured JSON output. Caches result keyed on document hash.
+structured JSON output. Caches result keyed on document hash + prompt version.
 """
 import os
 import json
@@ -16,9 +16,10 @@ logger = logging.getLogger("sidwell.analysis.qualitative")
 
 QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
 MODEL_NAME = "gemini-3.5-flash"  # Free tier, sufficient for structured extraction
+PROMPT_VERSION = "v0.3"  # Bump when prompt schema changes; invalidates old cache entries
 
 # Maximum characters of PDF text per document sent to Gemini.
-# Each PDF is truncated to this length to stay within token limits.
+# Gemini Flash supports 1M token context; 200k chars is safely within limits.
 MAX_DOC_CHARS = 200_000
 
 
@@ -32,14 +33,15 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
       - model: model name used
       - documents_used: list of filenames
 
-    Cached by combined document hash. If the cache hits, no Gemini call is made.
-    Never raises — all failure modes return an "unavailable" dict.
+    Cached by combined document hash + prompt version. If the cache hits,
+    no Gemini call is made. Never raises — all failure modes return
+    an "unavailable" dict.
     """
     if not documents:
         return _unavailable("No documents found in Drive folder")
 
     combined_hash = "_".join(sorted(d["hash"] for d in documents))
-    cache_key = f"qualitative_{ticker}_{combined_hash}.json"
+    cache_key = f"qualitative_{ticker}_{combined_hash}_{PROMPT_VERSION}.json"
 
     cached = cache.get_json(cache_key, QUALITATIVE_CACHE_TTL)
     if cached is not None:
@@ -95,6 +97,19 @@ def _unavailable(reason: str) -> dict:
         "strategic_themes": [],
         "tone_assessment": {"current": None, "trajectory": None, "notes": None},
         "coherence_assessment": {"verdict": None, "reasoning": None},
+        "owner_orientation_signal": {"verdict": None, "evidence": None},
+        "holdability_assessment": {"verdict": None, "reasoning": None},
+        "cycle_position": {
+            "sector_cycle": None, "company_cycle": None, "reasoning": None
+        },
+        "variant_perception": {
+            "consensus_view": None, "company_view": None,
+            "variant_present": None, "specificity": None, "notes": None
+        },
+        "management_humility": {"verdict": None, "evidence": None},
+        "why_now_signal": {
+            "verdict": None, "specific_event": None, "notes": None
+        },
         "documents_used": [],
         "model": None,
     }

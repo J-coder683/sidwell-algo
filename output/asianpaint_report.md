@@ -1,7 +1,7 @@
 # Investment Analysis Report: ASIANPAINT.NS
 **Generated on**: May 26, 2026
 **Valuation Engine**: Discounted Cash Flow (DCF)
-**Investor Lens**: Warren Buffett (v0.2.1)
+**Investor Lenses**: Warren Buffett + Howard Marks (v0.3)
 
 > [!WARNING]
 > **DCF COVERAGE GAP WARNING**: The computed DCF intrinsic value deviates significantly from the current market price.
@@ -15,11 +15,15 @@
 | **Current Price** | ₹2,657.80 | Yahoo Finance |
 | **Intrinsic Value (DCF)** | ₹291.69 | Sidwell DCF Engine |
 | **Margin of Safety** | Trading at 9.1x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
-| **Buffett Score** | **4/8** | Spec criteria checks passed |
-| **Final Verdict** | **SKIP** ❌ | Buffett Lens Rules |
+| **Buffett Score** | **8/14** | Buffett Lens (14 checks) |
+| **Buffett Verdict** | **SKIP** ❌ | Buffett Lens Rules |
+| **Marks Score** | **8/14** | Marks Lens (14 checks) |
+| **Marks Verdict** | **SKIP** ❌ | Marks Lens Rules |
 
 ### Verdict Summary
-> **SKIP** — Does not meet the quality or financial health standards of the Buffett framework. Skip.
+> **Buffett**: **SKIP** — Does not meet enough Buffett criteria across business quality, management, and price.
+>
+> **Marks**: **SKIP** — Insufficient asymmetric edge under Marks framework.
 
 ## 1. Company Snapshot
 Historical financial statements over the last 4 years:
@@ -78,58 +82,140 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 - **Intrinsic Value per Share**: **₹291.69**
 
 ## 3. Buffett Investor Lens
-All 8 checks per Warren Buffett's framework (distilled from annual letters):
+All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
 
-| Check | Status | Value | Target Threshold | Description |
+### Part C — Management & Capital Allocation
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Owner orientation | ✅ | 0.0 / None | Insiders > 5% OR LLM = owner_oriented | Insider ownership: 0.00% (FAIL at >5%). LLM owner-orientation: unavailable |
+| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: SKIPPED (qualitative unavailable); defaulted PASS |
+
+_Part C — Management & Capital Allocation: **3/4 passed**_
+
+### Part D — Margin of Safety & Holdability
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Margin of safety | ❌ | Trading at 9.1x intrinsic | > 25.0% | Trading at 9.1x intrinsic value (target ≤ 0.75x) (Price: 2657.80, Intrinsic: 291.69) |
+| Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
+| Holdability (20-year test) | ✅ | N/A | LLM verdict = holdable_20y | Holdability check skipped (qualitative unavailable); defaulted PASS |
+
+_Part D — Margin of Safety & Holdability: **2/3 passed**_
+
+### Part A — Business Quality
+
+| Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Durable competitive advantage (moat) | ❌ | 3.09% | < 3.0% | stdev = 3.09% >= 3% |
 | High return on invested capital | ✅ | 23.04% | > 15.0% | 4y avg = 23.04% > 15% |
-| Strong free-cash-flow generation | ❌ | 6.84% / 495.22% | Margin > 10% & Growth > 0% | avg margin = 6.84%, FCF growth = 495.22% |
-| Conservative balance sheet | ✅ | 0.36 / 23.48 | Debt/EBITDA < 3x & Coverage > 5x | Debt/EBITDA = 0.36x, Int. Coverage = 23.48x |
-| ROE without excess leverage | ✅ | 23.92% / 63.88% | ROE > 15% & Equity/Assets > 40% | 4y avg ROE = 23.92%, Equity/Assets = 63.88% |
-| Earnings predictability | ❌ | 5.32% / 11.90% | 5% < CAGR < 30% & YoY Growth StDev < 10.0% | Revenue CAGR = 5.32%, YoY Growth StDev = 11.90% |
-| Margin of safety | ❌ | Trading at 9.1x intrinsic value (target ≤ 0.75x) | > 25.0% | Trading at 9.1x intrinsic value (target ≤ 0.75x) (Price: 2657.80, Intrinsic: 291.69) |
-| Understandable business | ✅ | Hard: PASS / Soft: PASS | Both signals must pass | Hard check: PASS (ticker not in avoided-sector blacklist). Soft check: PASS (LLM coherence verdict: coherent). The disclosures and statements from the management are highly coherent and align with reported financials. Management successfully reconciles the 5% gap between volume and value growth using transparent references to material deflation and product mix variations. Strategic investments, such as impairments on White Teak and regional launches, are directly addressed and align with their longer-term operational plans for profitability and market share protection. |
+| Strong free-cash-flow generation | ❌ | 0.07 / 4.95 | Margin > 10% & Growth > 0% | avg margin = 6.84%, FCF growth = 495.22% |
+| Earnings predictability | ❌ | 0.05 / 0.12 | 5% < CAGR < 30% & YoY Growth StDev < 10.0% | Revenue CAGR = 5.32%, YoY Growth StDev = 11.90% |
 
-**Total Buffett Score**: **4/8**
+_Part A — Business Quality: **1/4 passed**_
+
+### Part B — Financial Health
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Conservative balance sheet | ✅ | 0.36 / 23.48 | Debt/EBITDA < 3x & Coverage > 5x | Debt/EBITDA = 0.36x, Int. Coverage = 23.48x |
+| ROE without excess leverage | ✅ | 0.24 / 0.64 | ROE > 15% & Equity/Assets > 40% | 4y avg ROE = 23.92%, Equity/Assets = 63.88% |
+| Liquidity cushion (Gibraltar test) | ❌ | 4452800000.00 / 22902900000.00 | Cash / Debt > 0.5x OR debt-free | Cash / Debt = 0.19x (<= 0.5) |
+
+_Part B — Financial Health: **2/3 passed**_
+
+### Part C — Management & Capital Allocation
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Anti-dilution discipline | ✅ | [0 values] | <= 2% growth over 4y | Share count data unavailable; check defaulted PASS |
+| Capital allocation track record | ❌ | -0.0012769063339250764 / False | ROIC not declining > 3pp AND capital returned | ROIC trend (latter-2y vs earlier-2y): -0.13pp; capital returned to shareholders: no |
+
+_Part C — Management & Capital Allocation: **3/4 passed**_
+
+**Total Buffett Score**: **8/14**
 
 ## 3.5 Qualitative Analysis
-Based on 1 document(s): 8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf. Model: `gemini-3.5-flash`.
+_Qualitative analysis unavailable: Gemini error: ServerError: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}_
 
-### Forward Guidance
-- **Q4 FY26** (volume): Management expects to maintain their current volume growth trajectory, targeting a volume growth band of 8% to 10% in the upcoming quarter. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
-- **Future periods** (margin): The company intends to maintain its PBDIT margin guidance within the 18% to 20% band, balancing brand investment and competitive pressures. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
-- **Next few quarters** (revenue): Realistically, value growth is projected to be around 5% to 6%, assuming the volume-value gap continues to hover at approximately 4% to 5%. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+## 3.6 Marks Investor Lens
+All 14 checks per Howard Marks's risk-first framework across 4 Parts (frameworks/marks.md):
 
-### Risk Callouts
-- **competitive intensity**: Management expects high competitive intensity to continue with the entry of aggressive new players and the amalgamation of two existing players. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
-- **crude oil volatility**: Geopolitical uncertainties pose continuous risks of volatility in crude oil prices, which can quickly impact key raw material costs. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
-- **regulatory pressure on TiO2**: There is potential regulatory risk around key imported raw materials like titanium dioxide (TiO2), which could see upcoming structural movements. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
-- **home decor bottom-line distress**: The White Teak business faced bottom-line challenges, leading to an impairment loss of approximately Rs. 94 crores during the quarter. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+### Part C — Risk Architecture
 
-### Strategic Themes
-- **regionalization**: Asian Paints has scaled customized regional product portfolios and marketing strategies across 8 to 9 states to enhance localized customer brand equity. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
-- **backward integration**: Following the launch of its white cement plant, the company plans to progress to the next level of backward integration starting next fiscal year to drive cost efficiency. _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
-- **AI integration in services**: The company is deploying artificial intelligence for hyper-segmentation of customers and tracking execution quality via AI-driven Net Promoter Scores (NPS). _[8bc8c7dd-23d0-4cf2-bcdf-620769ed0d1a.pdf]_
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Volatility / beta | ✅ | 1.000 | < 1.5 | Beta = 1.00 (< 1.5) |
+| No single-point failure mode | ✅ | 0 | <= 1 concentration/regulatory risk flagged | Concentration/regulatory risks identified: 0 |
 
-### Tone & Coherence
-- **Tone (current)**: confident
-- **Tone (trajectory)**: stable
-- **Coherence verdict**: coherent
+_Part C — Risk Architecture: **4/4 passed**_
 
-_Management displays a high level of confidence in their market leadership, brand visibility, and structural initiatives like regional packaging and backward integration. They dismiss competitive pricing moves as artificial discounting and remain secure in their premium position. However, their tone is reasonably realistic and cautious concerning global crude volatilities, geopolitical disruptions, and the slower recovery cycle in domestic decorative paint spending._
+### Part D — Second-Level Thinking & Contrarianism
 
-_The disclosures and statements from the management are highly coherent and align with reported financials. Management successfully reconciles the 5% gap between volume and value growth using transparent references to material deflation and product mix variations. Strategic investments, such as impairments on White Teak and regional launches, are directly addressed and align with their longer-term operational plans for profitability and market share protection._
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Variant perception | ❌ | False | variant_present=true AND specificity=high | Variant perception unavailable; defaulted FAIL |
+| Management humility (knowing what you don't know) | ✅ | N/A | verdict = humble | Management humility check skipped; defaulted PASS |
+| Patient opportunism (why now) | ❌ | N/A | verdict = dislocation_present | Why-now signal unavailable; defaulted FAIL |
+
+_Part D — Second-Level Thinking & Contrarianism: **1/3 passed**_
+
+### Part A — Margin of Safety & Asymmetric Payoff
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Deep margin of safety | ❌ | Trading at 9.1x intrinsic | > 40% | MoS = -811.18% (< 40% threshold) — Price 2657.80 vs Intrinsic 291.69 |
+| Asymmetric upside-to-downside payoff | ❌ | 0.000 | > 3.0x | Asymmetry ratio = 0.00 (< 3.0 threshold) |
+| Downside protection (tangible book) | ❌ | 7.61% | > 30% | Equity/MCap = 7.61% (<= 30%) |
+| Multiple expansion not exhausted | ✅ | N/A | < 25x (v0.3 placeholder; sector comp in v0.4) | Trailing P/E unavailable; check defaulted PASS |
+
+_Part A — Margin of Safety & Asymmetric Payoff: **1/4 passed**_
+
+### Part B — Cycle Position
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Sector cycle position | ✅ | N/A | trough | early_recovery | mid_cycle | Cycle position unavailable; defaulted PASS (mid_cycle assumed) |
+| Company earnings vs cyclical peak | ❌ | 67.16% | > 70% of peak | Latest NI / Peak NI = 67.2% |
+| Sentiment — going against the crowd | ✅ | N/A | Mean rating 2.5-4.0 (mixed/cautious consensus) | Consensus rating unavailable; defaulted PASS |
+
+_Part B — Cycle Position: **2/3 passed**_
+
+### Part C — Risk Architecture
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Capital structure resilience | ✅ | 0.36 / 23.48 | Debt/EBITDA < 4x AND Coverage > 4x | Debt/EBITDA = 0.36x, Coverage = 23.48x |
+| FCF stability through downturn | ✅ | 4357900000.000 | All 4 years positive FCF | 4y FCF: [4357900000.0, 27478200000.0, 36075200000.0, 25938900000.0] |
+
+_Part C — Risk Architecture: **4/4 passed**_
+
+**Total Marks Score**: **8/14**
 
 ## 4. Margin-of-Safety Check
 Current Stock Price: **₹2,657.80**
 DCF Intrinsic Value: **₹291.69**
-Required Margin of Safety: **25.00%** ( Graham & Dodd standard)
+Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)
 Computed Margin of Safety: Trading at 9.1x intrinsic value (target ≤ 0.75x)
 ### Status: [FAIL] ❌
 The stock trades above the safety threshold. Trading at 9.1x intrinsic value is insufficient for investment under the Buffett framework.
 
 ## 5. Investment Verdict
-**RECOMMENDATION: SKIP**
+**BUFFETT RECOMMENDATION: SKIP**
 
-Does not meet the quality or financial health standards of the Buffett framework. Skip.
+Does not meet enough Buffett criteria across business quality, management, and price.
+
+**MARKS RECOMMENDATION: SKIP**
+
+Insufficient asymmetric edge under Marks framework.
+
+## 6. Dual-Lens Synthesis
+Sidwell preserves both lens verdicts without collapsing them to a single recommendation.
+The disagreement between lenses IS the insight. See `frameworks/marks.md` section 'How This Lens Differs from Buffett' for design rationale.
+
+| | Buffett | Marks |
+| :--- | :---: | :---: |
+| **Score** | 8/14 | 8/14 |
+| **Verdict** | **SKIP** ❌ | **SKIP** ❌ |
+
+**Pattern: Both SKIP/SKIP** — Monitor for change in conditions.

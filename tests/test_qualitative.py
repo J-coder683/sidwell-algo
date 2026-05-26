@@ -15,10 +15,19 @@ def test_no_documents_returns_unavailable():
     result = extract_qualitative("TEST.NS", [])
     assert result["status"] == "unavailable"
     assert "No documents" in result["reason"]
-    # Schema keys present even when unavailable
+    # Core schema keys present even when unavailable
     assert "forward_guidance" in result
     assert result["forward_guidance"] == []
     assert "coherence_assessment" in result
+    # v0.3 schema keys present even when unavailable
+    assert "owner_orientation_signal" in result
+    assert "holdability_assessment" in result
+    assert "cycle_position" in result
+    assert "variant_perception" in result
+    assert "management_humility" in result
+    assert "why_now_signal" in result
+    assert result["owner_orientation_signal"]["verdict"] is None
+    assert result["variant_perception"]["variant_present"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -120,3 +129,47 @@ def test_cache_hit_skips_gemini_call():
     assert result["tone_assessment"]["current"] == "cautious"
     # Gemini was never called
     mock_client.models.generate_content.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# 6. PROMPT_VERSION in cache key (v0.3)
+# ---------------------------------------------------------------------------
+def test_cache_key_includes_prompt_version():
+    """Cache key must include PROMPT_VERSION so schema changes invalidate old cache."""
+    from analysis.qualitative import PROMPT_VERSION
+    docs = [{"hash": "abc123", "filename": "test.pdf", "type": "transcript", "text": "x"}]
+
+    recorded_keys = []
+
+    def fake_get_json(key, ttl):
+        recorded_keys.append(key)
+        return None  # Cache miss
+
+    gemini_payload = {
+        "forward_guidance": [], "risk_callouts": [], "strategic_themes": [],
+        "tone_assessment": {"current": "confident", "trajectory": "stable", "notes": "OK."},
+        "coherence_assessment": {"verdict": "coherent", "reasoning": "Fine."},
+        "owner_orientation_signal": {"verdict": "owner_oriented", "evidence": "Partners."},
+        "holdability_assessment": {"verdict": "holdable_20y", "reasoning": "Durable."},
+        "cycle_position": {"sector_cycle": "mid_cycle", "company_cycle": "mid", "reasoning": "Mid."},
+        "variant_perception": {"consensus_view": "Bull.", "company_view": "Modest.",
+                               "variant_present": True, "specificity": "high", "notes": "Specific."},
+        "management_humility": {"verdict": "humble", "evidence": "No forecast."},
+        "why_now_signal": {"verdict": "dislocation_present", "specific_event": "Shock.", "notes": "FII."},
+    }
+    mock_response = MagicMock()
+    mock_response.text = json.dumps(gemini_payload)
+    mock_client = MagicMock()
+    mock_client.models.generate_content.return_value = mock_response
+
+    with patch("analysis.qualitative.cache.get_json", side_effect=fake_get_json), \
+         patch("os.getenv", return_value="fake_key"), \
+         patch("analysis.qualitative.genai.Client", return_value=mock_client), \
+         patch("analysis.qualitative.cache.set_json"):
+        extract_qualitative("TEST.NS", docs)
+
+    assert len(recorded_keys) == 1
+    cache_key = recorded_keys[0]
+    assert PROMPT_VERSION in cache_key, (
+        f"Cache key '{cache_key}' does not include PROMPT_VERSION '{PROMPT_VERSION}'"
+    )

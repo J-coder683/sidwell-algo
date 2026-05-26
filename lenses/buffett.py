@@ -9,18 +9,24 @@ def evaluate_buffett_lens(
     qualitative_results: dict = None,
 ) -> dict:
     """
-    Evaluates a company's financials and DCF results against Warren Buffett's 8 checks.
+    Evaluates a company against Warren Buffett's 14-check framework.
 
-    financials: dict of historical financials (from public.fetch_financials)
-    dcf_results: dict of DCF calculations (from dcf.run_dcf_valuation)
-    qualitative_results: optional dict from analysis.qualitative (v0.2+).
-        When None or status='unavailable', check #8 uses hard blacklist only.
+    Checks are grouped into 4 Parts per frameworks/buffett.md:
+      Part A (1-4):  Business Quality
+      Part B (5-7):  Financial Health
+      Part C (8-11): Management & Capital Allocation
+      Part D (12-14): Margin of Safety & Holdability
 
-    Returns a dict with check details, total score, and verdict.
+    financials: dict from public.fetch_financials (v0.3+)
+    dcf_results: dict from dcf.run_dcf_valuation
+    qualitative_results: optional dict from analysis.qualitative (v0.2+)
+
+    Returns a dict with check details, part summaries, total score, and verdict.
     """
     hist_revenue = financials["revenue"]
     if len(hist_revenue) != 4:
         raise ValueError(f"Expected exactly 4 years of historical data, got {len(hist_revenue)}")
+
     hist_gross_profit = financials["gross_profit"]
     hist_ebit = financials["ebit"]
     hist_interest_expense = financials["interest_expense"]
@@ -34,15 +40,19 @@ def evaluate_buffett_lens(
     hist_capex = financials["capex"]
     hist_depreciation = financials["depreciation"]
     hist_fcf = financials["fcf"]
-    
+
     current_price = dcf_results["current_price"]
     intrinsic_value = dcf_results["intrinsic_value_per_share"]
-    
+    tax_rate = dcf_results["assumptions"]["tax_rate"]
+
     checks = {}
-    
+
+    # =========================================================================
+    # PART A — Business Quality (Checks 1-4)
+    # =========================================================================
+
     # 1. Durable competitive advantage (moat)
-    # Proxy: Gross margin stability over 4 years.
-    # Test: gross_margin_std_4y < 0.03
+    # Test: stdev(gross_margin, ddof=1) < 0.03
     hist_gross_margins = [gp / rev if rev > 0 else 0.0 for gp, rev in zip(hist_gross_profit, hist_revenue)]
     hist_gm_std = np.std(hist_gross_margins, ddof=1) if len(hist_gross_margins) > 1 else 0.0
     checks["1_moat"] = {
@@ -51,13 +61,15 @@ def evaluate_buffett_lens(
         "value": hist_gm_std,
         "threshold_str": "< 3.0%",
         "passed": hist_gm_std < 0.03,
-        "detail": f"stdev = {hist_gm_std*100:.2f}% < 3%" if hist_gm_std < 0.03 else f"stdev = {hist_gm_std*100:.2f}% >= 3%"
+        "detail": (
+            f"stdev = {hist_gm_std*100:.2f}% < 3%" if hist_gm_std < 0.03
+            else f"stdev = {hist_gm_std*100:.2f}% >= 3%"
+        ),
+        "part": "A",
     }
-    
+
     # 2. High return on invested capital
-    # Test: roic_4y_avg > 0.15
-    # ROIC = EBIT * (1-t) / (Debt + Equity - Cash)
-    tax_rate = dcf_results["assumptions"]["tax_rate"]
+    # Test: mean(roic_4y) > 0.15; ROIC = EBIT*(1-t) / (Debt+Equity-Cash)
     hist_roic_list = []
     for i in range(len(hist_revenue)):
         eq = hist_total_equity[i]
@@ -65,13 +77,12 @@ def evaluate_buffett_lens(
         csh = hist_cash[i]
         ic = eq + dbt - csh
         eb = hist_ebit[i]
-        
         if ic > 0.0:
             roic_val = eb * (1.0 - tax_rate) / ic
         else:
-            roic_val = 0.35 if eb > 0.0 else 0.0 # High default ROIC if equity/debt are zero but ebit positive
+            roic_val = 0.35 if eb > 0.0 else 0.0
         hist_roic_list.append(roic_val)
-        
+
     hist_roic_avg = np.mean(hist_roic_list) if hist_roic_list else 0.0
     checks["2_roic"] = {
         "name": "High return on invested capital",
@@ -79,22 +90,23 @@ def evaluate_buffett_lens(
         "value": hist_roic_avg,
         "threshold_str": "> 15.0%",
         "passed": hist_roic_avg > 0.15,
-        "detail": f"4y avg = {hist_roic_avg*100:.2f}% > 15%" if hist_roic_avg > 0.15 else f"4y avg = {hist_roic_avg*100:.2f}% <= 15%"
+        "detail": (
+            f"4y avg = {hist_roic_avg*100:.2f}% > 15%" if hist_roic_avg > 0.15
+            else f"4y avg = {hist_roic_avg*100:.2f}% <= 15%"
+        ),
+        "part": "A",
     }
-    
+
     # 3. Strong free-cash-flow generation
-    # Test: fcf_margin_4y_avg > 0.10 AND fcf_growth_4y > 0
+    # Test: mean(fcf_margin_4y) > 0.10 AND fcf_growth_4y > 0
     hist_fcf_margins = [f / r if r > 0 else 0.0 for f, r in zip(hist_fcf, hist_revenue)]
     hist_fcf_margin_avg = np.mean(hist_fcf_margins) if hist_fcf_margins else 0.0
-    
-    # FCF Growth
     if len(hist_fcf) >= 2 and hist_fcf[0] != 0:
         hist_fcf_growth = (hist_fcf[-1] - hist_fcf[0]) / abs(hist_fcf[0])
     elif len(hist_fcf) >= 2:
         hist_fcf_growth = 1.0 if hist_fcf[-1] > 0 else 0.0
     else:
         hist_fcf_growth = 0.0
-        
     hist_fcf_passed = hist_fcf_margin_avg > 0.10 and hist_fcf_growth > 0.0
     checks["3_fcf"] = {
         "name": "Strong free-cash-flow generation",
@@ -102,154 +114,295 @@ def evaluate_buffett_lens(
         "value": (hist_fcf_margin_avg, hist_fcf_growth),
         "threshold_str": "Margin > 10% & Growth > 0%",
         "passed": hist_fcf_passed,
-        "detail": f"avg margin = {hist_fcf_margin_avg*100:.2f}%, FCF growth = {hist_fcf_growth*100:.2f}%"
+        "detail": f"avg margin = {hist_fcf_margin_avg*100:.2f}%, FCF growth = {hist_fcf_growth*100:.2f}%",
+        "part": "A",
     }
-    
-    # 4. Conservative balance sheet
-    # Test: debt_to_ebitda < 3.0 AND interest_coverage > 5.0
+
+    # 4. Earnings predictability
+    # Test: 0.05 < revenue_cagr_4y < 0.30 AND stdev(yoy_growth, ddof=1) < 0.10
+    hist_revenue_cagr = dcf_results["assumptions"]["revenue_growth"]
+    hist_growth_rates = [(hist_revenue[i] / hist_revenue[i-1] - 1.0) for i in range(1, len(hist_revenue))]
+    hist_growth_std = np.std(hist_growth_rates, ddof=1) if len(hist_growth_rates) > 1 else 0.0
+    check_4_passed = (0.05 < hist_revenue_cagr < 0.30) and (hist_growth_std < 0.10)
+    checks["4_predictability"] = {
+        "name": "Earnings predictability",
+        "metric_name": "Revenue CAGR & YoY Growth StDev",
+        "value": (hist_revenue_cagr, hist_growth_std),
+        "threshold_str": "5% < CAGR < 30% & YoY Growth StDev < 10.0%",
+        "passed": check_4_passed,
+        "detail": f"Revenue CAGR = {hist_revenue_cagr*100:.2f}%, YoY Growth StDev = {hist_growth_std*100:.2f}%",
+        "part": "A",
+    }
+
+    # =========================================================================
+    # PART B — Financial Health (Checks 5-7)
+    # =========================================================================
+
+    # 5. Conservative balance sheet
+    # Test: debt/ebitda < 3.0 AND interest_coverage > 5.0
     latest_ebitda = hist_ebit[-1] + hist_depreciation[-1]
     latest_debt = hist_debt[-1]
-    
     if latest_ebitda > 0:
         latest_debt_to_ebitda = latest_debt / latest_ebitda
     else:
         latest_debt_to_ebitda = 0.0 if latest_debt == 0.0 else float("inf")
-        
     latest_interest = hist_interest_expense[-1]
     if latest_interest > 0:
         latest_interest_coverage = hist_ebit[-1] / latest_interest
     else:
-        latest_interest_coverage = float("inf") # No interest expense -> perfect coverage
-        
-    checks["4_balance_sheet"] = {
+        latest_interest_coverage = float("inf")
+    checks["5_balance_sheet"] = {
         "name": "Conservative balance sheet",
         "metric_name": "Debt/EBITDA & Interest Coverage",
         "value": (latest_debt_to_ebitda, latest_interest_coverage),
         "threshold_str": "Debt/EBITDA < 3x & Coverage > 5x",
         "passed": latest_debt_to_ebitda < 3.0 and latest_interest_coverage > 5.0,
-        "detail": f"Debt/EBITDA = {latest_debt_to_ebitda:.2f}x, Int. Coverage = {latest_interest_coverage:.2f}x" if latest_interest_coverage != float("inf") else f"Debt/EBITDA = {latest_debt_to_ebitda:.2f}x, Int. Coverage = N/A (no interest)"
+        "detail": (
+            f"Debt/EBITDA = {latest_debt_to_ebitda:.2f}x, Int. Coverage = {latest_interest_coverage:.2f}x"
+            if latest_interest_coverage != float("inf")
+            else f"Debt/EBITDA = {latest_debt_to_ebitda:.2f}x, Int. Coverage = N/A (no interest)"
+        ),
+        "part": "B",
     }
-    
-    # 5. Return on equity without excess leverage
-    # Test: roe_4y_avg > 0.15 AND equity_to_assets > 0.4
+
+    # 6. ROE without excess leverage
+    # Test: mean(roe_4y) > 0.15 AND latest_equity/assets > 0.4
     hist_roe_list = [ni / eq if eq > 0 else 0.0 for ni, eq in zip(hist_net_income, hist_total_equity)]
     hist_roe_avg = np.mean(hist_roe_list) if hist_roe_list else 0.0
-    
     latest_equity_to_assets = hist_total_equity[-1] / hist_total_assets[-1] if hist_total_assets[-1] > 0 else 0.0
-    checks["5_roe_leverage"] = {
+    checks["6_roe_leverage"] = {
         "name": "ROE without excess leverage",
         "metric_name": "Avg ROE & Equity/Assets",
         "value": (hist_roe_avg, latest_equity_to_assets),
         "threshold_str": "ROE > 15% & Equity/Assets > 40%",
         "passed": hist_roe_avg > 0.15 and latest_equity_to_assets > 0.4,
-        "detail": f"4y avg ROE = {hist_roe_avg*100:.2f}%, Equity/Assets = {latest_equity_to_assets*100:.2f}%"
+        "detail": f"4y avg ROE = {hist_roe_avg*100:.2f}%, Equity/Assets = {latest_equity_to_assets*100:.2f}%",
+        "part": "B",
     }
-    
-    # 6. Earnings predictability
-    # Test: 0.05 < revenue_cagr_4y < 0.30 AND stdev of YoY growth rates < 0.10
-    hist_revenue_cagr = dcf_results["assumptions"]["revenue_growth"]
-    
-    hist_growth_rates = [(hist_revenue[i] / hist_revenue[i-1] - 1.0) for i in range(1, len(hist_revenue))]
-    hist_growth_std = np.std(hist_growth_rates, ddof=1) if len(hist_growth_rates) > 1 else 0.0
-        
-    check_6_passed = (0.05 < hist_revenue_cagr < 0.30) and (hist_growth_std < 0.10)
-    
-    checks["6_predictability"] = {
-        "name": "Earnings predictability",
-        "metric_name": "Revenue CAGR & YoY Growth StDev",
-        "value": (hist_revenue_cagr, hist_growth_std),
-        "threshold_str": "5% < CAGR < 30% & YoY Growth StDev < 10.0%",
-        "passed": check_6_passed,
-        "detail": f"Revenue CAGR = {hist_revenue_cagr*100:.2f}%, YoY Growth StDev = {hist_growth_std*100:.2f}%"
+
+    # 7. Liquidity cushion (Gibraltar test)
+    # Test: cash/debt > 0.5 OR debt == 0
+    latest_cash_eq = hist_cash[-1]
+    if latest_debt == 0.0:
+        check_7_passed = True
+        detail_7 = "Debt-free; Gibraltar test passes trivially"
+        cash_to_debt = float("inf")
+    else:
+        cash_to_debt = latest_cash_eq / latest_debt
+        check_7_passed = cash_to_debt > 0.5
+        detail_7 = f"Cash / Debt = {cash_to_debt:.2f}x ({'>' if check_7_passed else '<='} 0.5)"
+    checks["7_liquidity_cushion"] = {
+        "name": "Liquidity cushion (Gibraltar test)",
+        "metric_name": "Cash / Total Debt",
+        "value": (latest_cash_eq, latest_debt),
+        "threshold_str": "Cash / Debt > 0.5x OR debt-free",
+        "passed": check_7_passed,
+        "detail": detail_7,
+        "part": "B",
     }
-    
-    # 7. Margin of safety
-    # Test: (dcf_intrinsic_value - current_price) / dcf_intrinsic_value > 0.25
+
+    # =========================================================================
+    # PART C — Management & Capital Allocation (Checks 8-11)
+    # =========================================================================
+
+    # 8. Anti-dilution discipline
+    # Test: shares_latest / shares_4y_ago <= 1.02
+    historical_shares = financials.get("historical_shares", [])
+    if len(historical_shares) >= 4 and historical_shares[0] > 0 and historical_shares[-1] > 0:
+        share_growth = historical_shares[-1] / historical_shares[0]
+        check_8_passed = share_growth <= 1.02
+        detail_8 = f"Share count growth (4y): {(share_growth - 1) * 100:+.2f}% (threshold: <= +2%)"
+    else:
+        check_8_passed = True  # Default PASS if data unavailable
+        detail_8 = "Share count data unavailable; check defaulted PASS"
+        share_growth = None
+    checks["8_anti_dilution"] = {
+        "name": "Anti-dilution discipline",
+        "metric_name": "Share count growth (4y)",
+        "value": historical_shares,
+        "threshold_str": "<= 2% growth over 4y",
+        "passed": check_8_passed,
+        "detail": detail_8,
+        "part": "C",
+    }
+
+    # 9. Capital allocation track record
+    # Test: ROIC not declining > 3pp (latter-2y vs earlier-2y) AND capital returned
+    if len(hist_roic_list) >= 4:
+        roic_first_half = np.mean(hist_roic_list[:2])
+        roic_second_half = np.mean(hist_roic_list[2:])
+        roic_trend = roic_second_half - roic_first_half
+        capital_returned = (
+            (share_growth is not None and share_growth <= 1.0)  # net buybacks
+            or (financials.get("dividend_yield", 0) > 0)
+        )
+        check_9_passed = roic_trend > -0.03 and capital_returned
+        detail_9 = (
+            f"ROIC trend (latter-2y vs earlier-2y): {roic_trend*100:+.2f}pp; "
+            f"capital returned to shareholders: {'yes' if capital_returned else 'no'}"
+        )
+    else:
+        check_9_passed = True
+        detail_9 = "Insufficient ROIC history; check defaulted PASS"
+        roic_trend = None
+        capital_returned = False
+    checks["9_capital_allocation"] = {
+        "name": "Capital allocation track record",
+        "metric_name": "ROIC trend + capital return",
+        "value": (roic_trend, capital_returned),
+        "threshold_str": "ROIC not declining > 3pp AND capital returned",
+        "passed": check_9_passed,
+        "detail": detail_9,
+        "part": "C",
+    }
+
+    # 10. Owner orientation
+    # Test: insider_ownership > 0.05 OR (soft) LLM = owner_oriented
+    insider_pct = financials.get("insider_ownership", 0.0)
+    hard_owner_pass = insider_pct > 0.05
+    soft_owner_verdict = None
+    soft_owner_pass = True  # default PASS when unavailable
+    if qualitative_results and qualitative_results.get("status") == "available":
+        oo = qualitative_results.get("owner_orientation_signal", {}) or {}
+        soft_owner_verdict = oo.get("verdict")
+        soft_owner_pass = (soft_owner_verdict == "owner_oriented")
+    check_10_passed = hard_owner_pass or soft_owner_pass
+    detail_10 = (
+        f"Insider ownership: {insider_pct*100:.2f}% "
+        f"({'PASS' if hard_owner_pass else 'FAIL'} at >5%). "
+        f"LLM owner-orientation: {soft_owner_verdict or 'unavailable'}"
+    )
+    checks["10_owner_orientation"] = {
+        "name": "Owner orientation",
+        "metric_name": "Insider ownership OR LLM owner-orientation",
+        "value": (insider_pct, soft_owner_verdict),
+        "threshold_str": "Insiders > 5% OR LLM = owner_oriented",
+        "passed": check_10_passed,
+        "detail": detail_10,
+        "part": "C",
+    }
+
+    # 11. Management coherence
+    # Test (soft): LLM coherence verdict = "coherent"; defaults PASS when unavailable
+    soft_coherence_pass = True
+    soft_coherence_detail = "Soft check: SKIPPED (qualitative unavailable); defaulted PASS"
+    if qualitative_results and qualitative_results.get("status") == "available":
+        coh = qualitative_results.get("coherence_assessment", {}) or {}
+        soft_coherence_verdict = coh.get("verdict", "coherent")
+        soft_coherence_pass = (soft_coherence_verdict == "coherent")
+        reasoning = (coh.get("reasoning") or "")[:500]
+        soft_coherence_detail = (
+            f"Soft check: {'PASS' if soft_coherence_pass else 'FAIL'} "
+            f"(LLM coherence: {soft_coherence_verdict}). {reasoning}"
+        )
+    checks["11_mgmt_coherence"] = {
+        "name": "Management coherence",
+        "metric_name": "LLM coherence verdict",
+        "value": soft_coherence_pass,
+        "threshold_str": "LLM coherence = coherent",
+        "passed": soft_coherence_pass,
+        "detail": soft_coherence_detail,
+        "part": "C",
+    }
+
+    # =========================================================================
+    # PART D — Margin of Safety & Holdability (Checks 12-14)
+    # =========================================================================
+
+    # 12. Margin of safety
+    # Test: (intrinsic - price) / intrinsic > 0.25
     if intrinsic_value > 0:
         mos = (intrinsic_value - current_price) / intrinsic_value
     else:
         mos = -1.0
-        
     if intrinsic_value <= 0:
         mos_detail = "DCF produced non-positive intrinsic value — model failed"
     elif intrinsic_value < current_price:
-        mos_detail = f"Trading at {current_price/intrinsic_value:.1f}x intrinsic value (target ≤ 0.75x) (Price: {current_price:.2f}, Intrinsic: {intrinsic_value:.2f})"
+        mos_detail = (
+            f"Trading at {current_price/intrinsic_value:.1f}x intrinsic value "
+            f"(target ≤ 0.75x) (Price: {current_price:.2f}, Intrinsic: {intrinsic_value:.2f})"
+        )
     else:
         mos_detail = f"mos = {mos*100:.2f}% (Price: {current_price:.2f}, Intrinsic: {intrinsic_value:.2f})"
-        
-    checks["7_margin_of_safety"] = {
+    checks["12_margin_of_safety"] = {
         "name": "Margin of safety",
         "metric_name": "Discount to Intrinsic Value",
         "value": mos,
         "threshold_str": "> 25.0%",
         "passed": mos > 0.25,
-        "detail": mos_detail
+        "detail": mos_detail,
+        "part": "D",
     }
-    
-    # 8. Understandable business — hybrid check (v0.2)
-    # Hard signal: deterministic blacklist of avoided sectors.
-    # Soft signal: LLM-based coherence assessment from qualitative analysis.
-    # Check passes only if BOTH signals pass.
 
+    # 13. Hard understandability blacklist
+    # Test: ticker not in avoided sectors (crypto, etc.)
     avoided_prefixes = ["BTC", "ETH", "COIN"]
     hard_pass = not any(financials["ticker"].startswith(p) for p in avoided_prefixes)
-    hard_detail = (
-        "Hard check: PASS (ticker not in avoided-sector blacklist)" if hard_pass
-        else "Hard check: FAIL (ticker in avoided-sector blacklist)"
-    )
-
-    # Soft signal: defaults to PASS if qualitative unavailable
-    # (preserves v0.1.1 behavior when no PDFs / no API key).
-    if qualitative_results and qualitative_results.get("status") == "available":
-        coherence = qualitative_results.get("coherence_assessment", {})
-        soft_verdict = coherence.get("verdict", "coherent")
-        soft_pass = (soft_verdict == "coherent")
-        reasoning = (coherence.get("reasoning") or "No reasoning provided.")[:500]
-        soft_detail = (
-            f"Soft check: {'PASS' if soft_pass else 'FAIL'} "
-            f"(LLM coherence verdict: {soft_verdict}). {reasoning}"
-        )
-    else:
-        soft_pass = True  # default pass when qualitative unavailable
-        soft_detail = "Soft check: SKIPPED (qualitative analysis unavailable)"
-
-    check_8_passed = hard_pass and soft_pass
-
-    checks["8_understandable"] = {
-        "name": "Understandable business",
-        "metric_name": "Hard blacklist AND Soft LLM coherence",
-        "value": (hard_pass, soft_pass),
-        "threshold_str": "Both signals must pass",
-        "passed": check_8_passed,
-        "detail": f"{hard_detail}. {soft_detail}",
+    checks["13_hard_blacklist"] = {
+        "name": "Understandable business (hard blacklist)",
+        "metric_name": "Ticker not in avoided sectors",
+        "value": hard_pass,
+        "threshold_str": "Ticker not BTC/ETH/COIN",
+        "passed": hard_pass,
+        "detail": (
+            "Hard check: PASS (ticker not in avoided-sector blacklist)" if hard_pass
+            else "Hard check: FAIL (ticker in avoided-sector blacklist)"
+        ),
+        "part": "D",
     }
-    
-    # Scoring
+
+    # 14. Holdability — 20-year test (soft, LLM-based)
+    # Test: LLM verdict = "holdable_20y"; defaults PASS when unavailable
+    soft_hold_pass = True
+    soft_hold_detail = "Holdability check skipped (qualitative unavailable); defaulted PASS"
+    hold_verdict = None
+    if qualitative_results and qualitative_results.get("status") == "available":
+        ha = qualitative_results.get("holdability_assessment", {}) or {}
+        hold_verdict = ha.get("verdict")
+        soft_hold_pass = (hold_verdict == "holdable_20y")
+        reasoning = (ha.get("reasoning") or "")[:500]
+        soft_hold_detail = f"LLM holdability verdict: {hold_verdict}. {reasoning}"
+    checks["14_holdability"] = {
+        "name": "Holdability (20-year test)",
+        "metric_name": "LLM holdability assessment",
+        "value": hold_verdict,
+        "threshold_str": "LLM verdict = holdable_20y",
+        "passed": soft_hold_pass,
+        "detail": soft_hold_detail,
+        "part": "D",
+    }
+
+    # =========================================================================
+    # Scoring & Verdict (per frameworks/buffett.md)
+    # =========================================================================
     score = sum(1 for c in checks.values() if c["passed"])
-    
-    # Verdict logic
-    check_7_passes = checks["7_margin_of_safety"]["passed"]
-    
-    if score >= 7 and check_7_passes:
+    check_12_passes = checks["12_margin_of_safety"]["passed"]
+
+    if score >= 12 and check_12_passes:
         verdict = "BUY"
-        reason = "Excellent business with a strong competitive moat, conservative capital structure, and a deep margin of safety at the current price."
-    elif score >= 6 and not check_7_passes:
+        reason = "Excellent business meeting Buffett quality, management, and price criteria."
+    elif score >= 10 and not check_12_passes:
         verdict = "WAIT"
-        reason = f"High-quality business that satisfies key quality criteria, but currently lacks a sufficient margin of safety (current price {current_price:.2f} is higher than the target buy price of {intrinsic_value * 0.75:.2f}). Wait for a pullback."
-    elif score >= 6:
+        reason = (
+            f"High-quality business that satisfies most Buffett criteria but lacks "
+            f"margin of safety. Set alert at buy-trigger price: "
+            f"₹{intrinsic_value * 0.75:.2f} (75% of intrinsic value)."
+        )
+    elif score >= 10:
         verdict = "WATCH"
-        reason = "A solid business that meets most criteria, but has some minor leverage or growth predictability concerns. Put on watchlist."
+        reason = "Most quality criteria pass; monitor for resolution of failed checks."
     else:
         verdict = "SKIP"
-        reason = "Does not meet the quality or financial health standards of the Buffett framework. Skip."
-        
-    res = {
+        reason = "Does not meet enough Buffett criteria across business quality, management, and price."
+
+    logger.info(
+        f"Buffett lens evaluation completed for {financials['ticker']}. "
+        f"Score: {score}/14, Verdict: {verdict}"
+    )
+    return {
         "ticker": financials["ticker"],
         "checks": checks,
         "score": score,
         "verdict": verdict,
-        "reason": reason
+        "reason": reason,
     }
-    
-    logger.info(f"Buffett lens evaluation completed for {financials['ticker']}. Score: {score}/8, Verdict: {verdict}")
-    return res

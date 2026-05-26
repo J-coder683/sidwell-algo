@@ -1,7 +1,7 @@
 # Investment Analysis Report: FICTITIOUS.NS
 **Generated on**: January 01, 2026
 **Valuation Engine**: Discounted Cash Flow (DCF)
-**Investor Lens**: Warren Buffett (v0.1)
+**Investor Lenses**: Warren Buffett + Howard Marks (v0.3)
 
 ## Executive Summary
 | Metric | Value | Source / Detail |
@@ -9,11 +9,15 @@
 | **Current Price** | ₹50.00 | Yahoo Finance |
 | **Intrinsic Value (DCF)** | ₹27.02 | Sidwell DCF Engine |
 | **Margin of Safety** | Trading at 1.9x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
-| **Buffett Score** | **7/8** | Spec criteria checks passed |
-| **Final Verdict** | **WAIT** ⏳ | Buffett Lens Rules |
+| **Buffett Score** | **13/14** | Buffett Lens (14 checks) |
+| **Buffett Verdict** | **WAIT** ⏳ | Buffett Lens Rules |
+| **Marks Score** | **11/14** | Marks Lens (14 checks) |
+| **Marks Verdict** | **WAIT** ⏳ | Marks Lens Rules |
 
 ### Verdict Summary
-> **WAIT** — High-quality business that satisfies key quality criteria, but currently lacks a sufficient margin of safety (current price 50.00 is higher than the target buy price of 20.27). Wait for a pullback.
+> **Buffett**: **WAIT** — High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹20.27 (75% of intrinsic value).
+>
+> **Marks**: **WAIT** — Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 16.21 (60% of intrinsic = 40% MoS).
 
 ## 1. Company Snapshot
 Historical financial statements over the last 4 years:
@@ -72,20 +76,58 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 - **Intrinsic Value per Share**: **₹27.02**
 
 ## 3. Buffett Investor Lens
-All 8 checks per Warren Buffett's framework (distilled from annual letters):
+All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
 
-| Check | Status | Value | Target Threshold | Description |
+### Part C — Management & Capital Allocation
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Owner orientation | ✅ | 0.1 / owner_oriented | Insiders > 5% OR LLM = owner_oriented | Insider ownership: 10.00% (PASS at >5%). LLM owner-orientation: owner_oriented |
+| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: PASS (LLM coherence: coherent). Numeric claims tie out across documents and strategy is consistent. |
+
+_Part C — Management & Capital Allocation: **4/4 passed**_
+
+### Part D — Margin of Safety & Holdability
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Margin of safety | ❌ | Trading at 1.9x intrinsic | > 25.0% | Trading at 1.9x intrinsic value (target ≤ 0.75x) (Price: 50.00, Intrinsic: 27.02) |
+| Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
+| Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. Demand category structurally enduring; no single-technology dependence identified in documents. |
+
+_Part D — Margin of Safety & Holdability: **2/3 passed**_
+
+### Part A — Business Quality
+
+| Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Durable competitive advantage (moat) | ✅ | 0.00% | < 3.0% | stdev = 0.00% < 3% |
 | High return on invested capital | ✅ | 22.26% | > 15.0% | 4y avg = 22.26% > 15% |
-| Strong free-cash-flow generation | ✅ | 11.69% / 37.42% | Margin > 10% & Growth > 0% | avg margin = 11.69%, FCF growth = 37.42% |
-| Conservative balance sheet | ✅ | 0.65 / 13.31 | Debt/EBITDA < 3x & Coverage > 5x | Debt/EBITDA = 0.65x, Int. Coverage = 13.31x |
-| ROE without excess leverage | ✅ | 22.82% / 60.00% | ROE > 15% & Equity/Assets > 40% | 4y avg ROE = 22.82%, Equity/Assets = 60.00% |
-| Earnings predictability | ✅ | 10.00% / 0.00% | 5% < CAGR < 30% & YoY Growth StDev < 10.0% | Revenue CAGR = 10.00%, YoY Growth StDev = 0.00% |
-| Margin of safety | ❌ | Trading at 1.9x intrinsic value (target ≤ 0.75x) | > 25.0% | Trading at 1.9x intrinsic value (target ≤ 0.75x) (Price: 50.00, Intrinsic: 27.02) |
-| Understandable business | ✅ | Hard: PASS / Soft: PASS | Both signals must pass | Hard check: PASS (ticker not in avoided-sector blacklist). Soft check: PASS (LLM coherence verdict: coherent). Numeric claims tie out across documents and strategy is consistent. |
+| Strong free-cash-flow generation | ✅ | 0.12 / 0.37 | Margin > 10% & Growth > 0% | avg margin = 11.69%, FCF growth = 37.42% |
+| Earnings predictability | ✅ | 0.10 / 0.00 | 5% < CAGR < 30% & YoY Growth StDev < 10.0% | Revenue CAGR = 10.00%, YoY Growth StDev = 0.00% |
 
-**Total Buffett Score**: **7/8**
+_Part A — Business Quality: **4/4 passed**_
+
+### Part B — Financial Health
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Conservative balance sheet | ✅ | 0.65 / 13.31 | Debt/EBITDA < 3x & Coverage > 5x | Debt/EBITDA = 0.65x, Int. Coverage = 13.31x |
+| ROE without excess leverage | ✅ | 0.23 / 0.60 | ROE > 15% & Equity/Assets > 40% | 4y avg ROE = 22.82%, Equity/Assets = 60.00% |
+| Liquidity cushion (Gibraltar test) | ✅ | 13.31 / 20.00 | Cash / Debt > 0.5x OR debt-free | Cash / Debt = 0.67x (> 0.5) |
+
+_Part B — Financial Health: **3/3 passed**_
+
+### Part C — Management & Capital Allocation
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Anti-dilution discipline | ✅ | [4 values] | <= 2% growth over 4y | Share count growth (4y): +0.00% (threshold: <= +2%) |
+| Capital allocation track record | ✅ | 0.010928017051142658 / True | ROIC not declining > 3pp AND capital returned | ROIC trend (latter-2y vs earlier-2y): +1.09pp; capital returned to shareholders: yes |
+
+_Part C — Management & Capital Allocation: **4/4 passed**_
+
+**Total Buffett Score**: **13/14**
 
 ## 3.5 Qualitative Analysis
 Based on 1 document(s): fixture_concall.pdf. Model: `gemini-3.5-flash`.
@@ -108,17 +150,96 @@ _Management remained confident across the period, with a stable narrative._
 
 _Numeric claims tie out across documents and strategy is consistent._
 
+### Marks-Relevant Signals
+- **Owner orientation**: owner_oriented — Letter uses 'shareholders as partners' framing; admits two FY24 mis-allocations by name.
+- **Holdability (20y)**: holdable_20y — Demand category structurally enduring; no single-technology dependence identified in documents.
+- **Sector cycle**: mid_cycle / Company cycle: mid — Capacity utilization mid-band; pricing actions modest; no signs of peak-cycle euphoria.
+- **Variant perception**: present=True, specificity=high. Consensus: 'Market expects continued strong growth driven by premiumisation.'
+- **Management humility**: humble — Management declines multi-year forecast; acknowledges raw material visibility limited to 2 quarters; references two past allocation errors by name.
+- **Why now**: dislocation_present — Post-Q3 FY26 commodity-cost shock has compressed multiples temporarily.
+
+## 3.6 Marks Investor Lens
+All 14 checks per Howard Marks's risk-first framework across 4 Parts (frameworks/marks.md):
+
+### Part C — Risk Architecture
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Volatility / beta | ✅ | 0.850 | < 1.5 | Beta = 0.85 (< 1.5) |
+| No single-point failure mode | ✅ | 0 | <= 1 concentration/regulatory risk flagged | Concentration/regulatory risks identified: 0 |
+
+_Part C — Risk Architecture: **4/4 passed**_
+
+### Part D — Second-Level Thinking & Contrarianism
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Variant perception | ✅ | True | variant_present=true AND specificity=high | Variant: True, Specificity: high. Consensus: 'Market expects continued strong growth driven by premiumisation.' | Company view: 'Management guides modest growth, citing cyclical headwinds and competitive intensity.' |
+| Management humility (knowing what you don't know) | ✅ | humble | verdict = humble | LLM humility verdict: humble. Management declines multi-year forecast; acknowledges raw material visibility limited to 2 quarters; references two past allocation errors by name. |
+| Patient opportunism (why now) | ✅ | dislocation_present | verdict = dislocation_present | Why-now: dislocation_present. Event: Post-Q3 FY26 commodity-cost shock has compressed multiples temporarily.. Sector has de-rated 25% in trailing 12 months; entry timing favorable due to forced selling from FII redemptions, not fundamental deterioration. |
+
+_Part D — Second-Level Thinking & Contrarianism: **3/3 passed**_
+
+### Part A — Margin of Safety & Asymmetric Payoff
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Deep margin of safety | ❌ | Trading at 1.9x intrinsic | > 40% | MoS = -85.01% (< 40% threshold) — Price 50.00 vs Intrinsic 27.02 |
+| Asymmetric upside-to-downside payoff | ❌ | 0.000 | > 3.0x | Asymmetry ratio = 0.00 (< 3.0 threshold) |
+| Downside protection (tangible book) | ❌ | 15.97% | > 30% | Equity/MCap = 15.97% (<= 30%) |
+| Multiple expansion not exhausted | ✅ | 18.000 | < 25x (v0.3 placeholder; sector comp in v0.4) | Trailing P/E = 18.0x (< 25x) |
+
+_Part A — Margin of Safety & Asymmetric Payoff: **1/4 passed**_
+
+### Part B — Cycle Position
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Sector cycle position | ✅ | mid_cycle | trough | early_recovery | mid_cycle | LLM sector cycle: mid_cycle. Capacity utilization mid-band; pricing actions modest; no signs of peak-cycle euphoria. |
+| Company earnings vs cyclical peak | ✅ | 100.00% | > 70% of peak | Latest NI / Peak NI = 100.0% |
+| Sentiment — going against the crowd | ✅ | 3.200 | Mean rating 2.5-4.0 (mixed/cautious consensus) | Consensus rating mean: 3.20 (PASS — Marks prefers 2.5-4.0 mixed/cautious; strong buy consensus is a contrarian caution signal) |
+
+_Part B — Cycle Position: **3/3 passed**_
+
+### Part C — Risk Architecture
+
+| Check | Status | Value | Threshold | Detail |
+| :--- | :---: | :--- | :--- | :--- |
+| Capital structure resilience | ✅ | 0.65 / 13.31 | Debt/EBITDA < 4x AND Coverage > 4x | Debt/EBITDA = 0.65x, Coverage = 13.31x |
+| FCF stability through downturn | ✅ | 11.500 | All 4 years positive FCF | 4y FCF: [11.5, 12.8, 14.23, 15.8] |
+
+_Part C — Risk Architecture: **4/4 passed**_
+
+**Total Marks Score**: **11/14**
+
 ## 4. Margin-of-Safety Check
 Current Stock Price: **₹50.00**
 DCF Intrinsic Value: **₹27.02**
-Required Margin of Safety: **25.00%** ( Graham & Dodd standard)
+Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)
 Computed Margin of Safety: Trading at 1.9x intrinsic value (target ≤ 0.75x)
 ### Status: [FAIL] ❌
 The stock trades above the safety threshold. Trading at 1.9x intrinsic value is insufficient for investment under the Buffett framework.
 
 ## 5. Investment Verdict
-**RECOMMENDATION: WAIT**
+**BUFFETT RECOMMENDATION: WAIT**
 
-High-quality business that satisfies key quality criteria, but currently lacks a sufficient margin of safety (current price 50.00 is higher than the target buy price of 20.27). Wait for a pullback.
+High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹20.27 (75% of intrinsic value).
 
 **Action Item**: Set alert at buy-trigger price: **₹20.27** (75% of intrinsic value).
+
+**MARKS RECOMMENDATION: WAIT**
+
+Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 16.21 (60% of intrinsic = 40% MoS).
+
+**Marks Action Item**: Set re-rating alert at **₹16.21** (60% of intrinsic = 40% MoS).
+
+## 6. Dual-Lens Synthesis
+Sidwell preserves both lens verdicts without collapsing them to a single recommendation.
+The disagreement between lenses IS the insight. See `frameworks/marks.md` section 'How This Lens Differs from Buffett' for design rationale.
+
+| | Buffett | Marks |
+| :--- | :---: | :---: |
+| **Score** | 13/14 | 11/14 |
+| **Verdict** | **WAIT** ⏳ | **WAIT** ⏳ |
+
+**Pattern: Both WAIT/WAIT** — Monitor for change in conditions.

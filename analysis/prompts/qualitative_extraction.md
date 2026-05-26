@@ -1,4 +1,4 @@
-# Qualitative Extraction Prompt
+# Qualitative Extraction Prompt v0.3
 
 You are an investment analyst extracting structured insights from company
 documents. Read all the documents provided below. Return ONLY a JSON object
@@ -8,46 +8,66 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
 
 {
   "forward_guidance": [
-    {
-      "period": "FY26 | Q1FY27 | etc.",
-      "metric": "revenue | margin | capex | volume | other",
-      "statement": "verbatim or paraphrased guidance, max 2 sentences",
-      "source_doc": "the source PDF filename"
-    }
+    {"period": "...", "metric": "revenue|margin|capex|volume|other",
+     "statement": "verbatim or paraphrased, max 2 sentences",
+     "source_doc": "filename"}
   ],
   "risk_callouts": [
-    {
-      "risk": "short label e.g. 'crude oil cost pressure'",
-      "context": "what management said about it, max 2 sentences",
-      "source_doc": "filename"
-    }
+    {"risk": "short label", "context": "what was said, max 2 sentences",
+     "source_doc": "filename"}
   ],
   "strategic_themes": [
-    {
-      "theme": "short label e.g. 'capacity expansion'",
-      "evidence": "what was said, max 2 sentences",
-      "source_doc": "filename"
-    }
+    {"theme": "short label", "evidence": "what was said, max 2 sentences",
+     "source_doc": "filename"}
   ],
   "tone_assessment": {
     "current": "confident | cautious | defensive | evasive | inconsistent",
     "trajectory": "improving | stable | deteriorating | unclear",
-    "notes": "one paragraph (3-5 sentences) explaining your read across the documents"
+    "notes": "one paragraph (3-5 sentences)"
   },
   "coherence_assessment": {
     "verdict": "coherent | incoherent",
-    "reasoning": "one paragraph. Coherent = clear, internally consistent, numeric claims tie out, strategy is stable across periods. Incoherent = contradictions across quarters, evasion on specific questions, numbers that don't reconcile, strategy shifts without acknowledgement."
+    "reasoning": "one paragraph"
+  },
+  "owner_orientation_signal": {
+    "verdict": "owner_oriented | management_class | unclear",
+    "evidence": "one paragraph citing specific language patterns from the documents — partnership framing, candor about mistakes, long-term focus vs short-term metric games"
+  },
+  "holdability_assessment": {
+    "verdict": "holdable_20y | uncertain | not_holdable_20y",
+    "reasoning": "one paragraph. Holdable_20y = business model resilient to obvious 20-year disruption (durable customer need, hard to disintermediate). Not_holdable = single-technology or single-regulatory dependency that could shift in 20 years. Uncertain = mixed signals."
+  },
+  "cycle_position": {
+    "sector_cycle": "trough | early_recovery | mid_cycle | late_cycle | peak",
+    "company_cycle": "early | mid | late",
+    "reasoning": "one paragraph identifying signals: capacity utilization, pricing trends, M&A activity in sector, demand commentary"
+  },
+  "variant_perception": {
+    "consensus_view": "one sentence — what the market/analyst consensus believes about this company",
+    "company_view": "one sentence — what management's actual outlook is",
+    "variant_present": true,
+    "specificity": "high | medium | low",
+    "notes": "one paragraph. Variant present + high specificity means there is a clearly articulated non-consensus thesis with a specific operational/financial mechanism — not just 'AI tailwind.'"
+  },
+  "management_humility": {
+    "verdict": "humble | hubristic | unclear",
+    "evidence": "one paragraph citing specific examples: acknowledging uncertainty, refusing to give multi-year forecasts they can't defend, admitting past mistakes, NOT making bold macro predictions"
+  },
+  "why_now_signal": {
+    "verdict": "dislocation_present | normal_cycle | unclear",
+    "specific_event": "one sentence — name the event creating opportunity: post-shock, post-distress, post-management-change, regulatory shift, or 'no specific dislocation'",
+    "notes": "one paragraph elaborating"
   }
 }
 
 ## Rules
 
-- Do NOT invent content not in the documents. Every item must be traceable to a source document.
-- If a section has no findings, return an empty array (not null).
+- Do NOT invent content not in the documents. Every item must trace to source documents.
+- If a section has no findings, return an empty array (for list fields) or "unclear" / null (for verdict fields).
 - Cite source documents by filename exactly as provided.
-- Keep all text fields concise. Max 2 sentences for items, max 5 sentences for paragraphs.
+- Keep text fields concise. Max 2 sentences for items; max 5 sentences for paragraphs.
 - Do NOT include any text outside the JSON object.
-- If documents are short, contradictory, or unclear, still return the schema — populate tone_assessment.notes and coherence_assessment.reasoning honestly.
+- The new v0.3 verdicts (owner_orientation, holdability, cycle, etc.) may legitimately be "unclear" / "uncertain" — return that honestly rather than guessing.
 
 ## Documents
 
