@@ -92,12 +92,25 @@ def render_markdown_report(
     md.append("")
 
     # DCF Coverage Gap Warning
-    if intrinsic_val < 0.30 * current_price or intrinsic_val > 3.00 * current_price:
+    intrinsic_to_price_pct = (intrinsic_val / current_price) * 100 if current_price > 0 else 0
+    if intrinsic_to_price_pct < 30.0 or intrinsic_to_price_pct > 300.0:
         md.append("> [!WARNING]")
-        md.append("> **DCF COVERAGE GAP WARNING**: The computed DCF intrinsic value deviates significantly from the current market price.")
-        md.append("> This indicates a potential DCF coverage gap. A simple 1-stage DCF model with a terminal growth ceiling may severely undervalue premium consumer staples ")
-        md.append("> because historical CAGR may capture a depressed window, capacity expansion CapEx is elevated relative to normalized levels, ")
-        md.append("> and the terminal growth ceiling is too conservative for high-quality consumer businesses. Treat this intrinsic value as a conservative floor, not a fair value.")
+        md.append("> **DCF COVERAGE GAP WARNING**: The computed DCF intrinsic value")
+        md.append("> deviates significantly from the current market price (intrinsic")
+        md.append(f"> at {intrinsic_to_price_pct:.0f}% of price).")
+        md.append(">")
+        md.append("> Even this v0.4 2-stage DCF (Stage 1 high-growth + Stage 2 fade +")
+        md.append("> sector-aware terminal) may understate premium businesses because:")
+        md.append("> - Historical CapEx ratios may include expansionary capex that won't")
+        md.append(">   recur indefinitely (a future v0.5+ refinement could fade capex")
+        md.append(">   toward maintenance level in Stage 2)")
+        md.append("> - DCF cannot capture brand premium, distribution moat, optionality")
+        md.append(">   on adjacent categories, or India consumption-story re-rating")
+        md.append("> - Market is willing to pay for sustained 15-20% earnings growth that")
+        md.append(">   exceeds Damodaran's published sector terminal rates")
+        md.append(">")
+        md.append("> Treat this intrinsic value as a conservative floor anchor, not a")
+        md.append("> fair-value estimate.")
         md.append("")
 
     # -------------------------------------------------------------------------

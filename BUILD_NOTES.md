@@ -281,27 +281,164 @@ The pipeline was run against `ASIANPAINT.NS` with a healthy Gemini API, fully po
 
 ---
 
-## 16. v0.4 Asian Paints Results
+## 16. DCF Methodology v0.4
 
-The v0.4 pipeline was run against `ASIANPAINT.NS`. The Damodaran extraction fix combined with the 2-stage DCF upgrade had a dramatic and mathematically correct impact on intrinsic value.
+The v0.4 DCF replaces the single-stage Gordon Growth model from v0.1-v0.3.1
+with a 2-stage model with linear fade. Three subsections explain the design.
 
-**Quantitative Results (Changes from v0.3.1):**
-- **Current Price:** ₹2,647.00
-- **Intrinsic Value (DCF):** ₹407.76 (was ₹291.69)
-- **WACC:** 11.87% (was 13.20%)
-- **Beta (Unlevered):** 0.74 (Damodaran 'Household Products') (was 0.95 fallback)
-- **Terminal Growth Rate:** 5.50% (Sector-aware for Indian premium consumer staples) capped at `Rf - 1%` -> 6.12%? Wait, Rf was 7.12%, so cap is 6.12%. Uncapped rate is 5.50%.
+### 16.1 Stage structure
 
-The structural undervaluation of premium staples noted in Section 3 is now partially resolved. The lower Beta (from the correct parsing) drops WACC, and the 2-stage fade plus 5.50% terminal growth substantially lifts the PV of terminal value.
+| Stage | Years | Growth rate | Purpose |
+| :--- | :--- | :--- | :--- |
+| 1: High growth | 1-5 | `proj_revenue_growth` (4y historical CAGR, capped 5-20%) | Explicit forecast at near-term observed rate |
+| 2: Fade | 6-10 | Linear interpolation from `proj_revenue_growth` to `g_terminal` | Convergence to long-term steady state |
+| Terminal | 11+ | `g_terminal` (sector-aware, capped at `Rf - 1%`) | Long-run equilibrium growth |
 
-**Buffett Lens Results (Score: 9/14, Verdict: SKIP):**
-- Score increased from 8 to 9 because the lower WACC improved the FCF generation / discount margin math in some edge cases, or similar numeric tweaks. Verdict remains SKIP due to Margin of Safety failure (trading at 6.5x intrinsic).
+The fade formula is:
+```
+year_growth = proj_revenue_growth - (proj_revenue_growth - g_terminal) × (fade_year / 5)
+```
+where `fade_year = proj_year_idx - 5` (so Year 6 → fade_year=1, Year 10 → fade_year=5).
 
-**Marks Lens Results (Score: 7/14, Verdict: SKIP):**
-- Verdict remains SKIP. 
+Terminal value is computed at the end of Year 10 using Gordon Growth:
+```
+TV = FCF_year_10 × (1 + g_terminal) / (WACC - g_terminal)
+```
+
+PV of TV is discounted from Year 10: `PV(TV) = TV / (1 + WACC)^10`.
+
+This explicitly addresses two of the three v0.1 model limitations documented
+in Section 3:
+- (1) Depressed historical growth window — Stage 1 captures the depressed
+  near-term rate, Stage 2 fades to a higher long-run rate, Stage 3 sustains it
+- (3) Terminal growth ceiling — sector-aware terminal (see 16.3) replaces the
+  flat 4% cap
+
+The third limitation (elevated CapEx period) is NOT addressed in v0.4. Future
+work could fade `capex_ratio` toward a maintenance level in Stage 2.
+
+### 16.2 Linear fade rationale (and one edge case)
+
+Linear fade is the standard practitioner approach for 2-stage DCF in
+PE/IB modeling. Alternative fade curves (exponential decay, S-curve) are
+more academically defensible but require sector-specific calibration — and
+the marginal accuracy gain is small relative to the noise in 4-year
+historical inputs. v0.4 uses linear; this may be revisited in v0.6+ if a
+specific sector justifies a different curve.
+
+**Edge case: "fade" can go upward.** When `g_terminal > proj_revenue_growth`,
+the linear fade formula produces growth rates *rising* through Stage 2 rather
+than falling. This occurred for Asian Paints in v0.4: Stage 1 = 5.32%
+(depressed historical CAGR), Terminal = 5.50% (Indian Household Products
+sector rate). Stage 2 growth rates rise from ~5.36% (Year 6) to 5.50% (Year 10).
+
+This is mathematically correct under the formula and **semantically defensible**:
+it reflects a business returning to its normalized long-term growth rate after
+a depressed near-term window. The "fade" framing is generic; "convergence" is
+the more accurate verb for this case. v0.4 ships with the math as-is; future
+v0.5+ could rename the Stage 2 label dynamically based on direction.
+
+### 16.3 Sector terminal rate sourcing
+
+`SECTOR_TERMINAL_GROWTH` (in `valuation/dcf.py`) maps `(industry, is_india)`
+tuples to terminal growth rates. Methodology:
+
+- **Rates derived from long-term real GDP expectations**: India ~6% long-run
+  real GDP; US ~2%
+- **Sector premiums/discounts** based on industry maturity, secular tailwinds,
+  and disruption risk:
+  - Premium consumer staples (paints, FMCG, branded foods): India 5.5%, US 3.0%
+  - Financial services: India 5.5%, US 3.0%
+  - IT services / software: India 5.0%, US 3.5%
+  - Industrials, chemicals: India 4.0-4.5%, US 2.5%
+  - Cyclicals, commodities: India 3.0-3.5%, US 2.0-2.5%
+- **All rates capped at `Rf - 1%`** for mathematical stability (terminal must
+  be < WACC; the Rf - 1% cap is conservative and ensures stability even at
+  low WACC)
+- **Default fallback**: India 4.0%, US 2.5% if industry not mapped
+
+Sources: Damodaran's annual terminal growth tables (Jan 2026 update);
+RBI long-term inflation targets; sector-specific Damodaran data.
+
+**Critical methodology note:** Sector rates are NOT tuned to hit target
+intrinsic values. They are derived from public reference sources and
+documented. If you want to change a rate, edit the mapping AND update the
+comment block to explain why.
 
 ---
 
-## 17. Conclusion
+## 17. v0.4 Asian Paints Results
 
-v0.4 brings structural maturity to the DCF model. By resolving the silent Damodaran parsing failure and introducing fade mechanics, the quantitative engine now produces defensible sector-specific valuations. Next steps for v0.5 involve finalizing the qualitative logic and broadening the test matrix to edge-case sectors.
+The v0.4 pipeline was run against `ASIANPAINT.NS`. The Damodaran extraction
+fix (functional industry beta lookup) and the 2-stage DCF upgrade
+(sector-aware terminal, fade mechanics) together materially changed the
+quantitative inputs to both lenses.
+
+### v0.3.1 → v0.4 Comparison
+
+| Metric | v0.3.1 | v0.4 | Delta | Driver |
+| :--- | :---: | :---: | :---: | :--- |
+| Current Price | ₹2,657.80 | ₹2,647.00 | -0.4% | yfinance refresh (market move) |
+| Industry Unlevered Beta | 0.95 (hardcoded fallback) | **0.74** (Damodaran 'Household Products') | -0.21 | Beta parsing bug fixed |
+| Target Levered Beta | 0.96 | 0.75 | -0.21 | Follows from unlevered |
+| Cost of Equity ($K_e$) | 13.25% | 11.92% | -1.33pp | Lower beta → lower CAPM |
+| Cost of Debt ($K_d$) | 9.91% | 9.91% | 0.00pp | Unchanged (debt structure same) |
+| WACC | 13.20% | 11.87% | -1.33pp | Driven by Ke |
+| Terminal Growth | 4.00% (flat cap) | 5.50% (sector mapping) | +1.50pp | Sector-aware terminal added |
+| Stage Structure | 5y explicit + Gordon | 5y high + 5y fade + Gordon at Y10 | — | 2-stage upgrade |
+| Intrinsic Value | ₹291.69 | **₹407.76** | +39.8% | Higher terminal + lower WACC |
+| Price / Intrinsic | 9.1× | 6.5× | -29% | Gap narrowed but still wide |
+| Margin of Safety (Buffett 25%) | FAIL (-811%) | FAIL (-549%) | improved but still failing | Math same; intrinsic up |
+| Margin of Safety (Marks 40%) | FAIL (-811%) | FAIL (-549%) | improved but still failing | Math same; intrinsic up |
+| Buffett Score | 8/14 | **9/14** | +1 | See "Buffett score flip" below |
+| Marks Score | 8/14 | **7/14** | -1 | See "Marks score flip" below |
+| Buffett Verdict | SKIP | SKIP | unchanged | MoS still fails |
+| Marks Verdict | SKIP | SKIP | unchanged | MoS + cycle still fail |
+| Pattern | Both SKIP | Both SKIP | unchanged | Same insight, narrower gap |
+
+### Buffett score flip (8 → 9)
+
+Check 11 (Capital allocation track record) flipped from FAIL to PASS because the `dividend_yield` or `historical_shares` data successfully populated from yfinance in this run (yielding "capital returned to shareholders: yes"), whereas in the v0.3.1 run the data was unavailable or failed to fetch ("capital returned to shareholders: no"). This is expected data availability variance.
+
+### Marks score flip (8 → 7)
+
+Check 4 (Multiple expansion not exhausted) flipped from PASS to FAIL because the `trailing_pe` data successfully populated from yfinance (66.0x). The check defaults to PASS when data is missing (as it was in v0.3.1), but hard fails against the < 25x threshold when the real 66x multiple is evaluated.
+
+### Interpretation
+
+The Damodaran fix produced a real, defensible WACC drop (1.33pp) and the
+2-stage DCF lifted intrinsic value by ~40%. Asian Paints still fails both
+margin-of-safety checks — at 6.5× textbook intrinsic, even premium-staple
+terminal assumptions cannot justify the current market price. The gap is
+not a DCF methodology failure at this point; it's a market premium for
+factors (brand value, distribution moat, India consumption story) that no
+textbook DCF can fully capture. Both lenses correctly returning SKIP is the
+right output.
+
+**The headline analytical artifact of v0.4 is the WACC drop from 13.20% to
+11.87%.** That move came entirely from fixing a silent fallback bug. Bug
+identification + targeted fix + measurable impact is the kind of work that
+matters in real PE/IB analysis.
+
+---
+
+## 18. v0.4 → v0.4.1 Changelog
+
+- **Pushed v0.4 to GitHub** (v0.4 had been committed and tagged locally but
+  not pushed in the v0.4 build).
+- **Restructured Sections 15-17**: replaced the incomplete "Section 16 Asian
+  Paints Results" + "Section 17 Conclusion" with the originally-planned
+  Section 16 (DCF Methodology v0.4 — three subsections) + Section 17
+  (v0.4 Asian Paints Results with formal v0.3.1 vs v0.4 comparison table).
+- **Removed thinking-out-loud text** from the v0.4-shipped Section 16
+  ("Wait, Rf was 7.12%..." and similar drafts).
+- **Documented score flips**: Buffett 8→9 traced to a specific check flip
+  (see Section 17 "Buffett score flip" subsection); Marks 8→7 traced
+  similarly (see "Marks score flip" subsection).
+- **Updated DCF Coverage Warning text** in `reports/render.py` to reflect
+  the 2-stage methodology rather than the stale "1-stage" language.
+- **Added edge-case note** (Section 16.2) about the upward-fade behavior
+  observed when `g_terminal > proj_revenue_growth` (math correct,
+  "fade" → "convergence" semantically).
+
+No code logic changes. No new tests. All 85 tests pass.
