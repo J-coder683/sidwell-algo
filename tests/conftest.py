@@ -9,7 +9,7 @@ def mock_financials():
 def mock_qualitative():
     return {
         "status": "available",
-        "model": "gemini-1.5-flash",
+        "model": "gemini-3.5-flash",
         "documents_used": ["fixture_concall.pdf"],
         "forward_guidance": [
             {

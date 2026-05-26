@@ -88,7 +88,7 @@ All 8 checks per Warren Buffett's framework (distilled from annual letters):
 **Total Buffett Score**: **7/8**
 
 ## 3.5 Qualitative Analysis
-Based on 1 document(s): fixture_concall.pdf. Model: `gemini-1.5-flash`.
+Based on 1 document(s): fixture_concall.pdf. Model: `gemini-3.5-flash`.
 
 ### Forward Guidance
 - **FY27** (revenue): Management expects 10% revenue growth driven by capacity expansion. _[fixture_concall.pdf]_

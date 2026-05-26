@@ -204,7 +204,7 @@ def evaluate_buffett_lens(
         coherence = qualitative_results.get("coherence_assessment", {})
         soft_verdict = coherence.get("verdict", "coherent")
         soft_pass = (soft_verdict == "coherent")
-        reasoning = (coherence.get("reasoning") or "No reasoning provided.")[:300]
+        reasoning = (coherence.get("reasoning") or "No reasoning provided.")[:500]
         soft_detail = (
             f"Soft check: {'PASS' if soft_pass else 'FAIL'} "
             f"(LLM coherence verdict: {soft_verdict}). {reasoning}"

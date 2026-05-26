@@ -197,7 +197,7 @@ The `mock_qualitative` pytest fixture (defined in `tests/conftest.py`) has
 
 **Header line** (from `documents_used` and `model`):
 ```
-Based on 1 document(s): fixture_concall.pdf. Model: `gemini-1.5-flash`.
+Based on 1 document(s): fixture_concall.pdf. Model: `gemini-3.5-flash`.
 ```
 
 **Forward Guidance** (1 item):

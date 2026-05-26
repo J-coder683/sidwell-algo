@@ -5,7 +5,7 @@ from datetime import datetime
 
 logger = logging.getLogger("sidwell.reports.render")
 
-SIDWELL_VERSION = "v0.1"
+SIDWELL_VERSION = "v0.2.1"
 
 def format_currency(val: float, is_india: bool) -> str:
     """

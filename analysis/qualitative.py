@@ -15,11 +15,11 @@ from data import cache
 logger = logging.getLogger("sidwell.analysis.qualitative")
 
 QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
-MODEL_NAME = "gemini-1.5-flash"  # Free tier, sufficient for structured extraction
+MODEL_NAME = "gemini-3.5-flash"  # Free tier, sufficient for structured extraction
 
 # Maximum characters of PDF text per document sent to Gemini.
 # Each PDF is truncated to this length to stay within token limits.
-MAX_DOC_CHARS = 50_000
+MAX_DOC_CHARS = 200_000
 
 
 def extract_qualitative(ticker: str, documents: list) -> dict:

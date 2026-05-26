@@ -85,7 +85,7 @@ def test_gemini_valid_response_is_parsed_and_cached():
         result = extract_qualitative("TEST.NS", docs)
 
     assert result["status"] == "available"
-    assert result["model"] == "gemini-1.5-flash"
+    assert result["model"] == "gemini-3.5-flash"
     assert result["documents_used"] == ["test.pdf"]
     assert len(result["forward_guidance"]) == 1
     assert result["coherence_assessment"]["verdict"] == "coherent"
@@ -101,7 +101,7 @@ def test_cache_hit_skips_gemini_call():
 
     cached_result = {
         "status": "available",
-        "model": "gemini-1.5-flash",
+        "model": "gemini-3.5-flash",
         "documents_used": ["test.pdf"],
         "forward_guidance": [],
         "risk_callouts": [],
