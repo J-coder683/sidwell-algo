@@ -5,6 +5,9 @@ from pathlib import Path
 from valuation.dcf import run_dcf_valuation
 from lenses.buffett import evaluate_buffett_lens
 from lenses.marks import evaluate_marks_lens
+from lenses.kkr import evaluate_kkr_lens
+from lenses.blackstone import evaluate_blackstone_lens
+from lenses.apollo import evaluate_apollo_lens
 from reports.render import render_markdown_report
 from tests.fixture_company import FIXTURE_INPUTS, FIXTURE_MACRO, FIXTURE_RISK_FREE_RATE
 
@@ -18,6 +21,9 @@ def test_regression_snapshot(mock_qualitative):
     dcf_res = run_dcf_valuation(financials, macro, rf)
     buffett_res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=mock_qualitative)
     marks_res = evaluate_marks_lens(financials, dcf_res, qualitative_results=mock_qualitative)
+    kkr_res = evaluate_kkr_lens(financials, dcf_res, qualitative_results=mock_qualitative)
+    bx_res = evaluate_blackstone_lens(financials, dcf_res, qualitative_results=mock_qualitative)
+    apollo_res = evaluate_apollo_lens(financials, dcf_res, qualitative_results=mock_qualitative)
 
     # Freeze the generated_at date to 2026-01-01 00:00:00
     frozen_date = datetime(2026, 1, 1, 0, 0, 0)
@@ -31,6 +37,9 @@ def test_regression_snapshot(mock_qualitative):
             dcf_res, buffett_res, financials,
             qualitative_results=mock_qualitative,
             marks_results=marks_res,
+            kkr_results=kkr_res,
+            blackstone_results=bx_res,
+            apollo_results=apollo_res,
             generated_at=frozen_date,
             output_dir=Path("output")
         )

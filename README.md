@@ -1,7 +1,7 @@
-# Sidwell — Personal Investment-Decision Engine (v0.3)
+# Sidwell — Personal Investment-Decision Engine (v0.5)
 
 Sidwell is a Python tool that values companies and applies investor frameworks to produce investment recommendations.
-Version 0.3 (v0.3) implements the core **DCF (Discounted Cash Flow)** valuation engine, **Warren Buffett's 14 investment checks**, and **Howard Marks's 14 risk-first checks** for public market equities. Version 0.3 includes a **qualitative ingestion layer** that reads PDF documents (concall transcripts, investor decks, MD&A sections) from a Drive-synced folder and runs structured Gemini extraction, integrating a coherence signal, management humility, cycle position, and more into the respective checks.
+Version 0.5 (v0.5) implements the core **DCF (Discounted Cash Flow)** valuation engine, **Warren Buffett's 14 investment checks**, **Howard Marks's 14 risk-first checks**, **KKR's 18 checks**, **Blackstone's 14 checks**, and **Apollo's 16 checks** for public market equities. Version 0.5 includes a **qualitative ingestion layer** that reads PDF documents (concall transcripts, investor decks, MD&A sections) from a Drive-synced folder and runs structured Gemini extraction, integrating a coherence signal, management humility, cycle position, and more into the respective checks.
 
 ## Directory Structure
 
@@ -28,9 +28,11 @@ sidwell/
 │   └── lbo.py                # LBO valuation engine stub
 ├── lenses/
 │   ├── __init__.py
-│   ├── buffett.py            # Warren Buffett's 8 checks & verdict engine
-│   ├── marks.py              # Howard Marks lens stub
-│   ├── kkr_blackstone.py     # Blackstone/Carlyle/KKR PE lens stub
+│   ├── buffett.py            # Warren Buffett's 14 checks & verdict engine
+│   ├── marks.py              # Howard Marks's 14 checks & verdict engine
+│   ├── kkr.py                # KKR's 18 checks & verdict engine
+│   ├── blackstone.py         # Blackstone's 14 checks & verdict engine
+│   ├── apollo.py             # Apollo's 16 checks & verdict engine
 │   └── distressed.py         # Distressed / Special Situations lens stub
 ├── reports/
 │   ├── __init__.py

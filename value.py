@@ -7,6 +7,9 @@ from data import documents as doc_module
 from valuation import dcf
 from lenses import buffett
 from lenses import marks
+from lenses import kkr
+from lenses import blackstone
+from lenses import apollo
 from reports import render
 from reports.render import SIDWELL_VERSION
 from analysis import qualitative
@@ -85,11 +88,29 @@ def main():
             financials, dcf_results, qualitative_results=qualitative_results
         )
 
-        # Step 8: Render Markdown Report and Save
+        # Step 8: Evaluate KKR Investor Lens (18 checks)
+        kkr_results = kkr.evaluate_kkr_lens(
+            financials, dcf_results, qualitative_results=qualitative_results
+        )
+
+        # Step 9: Evaluate Blackstone Investor Lens (14 checks)
+        blackstone_results = blackstone.evaluate_blackstone_lens(
+            financials, dcf_results, qualitative_results=qualitative_results
+        )
+
+        # Step 10: Evaluate Apollo Investor Lens (16 checks)
+        apollo_results = apollo.evaluate_apollo_lens(
+            financials, dcf_results, qualitative_results=qualitative_results
+        )
+
+        # Step 11: Render Markdown Report and Save
         report_path = render.render_markdown_report(
             dcf_results, buffett_results, financials,
             qualitative_results=qualitative_results,
             marks_results=marks_results,
+            kkr_results=kkr_results,
+            blackstone_results=blackstone_results,
+            apollo_results=apollo_results,
         )
 
         # Print a short console summary
@@ -99,10 +120,16 @@ def main():
         print(f"Current Price   : {financials['current_price']:.2f}")
         print(f"Intrinsic Value : {dcf_results['intrinsic_value_per_share']:.2f}")
         print(f"WACC            : {dcf_results['wacc']*100:.2f}%")
-        print(f"Buffett Score   : {buffett_results['score']}/14")
+        print(f"Buffett Score   : {buffett_results['score']}/{buffett_results.get('max_score', 14)}")
         print(f"Buffett Verdict : {buffett_results['verdict']}")
-        print(f"Marks Score     : {marks_results['score']}/14")
+        print(f"Marks Score     : {marks_results['score']}/{marks_results.get('max_score', 14)}")
         print(f"Marks Verdict   : {marks_results['verdict']}")
+        print(f"KKR Score       : {kkr_results['score']}/{kkr_results.get('max_score', 18)}")
+        print(f"KKR Verdict     : {kkr_results['verdict']}")
+        print(f"BX Score        : {blackstone_results['score']}/{blackstone_results.get('max_score', 14)}")
+        print(f"BX Verdict      : {blackstone_results['verdict']}")
+        print(f"Apollo Score    : {apollo_results['score']}/{apollo_results.get('max_score', 16)}")
+        print(f"Apollo Verdict  : {apollo_results['verdict']}")
         if qualitative_results.get("status") == "available":
             print(
                 f"Qualitative     : {len(docs)} doc(s) analyzed via "

@@ -16,7 +16,7 @@ logger = logging.getLogger("sidwell.analysis.qualitative")
 
 QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
 MODEL_NAME = "gemini-3.5-flash"  # Free tier, sufficient for structured extraction
-PROMPT_VERSION = "v0.3"  # Bump when prompt schema changes; invalidates old cache entries
+PROMPT_VERSION = "v0.4"  # Bump when prompt schema changes; invalidates old cache entries
 
 # Maximum characters of PDF text per document sent to Gemini.
 # Gemini Flash supports 1M token context; 200k chars is safely within limits.
@@ -110,6 +110,19 @@ def _unavailable(reason: str) -> dict:
         "why_now_signal": {
             "verdict": None, "specific_event": None, "notes": None
         },
+        "willing_seller_signal": {"verdict": None, "notes": None},
+        "ma_platform_potential": {"verdict": None, "notes": None},
+        "workforce_stavros_fit": {"verdict": None, "notes": None},
+        "mgmt_upgrade_potential": {"verdict": None, "notes": None},
+        "wc_optimization_signal": {"verdict": None, "notes": None},
+        "structural_tailwind_signal": {"verdict": None, "notes": None},
+        "multi_product_engagement_signal": {"verdict": None, "notes": None},
+        "chaos_dislocation_catalyst": {"verdict": None, "notes": None},
+        "fulcrum_security_signal": {"verdict": None, "notes": None},
+        "abf_credit_fit": {"verdict": None, "notes": None},
+        "complexity_moat_signal": {"verdict": None, "notes": None},
+        "permanent_hold_viable": {"verdict": None, "notes": None},
+        "covenant_control_potential": {"verdict": None, "notes": None},
         "documents_used": [],
         "model": None,
     }

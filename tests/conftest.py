@@ -74,5 +74,12 @@ def mock_qualitative():
             "verdict": "dislocation_present",
             "specific_event": "Post-Q3 FY26 commodity-cost shock has compressed multiples temporarily.",
             "notes": "Sector has de-rated 25% in trailing 12 months; entry timing favorable due to forced selling from FII redemptions, not fundamental deterioration."
-        }
+        },
+        "structural_tailwind_signal": {"verdict": "tailwind"},
+        "multi_product_engagement_signal": {"verdict": "multi_product_potential"},
+        "chaos_dislocation_catalyst": {"verdict": "chaos_present"},
+        "fulcrum_security_signal": {"verdict": "fulcrum_identified"},
+        "abf_credit_fit": {"verdict": "abf_primary_opportunity"},
+        "complexity_moat_signal": {"verdict": "high"},
+        "covenant_control_potential": {"verdict": "covenant_rich_opportunity"}
     }

@@ -1,0 +1,39 @@
+v0.5: triple-lens addition (KKR + Blackstone + Apollo)
+
+Three new investor lenses extending the deterministic + LLM-soft hybrid pattern
+established by Buffett (v0.1) and Marks (v0.3). Sidwell now evaluates a public
+company through 5 lenses side-by-side, with lens divergence as the primary
+diagnostic signal.
+
+Lens implementations:
+- lenses/kkr.py       — 18 checks, operator-buyer LBO framework, Phalippou meta-check
+- lenses/blackstone.py — 14 checks, good-business-in-good-neighborhood framework
+- lenses/apollo.py     — 16 checks, credit-first chaos/complexity framework
+
+Pipeline integration:
+- value.py wires all 5 lenses; console prints 5 scores + 5 verdicts
+- reports/render.py extended to quintuple-lens layout (sections 3.1-3.5)
+- Quintuple-Lens Synthesis section with deterministic pattern-read rules
+
+Data + qualitative layer:
+- data/public.py adds total_intangibles, goodwill, book_value_per_share
+- analysis/qualitative.py PROMPT_VERSION bumped v0.3 -> v0.4 (cache invalidated)
+- 13 new qualitative fields across KKR / Blackstone / Apollo soft signals
+- why_now_signal enum extended with catalyst_present for KKR
+
+Tests:
+- 7 KKR tests, 7 Blackstone tests, 8 Apollo tests
+- Realistic _make_asianpaints_qualitative() fixture for APN actual tests
+- All 107 tests pass
+
+Documentation:
+- BUILD_NOTES.md section 19 covers Asian Paints score deltas, sector-median
+  lookup source, schema migration, neutral-default convention, section
+  renumbering rationale, snapshot hand-validation
+- README.md updated to reflect 5-lens v0.5
+- frameworks/_future_lenses.md trimmed (KKR/Blackstone no longer future)
+
+Removed:
+- lenses/kkr_blackstone.py (combined stub; split into separate files)
+- update_snapshot.py (spec-forbidden snapshot regenerator; expected_report.md
+  is now hand-validated only)

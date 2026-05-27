@@ -4,6 +4,7 @@ Tests for the Howard Marks investor lens (lenses/marks.py).
 """
 import pytest
 from lenses.marks import evaluate_marks_lens
+from tests.fixture_company import _make_available_qualitative as _make_full_qualitative, _make_unavailable_qualitative
 
 
 def get_base_financials():
@@ -56,66 +57,7 @@ def get_base_dcf(intrinsic_value=30.0, current_price=50.0):
     }
 
 
-def _make_full_qualitative(
-    sector_cycle="mid_cycle",
-    variant_present=True,
-    specificity="high",
-    humility_verdict="humble",
-    why_now_verdict="dislocation_present",
-):
-    return {
-        "status": "available",
-        "model": "gemini-3.5-flash",
-        "documents_used": ["test.pdf"],
-        "forward_guidance": [],
-        "risk_callouts": [],
-        "strategic_themes": [],
-        "tone_assessment": {"current": "confident", "trajectory": "stable", "notes": "Fine."},
-        "coherence_assessment": {"verdict": "coherent", "reasoning": "Consistent."},
-        "owner_orientation_signal": {"verdict": "owner_oriented", "evidence": "Partner language."},
-        "holdability_assessment": {"verdict": "holdable_20y", "reasoning": "Durable demand."},
-        "cycle_position": {
-            "sector_cycle": sector_cycle,
-            "company_cycle": "mid",
-            "reasoning": "Mid-band utilization."
-        },
-        "variant_perception": {
-            "consensus_view": "Strong consensus growth.",
-            "company_view": "Modest, caveated guidance.",
-            "variant_present": variant_present,
-            "specificity": specificity,
-            "notes": "Specific ramp mechanism."
-        },
-        "management_humility": {"verdict": humility_verdict, "evidence": "Refused 5-year forecast."},
-        "why_now_signal": {
-            "verdict": why_now_verdict,
-            "specific_event": "Sector de-rated on macro fears.",
-            "notes": "FII-driven selling, not fundamental."
-        },
-    }
 
-
-def _make_unavailable_qualitative():
-    return {
-        "status": "unavailable",
-        "reason": "No documents",
-        "forward_guidance": [],
-        "risk_callouts": [],
-        "strategic_themes": [],
-        "tone_assessment": {"current": None, "trajectory": None, "notes": None},
-        "coherence_assessment": {"verdict": None, "reasoning": None},
-        "owner_orientation_signal": {"verdict": None, "evidence": None},
-        "holdability_assessment": {"verdict": None, "reasoning": None},
-        "cycle_position": {"sector_cycle": None, "company_cycle": None, "reasoning": None},
-        "variant_perception": {
-            "consensus_view": None, "company_view": None,
-            "variant_present": None, "specificity": None, "notes": None
-        },
-        "management_humility": {"verdict": None, "evidence": None},
-        "why_now_signal": {"verdict": None, "specific_event": None, "notes": None},
-        "documents_used": [],
-        "model": None,
-    }
 
 
 # ---------------------------------------------------------------------------

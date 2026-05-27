@@ -521,6 +521,9 @@ def fetch_financials(ticker: str) -> dict:
         equity_row = get_row(balance, ["Stockholders Equity", "Total Stockholders Equity", "Common Stock Equity"])
         cash_row = get_row(balance, ["Cash And Cash Equivalents", "Cash Financial", "Cash Cash Equivalents And Short Term Investments"])
         
+        total_intangibles_row = get_row(balance, ["Total Intangible Assets", "Intangible Assets", "Total Intangibles"])
+        goodwill_row = get_row(balance, ["Goodwill"])
+        
         # Debt calculation
         # Sum of current debt and long term debt
         lt_debt = get_row(balance, ["Long Term Debt"])
@@ -563,31 +566,43 @@ def fetch_financials(ticker: str) -> dict:
         total_assets = []
         total_equity = []
         cash = []
+        total_intangibles = []
+        goodwill = []
         capex = []
         depreciation = []
         working_capital_change = []
         fcf = []
         
+        import math
+        def _safe_float(val, default=0.0):
+            try:
+                f = float(val)
+                return default if math.isnan(f) else f
+            except (ValueError, TypeError):
+                return default
+        
         for idx, d in enumerate(sorted_dates):
-            r = float(rev_row.get(d, 0.0))
-            gp = float(gp_row.get(d, 0.0))
-            eb = float(ebit_row.get(d, 0.0))
-            ie = float(interest_row.get(d, 0.0))
-            tp = float(tax_row.get(d, 0.0))
-            pi = float(pretax_row.get(d, 0.0))
-            ni = float(net_inc_row.get(d, 0.0))
+            r = _safe_float(rev_row.get(d, 0.0))
+            gp = _safe_float(gp_row.get(d, 0.0))
+            eb = _safe_float(ebit_row.get(d, 0.0))
+            ie = _safe_float(interest_row.get(d, 0.0))
+            tp = _safe_float(tax_row.get(d, 0.0))
+            pi = _safe_float(pretax_row.get(d, 0.0))
+            ni = _safe_float(net_inc_row.get(d, 0.0))
             
-            ast = float(assets_row.get(d, 0.0))
-            eq = float(equity_row.get(d, 0.0))
-            c = float(cash_row.get(d, 0.0))
+            ast = _safe_float(assets_row.get(d, 0.0))
+            eq = _safe_float(equity_row.get(d, 0.0))
+            c = _safe_float(cash_row.get(d, 0.0))
+            ti = _safe_float(total_intangibles_row.get(d, 0.0))
+            gw = _safe_float(goodwill_row.get(d, 0.0))
             
-            cfo = float(cfo_row.get(d, 0.0))
-            cx = float(capex_row.get(d, 0.0))
+            cfo = _safe_float(cfo_row.get(d, 0.0))
+            cx = _safe_float(capex_row.get(d, 0.0))
             # Capex is typically negative in yfinance. Ensure it is represented as a positive outflow number here
             cx_abs = abs(cx)
-            dep = float(deprec_row.get(d, 0.0))
+            dep = _safe_float(deprec_row.get(d, 0.0))
             
-            nwc_chg = float(nwc_change_row.get(d, 0.0))
+            nwc_chg = _safe_float(nwc_change_row.get(d, 0.0))
             
             revenue.append(r)
             gross_profit.append(gp)
@@ -600,6 +615,8 @@ def fetch_financials(ticker: str) -> dict:
             total_assets.append(ast)
             total_equity.append(eq)
             cash.append(c)
+            total_intangibles.append(ti)
+            goodwill.append(gw)
             capex.append(cx_abs)
             depreciation.append(dep)
             working_capital_change.append(nwc_chg)
@@ -623,6 +640,8 @@ def fetch_financials(ticker: str) -> dict:
         total_assets = total_assets[-4:]
         total_equity = total_equity[-4:]
         cash = cash[-4:]
+        total_intangibles = total_intangibles[-4:]
+        goodwill = goodwill[-4:]
         final_debt = final_debt[-4:]
         capex = capex[-4:]
         depreciation = depreciation[-4:]
@@ -635,6 +654,7 @@ def fetch_financials(ticker: str) -> dict:
             ("ebit", ebit), ("interest_expense", interest_expense), ("tax_provision", tax_provision),
             ("pretax_income", pretax_income), ("net_income", net_income), ("total_assets", total_assets),
             ("total_equity", total_equity), ("cash", cash), ("debt", final_debt),
+            ("total_intangibles", total_intangibles), ("goodwill", goodwill),
             ("capex", capex), ("depreciation", depreciation), ("working_capital_change", working_capital_change),
             ("fcf", fcf)
         ]:
@@ -656,6 +676,8 @@ def fetch_financials(ticker: str) -> dict:
             "total_assets": total_assets,
             "total_equity": total_equity,
             "cash": cash,
+            "total_intangibles": total_intangibles,
+            "goodwill": goodwill,
             "debt": final_debt,
             "capex": capex,
             "depreciation": depreciation,
@@ -668,6 +690,7 @@ def fetch_financials(ticker: str) -> dict:
             "recommendation_mean": recommendation_mean,
             "dividend_yield": dividend_yield,
             "historical_shares": historical_shares_raw,
+            "book_value_per_share": total_equity[-1] / shares_outstanding if shares_outstanding > 0 else 0.0,
             "source": "Yahoo Finance (yfinance)"
         }
         

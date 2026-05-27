@@ -5,9 +5,9 @@ from datetime import datetime
 
 logger = logging.getLogger("sidwell.reports.render")
 
-SIDWELL_VERSION = "v0.4"
+SIDWELL_VERSION = "v0.5"
 
-_PART_ORDER = {"A": 0, "B": 1, "C": 2, "D": 3}
+_PART_ORDER = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4}
 
 def _sorted_checks(checks: dict) -> list:
     """
@@ -50,21 +50,27 @@ def render_markdown_report(
     financials: dict,
     qualitative_results: dict = None,
     marks_results: dict = None,
+    kkr_results: dict = None,
+    blackstone_results: dict = None,
+    apollo_results: dict = None,
     generated_at: datetime = None,
     output_dir: Path = None
 ) -> Path:
     """
-    Generates a professional Markdown investment report with dual-lens output.
+    Generates a professional Markdown investment report with quintuple-lens output.
 
     Sections:
       1. Company Snapshot
       2. DCF Valuation & WACC
-      3. Buffett Investor Lens (14 checks, 4 Parts)
+      3. Buffett Investor Lens
+      3.1 Marks Lens
+      3.2 KKR Lens
+      3.3 Blackstone Lens
+      3.4 Apollo Lens
       3.5 Qualitative Analysis
-      3.6 Marks Lens (14 checks, 4 Parts)  [if marks_results provided]
       4. Margin-of-Safety Check
       5. Investment Verdict
-      6. Dual-Lens Synthesis              [if marks_results provided]
+      6. Quintuple-Lens Synthesis
     """
     if generated_at is None:
         generated_at = datetime.now()
@@ -88,7 +94,7 @@ def render_markdown_report(
     md.append(f"# Investment Analysis Report: {ticker}")
     md.append(f"**Generated on**: {generated_at.strftime('%B %d, %Y')}")
     md.append(f"**Valuation Engine**: Discounted Cash Flow (DCF)")
-    md.append(f"**Investor Lenses**: Warren Buffett + Howard Marks ({SIDWELL_VERSION})")
+    md.append(f"**Investor Lenses**: Warren Buffett + Howard Marks + KKR + Blackstone + Apollo ({SIDWELL_VERSION})")
     md.append("")
 
     # DCF Coverage Gap Warning
@@ -133,14 +139,37 @@ def render_markdown_report(
 
     # Buffett verdict row
     buffett_emoji = _verdict_emoji(buffett_results["verdict"])
-    md.append(f"| **Buffett Score** | **{buffett_results['score']}/14** | Buffett Lens (14 checks) |")
+    buffett_max = buffett_results.get("max_score", 14)
+    md.append(f"| **Buffett Score** | **{buffett_results['score']}/{buffett_max}** | Buffett Lens ({buffett_max} checks) |")
     md.append(f"| **Buffett Verdict** | **{buffett_results['verdict']}** {buffett_emoji} | Buffett Lens Rules |")
 
     # Marks verdict row (if available)
     if marks_results is not None:
+        marks_max = marks_results.get("max_score", 14)
         marks_emoji = _verdict_emoji(marks_results["verdict"])
-        md.append(f"| **Marks Score** | **{marks_results['score']}/14** | Marks Lens (14 checks) |")
+        md.append(f"| **Marks Score** | **{marks_results['score']}/{marks_max}** | Marks Lens ({marks_max} checks) |")
         md.append(f"| **Marks Verdict** | **{marks_results['verdict']}** {marks_emoji} | Marks Lens Rules |")
+
+    # KKR verdict row
+    if kkr_results is not None:
+        kkr_max = kkr_results.get("max_score", 18)
+        kkr_emoji = _verdict_emoji(kkr_results["verdict"])
+        md.append(f"| **KKR Score** | **{kkr_results['score']}/{kkr_max}** | KKR Lens ({kkr_max} checks) |")
+        md.append(f"| **KKR Verdict** | **{kkr_results['verdict']}** {kkr_emoji} | KKR Lens Rules |")
+
+    # Blackstone verdict row
+    if blackstone_results is not None:
+        bx_max = blackstone_results.get("max_score", 14)
+        bx_emoji = _verdict_emoji(blackstone_results["verdict"])
+        md.append(f"| **Blackstone Score** | **{blackstone_results['score']}/{bx_max}** | Blackstone Lens ({bx_max} checks) |")
+        md.append(f"| **Blackstone Verdict** | **{blackstone_results['verdict']}** {bx_emoji} | Blackstone Lens Rules |")
+
+    # Apollo verdict row
+    if apollo_results is not None:
+        ap_max = apollo_results.get("max_score", 16)
+        ap_emoji = _verdict_emoji(apollo_results["verdict"])
+        md.append(f"| **Apollo Score** | **{apollo_results['score']}/{ap_max}** | Apollo Lens ({ap_max} checks) |")
+        md.append(f"| **Apollo Verdict** | **{apollo_results['verdict']}** {ap_emoji} | Apollo Lens Rules |")
 
     md.append("")
 
@@ -148,8 +177,13 @@ def render_markdown_report(
     md.append("### Verdict Summary")
     md.append(f"> **Buffett**: **{buffett_results['verdict']}** — {buffett_results['reason']}")
     if marks_results is not None:
-        md.append(f">")
         md.append(f"> **Marks**: **{marks_results['verdict']}** — {marks_results['reason']}")
+    if kkr_results is not None:
+        md.append(f"> **KKR**: **{kkr_results['verdict']}** — {kkr_results['reason']}")
+    if blackstone_results is not None:
+        md.append(f"> **Blackstone**: **{blackstone_results['verdict']}** — {blackstone_results['reason']}")
+    if apollo_results is not None:
+        md.append(f"> **Apollo**: **{apollo_results['verdict']}** — {apollo_results['reason']}")
     md.append("")
 
     # -------------------------------------------------------------------------
@@ -293,13 +327,62 @@ def render_markdown_report(
     # 3. Buffett Investor Lens (14 checks)
     # -------------------------------------------------------------------------
     md.append("## 3. Buffett Investor Lens")
-    md.append(f"All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):")
+    buffett_max = buffett_results.get("max_score", 14)
+    md.append(f"All {buffett_max} checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):")
     md.append("")
 
     _render_lens_table(md, buffett_results, current_price, intrinsic_val, "Buffett")
 
-    md.append(f"**Total Buffett Score**: **{buffett_results['score']}/14**")
+    md.append(f"**Total Buffett Score**: **{buffett_results['score']}/{buffett_max}**")
     md.append("")
+
+    # -------------------------------------------------------------------------
+    # 3.1 Marks Investor Lens
+    # -------------------------------------------------------------------------
+    if marks_results is not None:
+        md.append("## 3.1 Marks Investor Lens")
+        marks_max = marks_results.get("max_score", 14)
+        md.append(f"All {marks_max} checks per Howard Marks's risk-first framework (frameworks/marks.md):")
+        md.append("")
+        _render_lens_table(md, marks_results, current_price, intrinsic_val, "Marks")
+        md.append(f"**Total Marks Score**: **{marks_results['score']}/{marks_max}**")
+        md.append("")
+        
+    # -------------------------------------------------------------------------
+    # 3.2 KKR Investor Lens
+    # -------------------------------------------------------------------------
+    if kkr_results is not None:
+        md.append("## 3.2 KKR Investor Lens")
+        kkr_max = kkr_results.get("max_score", 18)
+        md.append(f"All {kkr_max} checks per KKR's operating playbook framework (frameworks/kkr.md):")
+        md.append("")
+        _render_lens_table(md, kkr_results, current_price, intrinsic_val, "KKR")
+        md.append(f"**Total KKR Score**: **{kkr_results['score']}/{kkr_max}**")
+        md.append("")
+
+    # -------------------------------------------------------------------------
+    # 3.3 Blackstone Investor Lens
+    # -------------------------------------------------------------------------
+    if blackstone_results is not None:
+        md.append("## 3.3 Blackstone Investor Lens")
+        bx_max = blackstone_results.get("max_score", 14)
+        md.append(f"All {bx_max} checks per Blackstone's thematic framework (frameworks/blackstone.md):")
+        md.append("")
+        _render_lens_table(md, blackstone_results, current_price, intrinsic_val, "Blackstone")
+        md.append(f"**Total Blackstone Score**: **{blackstone_results['score']}/{bx_max}**")
+        md.append("")
+
+    # -------------------------------------------------------------------------
+    # 3.4 Apollo Investor Lens
+    # -------------------------------------------------------------------------
+    if apollo_results is not None:
+        md.append("## 3.4 Apollo Investor Lens")
+        ap_max = apollo_results.get("max_score", 16)
+        md.append(f"All {ap_max} checks per Apollo's credit & complexity framework (frameworks/apollo.md):")
+        md.append("")
+        _render_lens_table(md, apollo_results, current_price, intrinsic_val, "Apollo")
+        md.append(f"**Total Apollo Score**: **{apollo_results['score']}/{ap_max}**")
+        md.append("")
 
     # -------------------------------------------------------------------------
     # 3.5 Qualitative Analysis
@@ -400,16 +483,7 @@ def render_markdown_report(
                 md.append(f"- **Why now**: {wn.get('verdict')} — {(wn.get('specific_event') or '')[:200]}")
             md.append("")
 
-    # -------------------------------------------------------------------------
-    # 3.6 Marks Investor Lens (14 checks)
-    # -------------------------------------------------------------------------
-    if marks_results is not None:
-        md.append("## 3.6 Marks Investor Lens")
-        md.append(f"All 14 checks per Howard Marks's risk-first framework across 4 Parts (frameworks/marks.md):")
-        md.append("")
-        _render_lens_table(md, marks_results, current_price, intrinsic_val, "Marks")
-        md.append(f"**Total Marks Score**: **{marks_results['score']}/14**")
-        md.append("")
+
 
     # -------------------------------------------------------------------------
     # 4. Margin-of-Safety Check
@@ -468,31 +542,55 @@ def render_markdown_report(
             md.append(f"**Marks Action Item**: Set re-rating alert at **{format_currency(marks_alert_price, is_india)}** (60% of intrinsic = 40% MoS).")
             md.append("")
 
+    if kkr_results is not None:
+        md.append(f"**KKR RECOMMENDATION: {kkr_results['verdict']}**")
+        md.append("")
+        md.append(kkr_results["reason"])
+        md.append("")
+        
+    if blackstone_results is not None:
+        md.append(f"**BLACKSTONE RECOMMENDATION: {blackstone_results['verdict']}**")
+        md.append("")
+        md.append(blackstone_results["reason"])
+        md.append("")
+        
+    if apollo_results is not None:
+        md.append(f"**APOLLO RECOMMENDATION: {apollo_results['verdict']}**")
+        md.append("")
+        md.append(apollo_results["reason"])
+        md.append("")
+
     # -------------------------------------------------------------------------
     # 6. Dual-Lens Synthesis (if both lenses ran)
     # -------------------------------------------------------------------------
     if marks_results is not None:
-        md.append("## 6. Dual-Lens Synthesis")
-        md.append("Sidwell preserves both lens verdicts without collapsing them to a single recommendation.")
-        md.append("The disagreement between lenses IS the insight. See `frameworks/marks.md` section 'How This Lens Differs from Buffett' for design rationale.")
+        md.append("## 6. Quintuple-Lens Synthesis")
+        md.append("Sidwell preserves all lens verdicts without collapsing them to a single recommendation.")
+        md.append("The disagreement between lenses IS the insight.")
         md.append("")
-        md.append("| | Buffett | Marks |")
+        
+        headers = ["Score", "Verdict"]
+        
+        md.append("| Lens | Score | Verdict |")
         md.append("| :--- | :---: | :---: |")
-        md.append(f"| **Score** | {buffett_results['score']}/14 | {marks_results['score']}/14 |")
-        md.append(f"| **Verdict** | **{buffett_results['verdict']}** {_verdict_emoji(buffett_results['verdict'])} | **{marks_results['verdict']}** {_verdict_emoji(marks_results['verdict'])} |")
-        md.append("")
-
-        # Pattern interpretation
-        bv = buffett_results["verdict"]
-        mv = marks_results["verdict"]
-        if bv == "BUY" and mv == "BUY":
-            md.append("**Pattern: Both BUY** — Rare, high-conviction signal. Quality compounder available at deep distress.")
-        elif bv in ("BUY", "WAIT", "WATCH") and mv == "SKIP":
-            md.append("**Pattern: Buffett favors / Marks SKIP** — Quality business at fair price but no cyclical edge or asymmetric payoff. Suitable for permanent-capital, long-horizon holders.")
-        elif bv == "SKIP" and mv in ("BUY", "WAIT", "WATCH"):
-            md.append("**Pattern: Marks favors / Buffett SKIP** — Cyclical opportunity at deep discount but business quality fails Buffett's quality bars. Tradeable trough opportunity; not a forever-hold.")
-        else:
-            md.append(f"**Pattern: Both {bv}/{mv}** — Monitor for change in conditions.")
+        buffett_max = buffett_results.get("max_score", 14)
+        md.append(f"| **Buffett** | {buffett_results['score']}/{buffett_max} | **{buffett_results['verdict']}** {_verdict_emoji(buffett_results['verdict'])} |")
+        
+        marks_max = marks_results.get("max_score", 14)
+        md.append(f"| **Marks** | {marks_results['score']}/{marks_max} | **{marks_results['verdict']}** {_verdict_emoji(marks_results['verdict'])} |")
+        
+        if kkr_results:
+            kkr_max = kkr_results.get("max_score", 18)
+            md.append(f"| **KKR** | {kkr_results['score']}/{kkr_max} | **{kkr_results['verdict']}** {_verdict_emoji(kkr_results['verdict'])} |")
+        
+        if blackstone_results:
+            bx_max = blackstone_results.get("max_score", 14)
+            md.append(f"| **Blackstone** | {blackstone_results['score']}/{bx_max} | **{blackstone_results['verdict']}** {_verdict_emoji(blackstone_results['verdict'])} |")
+            
+        if apollo_results:
+            ap_max = apollo_results.get("max_score", 16)
+            md.append(f"| **Apollo** | {apollo_results['score']}/{ap_max} | **{apollo_results['verdict']}** {_verdict_emoji(apollo_results['verdict'])} |")
+            
         md.append("")
 
     report_content = "\n".join(md)
@@ -515,12 +613,45 @@ def _render_lens_table(md: list, lens_results: dict, current_price: float, intri
     Renders a lens check table grouped by Part (A/B/C/D).
     Each Part gets its own sub-header before its checks.
     """
-    part_labels = {
-        "A": "Part A — Business Quality" if lens_name == "Buffett" else "Part A — Margin of Safety & Asymmetric Payoff",
-        "B": "Part B — Financial Health" if lens_name == "Buffett" else "Part B — Cycle Position",
-        "C": "Part C — Management & Capital Allocation" if lens_name == "Buffett" else "Part C — Risk Architecture",
-        "D": "Part D — Margin of Safety & Holdability" if lens_name == "Buffett" else "Part D — Second-Level Thinking & Contrarianism",
-    }
+    part_labels = {}
+    if lens_name == "Buffett":
+        part_labels = {
+            "A": "Part A — Business Quality",
+            "B": "Part B — Financial Health",
+            "C": "Part C — Management & Capital Allocation",
+            "D": "Part D — Margin of Safety & Holdability",
+        }
+    elif lens_name == "Marks":
+        part_labels = {
+            "A": "Part A — Margin of Safety & Asymmetric Payoff",
+            "B": "Part B — Cycle Position",
+            "C": "Part C — Risk Architecture",
+            "D": "Part D — Second-Level Thinking & Contrarianism",
+        }
+    elif lens_name == "KKR":
+        part_labels = {
+            "A": "Part A — LBO Viability",
+            "B": "Part B — Operational Upside",
+            "C": "Part C — Strategic Fit",
+            "D": "Part D — Cycle Timing & Returns",
+            "E": "Part E — Defensibility vs Phalippou Bar",
+        }
+    elif lens_name == "Blackstone":
+        part_labels = {
+            "A": "Part A — Good Business Filter",
+            "B": "Part B — Good Neighborhood (Thematic)",
+            "C": "Part C — Downside Protection",
+            "D": "Part D — Scale Fit & Hold Economics",
+            "E": "Part E — Defensibility vs Phalippou Bar",
+        }
+    elif lens_name == "Apollo":
+        part_labels = {
+            "A": "Part A — Purchase Price & Capital Structure Entry",
+            "B": "Part B — Chaos, Complexity, Credit Edge",
+            "C": "Part C — Athene Permanent Capital Fit",
+            "D": "Part D — Credit Downside Quality",
+            "E": "Part E — Defensibility vs Phalippou Bar",
+        }
 
     checks = lens_results["checks"]
     sorted_items = _sorted_checks(checks)

@@ -1,5 +1,6 @@
 import pytest
 from lenses.buffett import evaluate_buffett_lens
+from tests.fixture_company import _make_available_qualitative, _make_unavailable_qualitative
 
 
 def get_perfect_financials():
@@ -50,49 +51,7 @@ def get_perfect_dcf(intrinsic_value=100.0):
     }
 
 
-def _make_unavailable_qualitative():
-    return {
-        "status": "unavailable",
-        "reason": "No documents found in Drive folder",
-        "forward_guidance": [],
-        "risk_callouts": [],
-        "strategic_themes": [],
-        "tone_assessment": {"current": None, "trajectory": None, "notes": None},
-        "coherence_assessment": {"verdict": None, "reasoning": None},
-        "owner_orientation_signal": {"verdict": None, "evidence": None},
-        "holdability_assessment": {"verdict": None, "reasoning": None},
-        "cycle_position": {"sector_cycle": None, "company_cycle": None, "reasoning": None},
-        "variant_perception": {"consensus_view": None, "company_view": None,
-                               "variant_present": None, "specificity": None, "notes": None},
-        "management_humility": {"verdict": None, "evidence": None},
-        "why_now_signal": {"verdict": None, "specific_event": None, "notes": None},
-        "documents_used": [],
-        "model": None,
-    }
 
-
-def _make_available_qualitative(
-    coherence_verdict="coherent",
-    owner_verdict="owner_oriented",
-    holdability_verdict="holdable_20y",
-):
-    return {
-        "status": "available",
-        "model": "gemini-3.5-flash",
-        "documents_used": ["test.pdf"],
-        "forward_guidance": [],
-        "risk_callouts": [],
-        "strategic_themes": [],
-        "tone_assessment": {"current": "confident", "trajectory": "stable", "notes": "Fine."},
-        "coherence_assessment": {"verdict": coherence_verdict, "reasoning": "Because."},
-        "owner_orientation_signal": {"verdict": owner_verdict, "evidence": "Partners framing."},
-        "holdability_assessment": {"verdict": holdability_verdict, "reasoning": "Durable demand."},
-        "cycle_position": {"sector_cycle": "mid_cycle", "company_cycle": "mid", "reasoning": "Mid band."},
-        "variant_perception": {"consensus_view": "Strong growth.", "company_view": "Modest.",
-                               "variant_present": True, "specificity": "high", "notes": "Specific mechanism."},
-        "management_humility": {"verdict": "humble", "evidence": "No multi-year forecasts."},
-        "why_now_signal": {"verdict": "dislocation_present", "specific_event": "Sector de-rated.", "notes": "FII selling."},
-    }
 
 
 # ---------------------------------------------------------------------------
