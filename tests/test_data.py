@@ -373,19 +373,19 @@ def test_fmp_normalized_shape_matches_yfinance_shape(mock_set_json, mock_get_jso
         mock_resp.status_code = 200
         mock_resp.ok = True
         
-        if "/profile/" in url:
+        if "/profile" in url:
             mock_resp.json.return_value = [{"price": 100.0, "mktCap": 1000.0, "beta": 1.2, "lastDiv": 1.5, "dividendYield": 0.015}]
-        elif "/income-statement/" in url:
+        elif "/income-statement" in url:
             mock_resp.json.return_value = [{"date": f"202{i}-12-31", "revenue": 100, "grossProfit": 50, "operatingIncome": 20, "interestExpense": 2, "incomeTaxExpense": 3, "incomeBeforeTax": 18, "netIncome": 15} for i in range(4, 0, -1)]
-        elif "/balance-sheet-statement/" in url:
+        elif "/balance-sheet-statement" in url:
             mock_resp.json.return_value = [{"totalAssets": 200, "totalStockholdersEquity": 100, "cashAndCashEquivalents": 50, "totalDebt": 30, "intangibleAssets": 10, "goodwill": 5} for i in range(4, 0, -1)]
-        elif "/cash-flow-statement/" in url:
+        elif "/cash-flow-statement" in url:
             mock_resp.json.return_value = [{"capitalExpenditure": -10, "depreciationAndAmortization": 5, "changeInWorkingCapital": -2, "freeCashFlow": 15} for i in range(4, 0, -1)]
-        elif "/key-metrics/" in url:
+        elif "/key-metrics" in url:
             mock_resp.json.return_value = [{"weightedAverageShsOut": 10, "peRatio": 15.0} for i in range(4, 0, -1)]
-        elif "/shares-float/" in url:
+        elif "/shares-float" in url:
             mock_resp.json.return_value = [{"insiderHolding": 5.0}]
-        elif "/analyst-stock-recommendations/" in url:
+        elif "/analyst-stock-recommendations" in url:
             mock_resp.json.return_value = [{"ratingScore": 2.5}]
         return mock_resp
         
@@ -433,20 +433,20 @@ def test_fmp_capex_sign_flipped_to_positive(mock_set_json, mock_get_json, mock_g
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.ok = True
-        if "/profile/" in url:
+        if "/profile" in url:
             mock_resp.json.return_value = [{"price": 100.0, "mktCap": 1000.0}]
-        elif "/income-statement/" in url:
+        elif "/income-statement" in url:
             mock_resp.json.return_value = [{"date": f"202{i}-12-31"} for i in range(4, 0, -1)]
-        elif "/balance-sheet-statement/" in url:
+        elif "/balance-sheet-statement" in url:
             mock_resp.json.return_value = [{}] * 4
-        elif "/cash-flow-statement/" in url:
+        elif "/cash-flow-statement" in url:
             # FMP returns negative for outflows
             mock_resp.json.return_value = [{"capitalExpenditure": -25.5}] * 4
-        elif "/key-metrics/" in url:
+        elif "/key-metrics" in url:
             mock_resp.json.return_value = [{}] * 4
-        elif "/shares-float/" in url:
+        elif "/shares-float" in url:
             mock_resp.json.return_value = []
-        elif "/analyst-stock-recommendations/" in url:
+        elif "/analyst-stock-recommendations" in url:
             mock_resp.json.return_value = []
         return mock_resp
         
@@ -454,3 +454,18 @@ def test_fmp_capex_sign_flipped_to_positive(mock_set_json, mock_get_json, mock_g
     
     res = public.fetch_financials("AAPL")
     assert all(cx == 25.5 for cx in res["capex"])
+
+@patch("data.public.requests.Session.get")
+@patch("os.getenv")
+@patch("data.cache.get_json")
+def test_fmp_403_legacy_endpoint_surfaces_clear_error(mock_get_json, mock_getenv, mock_get):
+    mock_getenv.return_value = "mock_fmp_key"
+    mock_get_json.return_value = None
+    
+    mock_resp = MagicMock()
+    mock_resp.status_code = 403
+    mock_resp.text = "Legacy Endpoint"
+    mock_get.return_value = mock_resp
+    
+    with pytest.raises(ValueError, match="FMP returned 403 Legacy Endpoint"):
+        public.fetch_financials("AAPL")

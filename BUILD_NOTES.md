@@ -740,5 +740,9 @@ Yahoo Finance aggressively rate-limited US ticker scraping in late May 2026, cau
 - **Dispatcher Architecture:** `data.public.fetch_financials` was refactored to route `.NS` and `.BO` suffixes to the legacy `yfinance` fetcher, while all other tickers route to `_fetch_financials_fmp`.
 - **FMP Endpoints:** The FMP fetcher normalizes data from `/profile`, `/income-statement`, `/balance-sheet-statement`, `/cash-flow-statement`, `/key-metrics`, `/shares-float`, and `/analyst-stock-recommendations` into the exact shape expected by the downstream lenses.
 - **Graceful Error Handling:** Specific error catches surface actionable messages in Streamlit (e.g., missing API key, 429 quota limits, missing free-tier coverage).
-- **Authentication:** `FMP_API_KEY` is injected via Streamlit Secrets and `.env`.
+- Authentication: `FMP_API_KEY` is injected via Streamlit Secrets and `.env`.
 - Phase 2 (v0.6.3) will migrate Indian tickers to a `screener.in` scraper and drop `yfinance` entirely.
+
+### 21.1 FMP /stable/ Endpoint Migration (v0.6.2.1)
+
+FMP API endpoint regime: Sidwell uses FMP's `/stable/` endpoints (current as of v0.6.2.1). The legacy `/api/v3/` endpoints were deprecated for new accounts after Aug 31, 2025 and return HTTP 403 Legacy Endpoint. Initial v0.6.2 commit targeted `/api/v3/` which broke live demos for the user's post-cutoff account. Migrated to `/stable/` pattern on May 29, 2026: base URL changed, ticker moved from URL path to symbol query parameter, response shape unchanged.

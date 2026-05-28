@@ -744,7 +744,7 @@ def _fetch_financials_fmp(ticker: str) -> dict:
     if not api_key:
         raise ValueError("FMP_API_KEY required for US ticker fetching — sign up free at financialmodelingprep.com/developer (250 req/day free tier).")
         
-    base_url = "https://financialmodelingprep.com/api/v3"
+    base_url = "https://financialmodelingprep.com/stable"
     session = requests.Session()
     
     def _fetch_endpoint(endpoint_url: str):
@@ -762,6 +762,8 @@ def _fetch_financials_fmp(ticker: str) -> dict:
             
         if resp.status_code == 401:
             raise ValueError("FMP_API_KEY invalid — verify the key at financialmodelingprep.com/dashboard")
+        elif resp.status_code == 403 and "Legacy Endpoint" in resp.text:
+            raise ValueError("FMP returned 403 Legacy Endpoint — code is calling the deprecated /api/v3/ URL pattern. Fix data/public.py to use /stable/ endpoints. See BUILD_NOTES §21.")
         elif resp.status_code == 429:
             raise ValueError("FMP daily quota (250 req/day free tier) exceeded. Try again tomorrow or upgrade plan.")
         elif 500 <= resp.status_code < 600:
@@ -777,26 +779,26 @@ def _fetch_financials_fmp(ticker: str) -> dict:
 
     try:
         # 1. Profile
-        profile_data = _fetch_endpoint(f"/profile/{ticker}")
+        profile_data = _fetch_endpoint(f"/profile?symbol={ticker}")
         if not profile_data or not isinstance(profile_data, list):
             raise ValueError(f"FMP free tier does not cover {ticker}. Try a different ticker.")
         profile = profile_data[0]
         
         current_price = profile.get("price", 0.0)
-        market_cap = profile.get("mktCap", 0.0)
+        market_cap = profile.get("marketCap", profile.get("mktCap", 0.0))
         if current_price > 0.0:
             shares_outstanding = market_cap / current_price
         else:
             shares_outstanding = 0.0
             
         stock_beta = profile.get("beta", 1.0)
-        dividend_yield = profile.get("lastDiv", 0.0) / current_price if current_price > 0.0 else 0.0
+        dividend_yield = profile.get("lastDividend", profile.get("lastDiv", 0.0)) / current_price if current_price > 0.0 else 0.0
         dividend_yield = profile.get("dividendYield", dividend_yield)
         if dividend_yield is None:
             dividend_yield = 0.0
         
         # 2. Income Statement
-        inc_stmt_data = _fetch_endpoint(f"/income-statement/{ticker}?period=annual&limit=4")
+        inc_stmt_data = _fetch_endpoint(f"/income-statement?symbol={ticker}&period=annual&limit=4")
         if not inc_stmt_data or len(inc_stmt_data) < 4:
             raise ValueError(f"FMP free tier does not cover {ticker}. Try a different ticker.")
             
@@ -823,7 +825,7 @@ def _fetch_financials_fmp(ticker: str) -> dict:
             net_income.append(float(p.get("netIncome", 0.0) or 0.0))
             
         # 3. Balance Sheet
-        bal_sheet_data = _fetch_endpoint(f"/balance-sheet-statement/{ticker}?period=annual&limit=4")
+        bal_sheet_data = _fetch_endpoint(f"/balance-sheet-statement?symbol={ticker}&period=annual&limit=4")
         if not bal_sheet_data or len(bal_sheet_data) < 4:
             raise ValueError(f"FMP free tier does not cover {ticker}. Try a different ticker.")
         bal_sheet_data = list(reversed(bal_sheet_data))
@@ -847,7 +849,7 @@ def _fetch_financials_fmp(ticker: str) -> dict:
             goodwill.append(float(p.get("goodwill", 0.0) or 0.0))
             
         # 4. Cash Flow Statement
-        cf_stmt_data = _fetch_endpoint(f"/cash-flow-statement/{ticker}?period=annual&limit=4")
+        cf_stmt_data = _fetch_endpoint(f"/cash-flow-statement?symbol={ticker}&period=annual&limit=4")
         if not cf_stmt_data or len(cf_stmt_data) < 4:
             raise ValueError(f"FMP free tier does not cover {ticker}. Try a different ticker.")
         cf_stmt_data = list(reversed(cf_stmt_data))
@@ -866,22 +868,26 @@ def _fetch_financials_fmp(ticker: str) -> dict:
             fcf.append(float(p.get("freeCashFlow", 0.0) or 0.0))
             
         # 5. Key Metrics
-        metrics_data = _fetch_endpoint(f"/key-metrics/{ticker}?period=annual&limit=4")
+        metrics_data = _fetch_endpoint(f"/key-metrics?symbol={ticker}&period=annual&limit=4")
         if not metrics_data or len(metrics_data) < 4:
             raise ValueError(f"FMP free tier does not cover {ticker}. Try a different ticker.")
             
         metrics_data_chron = list(reversed(metrics_data))
         historical_shares = []
-        for p in metrics_data_chron:
+        for p in inc_stmt_data:
             historical_shares.append(float(p.get("weightedAverageShsOut", 0.0) or 0.0))
             
         trailing_pe_val = metrics_data[0].get("peRatio")
-        trailing_pe = float(trailing_pe_val) if trailing_pe_val is not None else None
+        if trailing_pe_val is not None:
+            trailing_pe = float(trailing_pe_val)
+        else:
+            latest_eps = inc_stmt_data[-1].get("eps", 0.0)
+            trailing_pe = current_price / float(latest_eps) if float(latest_eps) > 0 else None
             
         # 6. Shares Float (insider ownership)
         insider_ownership = 0.0
         try:
-            float_data = _fetch_endpoint(f"/shares-float/{ticker}")
+            float_data = _fetch_endpoint(f"/shares-float?symbol={ticker}")
             if float_data and len(float_data) > 0:
                 io = float_data[0].get("insiderHolding")
                 if io is not None:
@@ -896,7 +902,7 @@ def _fetch_financials_fmp(ticker: str) -> dict:
         # 7. Analyst Recommendations
         recommendation_mean = None
         try:
-            rec_data = _fetch_endpoint(f"/analyst-stock-recommendations/{ticker}")
+            rec_data = _fetch_endpoint(f"/analyst-stock-recommendations?symbol={ticker}")
             if rec_data and len(rec_data) > 0:
                 rec_data = rec_data[:5]
                 scores = [float(r.get("ratingScore", 0.0)) for r in rec_data if r.get("ratingScore") is not None]
