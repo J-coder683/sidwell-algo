@@ -34,7 +34,7 @@ This document outlines key technical assumptions, calculation methods, architect
 - **Line Items**: EBIT, D&A, CapEx, and Net Working Capital changes are projected as historical 4-year averages relative to Revenue.
 - **Terminal Growth ($g_{terminal}$)**: Capped at $\min(4.0\%, R_f - 1.0\%)$. For India, this is set to **4.00%**.
 - **WACC**: Capped WACC is **13.20%**. 
-- **WACC Invariant Assertion**: The engine strictly enforces `0.03 < wacc < 0.30` (using `raise ValueError` in production code) to fail loudly on unit-conversion errors while accommodating non-US/highly-leveraged structures.
+- **WACC Invariant Assertion**: The engine strictly enforces `0.05 < wacc < 0.30` (using `raise ValueError` in production code) to fail loudly on unit-conversion errors.
 
 ---
 
@@ -754,6 +754,14 @@ FMP API endpoint regime: Sidwell uses FMP's `/stable/` endpoints (current as of 
 - This approach bypasses HTML parsing by directly resolving the devalue indexed object graph, returning pristine JSON floats without complex string cleaning.
 - Handled the missing interest_expense field by using a conservative proxy: debt * 0.05 (5% blended rate). This is documented for any ticker hitting the US scraper path.
 - Period slicing logic drops the TTM column and extracts the last 4 complete Fiscal Years in chronological order.
+
+
+## v0.6.3a — Stockanalysis.com Scraper (Tier 1)
+- Dropped Financial Modeling Prep (FMP) due to aggressive paywalling and 402/403 errors on the free tier for most US tickers.
+- Implemented a custom scraper for stockanalysis.com targeting their SvelteKit __data.json endpoints.
+- This approach bypasses HTML parsing by directly resolving the devalue indexed object graph, returning pristine JSON floats without complex string cleaning.
+- Handled the missing interest_expense field by using a conservative proxy: debt * 0.05 (5% blended rate). This is documented for any ticker hitting the US scraper path.
+- Period slicing logic drops the TTM column and extracts the last 4 complete Fiscal Years in chronological order.
 - Indian tickers (.NS, .BO) continue to route via yfinance temporarily until the v0.6.3b screener.in scraper is built.
 
 ## §23 v0.6.3b Screener.in Integration
@@ -763,8 +771,11 @@ Replaced yfinance entirely with a direct HTML scraper for screener.in. Anonymous
 
 When extracting data from screener.in, the parser relies on an asynchronous API for expanding sub-rows (e.g., 'Material Cost %', 'Other Assets'). For certain industries like Banks or Service companies, these rows may be structurally absent from the company's financial statements:
 
-- **Banks and Financials**: Material Cost is entirely absent from the P&L. The system correctly logs an expected WARNING ('Raw material cost not found... falling back to revenue - expenses') and proceeds to calculate gross profit as Revenue - Expenses, which functionally aligns with EBIT for these firms.
+- **Banks and Financials**: Material Cost is entirely absent from the P&L. The system correctly logs an expected WARNING ('Raw material cost not found... falling back to revenue - expenses') and proceeds to calculate gross profit as `Revenue - Expenses`, which functionally aligns with EBIT for these firms.
 - **Cash, Capex, and Working Capital Changes**: If these explicit sub-rows are not available in the API response, the system falls back to proxy estimates (e.g., defaulting cash to 0.0, computing CapEx as absolute Cash from Investing, and falling back to a residual working capital method).
 
 These fallback WARNINGs are intentional behavior and ensure pipeline resilience across diverse sectors.
 
+## 25. v0.6.4.1 Hotfix — WACC Floor and ERP Parser Integrity
+
+WACC floor was briefly lowered to 3% during v0.6.4 debugging of MU. This was a methodology violation (masking a symptom rather than fixing root cause). Restored to 5%. The actual fix was upstream in the Damodaran ERP parser (see Fix 2).

@@ -32,6 +32,30 @@ TICKER_INDUSTRY_MAP = {
     # Indian IT
     "TCS.NS":         "Software (System & Application)",
     "INFY.NS":        "Software (System & Application)",
+    
+    # Common US tickers
+    "MU":      "Semiconductor",
+    "NVDA":    "Semiconductor",
+    "AMD":     "Semiconductor",
+    "INTC":    "Semiconductor",
+    "AVGO":    "Semiconductor",
+    "TSM":     "Semiconductor",
+    "QCOM":    "Semiconductor",
+    "TSLA":    "Auto & Truck",
+    "F":       "Auto & Truck",
+    "GM":      "Auto & Truck",
+    "JPM":     "Bank (Money Center)",
+    "BAC":     "Bank (Money Center)",
+    "GS":      "Bank (Money Center)",
+    "WMT":     "Retail (General)",
+    "COST":    "Retail (General)",
+    "HD":      "Retail (Building Supply)",
+    "V":       "Financial Svcs. (Non-bank & Insurance)",
+    "MA":      "Financial Svcs. (Non-bank & Insurance)",
+    "META":    "Software (System & Application)",
+    "DIS":     "Entertainment",
+    "NFLX":    "Entertainment",
+    "BA":      "Aerospace/Defense",
     # US placeholders for testing
     "AAPL":           "Computers/Peripherals",
     "MSFT":           "Software (System & Application)",
@@ -323,11 +347,11 @@ def fetch_damodaran_data(ticker: str) -> dict:
         # If headers are messy, we'll try to find columns by name.
         col_list = [str(c).lower() for c in df_crp.columns]
         
-        # Check if we can find headers in the first few rows
+        # Check if we can find headers in the first few rows (usually row 6 or 7)
         header_row_idx = None
-        for i in range(max(0, country_row_idx - 5), country_row_idx):
+        for i in range(0, min(30, country_row_idx)):
             row_str = df_crp.iloc[i].astype(str).str.lower().values
-            if any("risk premium" in str(val) or "crp" in str(val) or "erp" in str(val) for val in row_str):
+            if len(row_str) > 0 and str(row_str[0]).strip() == "country":
                 header_row_idx = i
                 break
                 
@@ -341,76 +365,33 @@ def fetch_damodaran_data(ticker: str) -> dict:
         total_erp = 0.0641
         
         # Locate indices in headers
-        mature_col_idx = None
         crp_col_idx = None
         total_col_idx = None
         
         for idx, h in enumerate(headers):
-            h_low = h.lower()
-            if "mature" in h_low and "premium" in h_low:
-                mature_col_idx = idx
-            elif ("country risk premium" in h_low or "crp" in h_low or "country premium" in h_low) and not "total" in h_low:
+            h_low = str(h).lower()
+            if crp_col_idx is None and ("country risk premium" in h_low or "crp" in h_low or "country premium" in h_low) and not "total" in h_low and not "3" in h_low:
                 crp_col_idx = idx
-            elif "total equity risk premium" in h_low or "total erp" in h_low or ("equity risk premium" in h_low and "total" in h_low):
+            if total_col_idx is None and ("total equity risk premium" in h_low or "total erp" in h_low or ("equity risk premium" in h_low and "total" in h_low)) and not "2" in h_low:
                 total_col_idx = idx
                 
-        # If we couldn't find columns by header names, we search values by range
-        # Let's look at the cells in row_data
-        nums = []
-        for val in row_data:
-            try:
-                # remove % if string
-                if isinstance(val, str):
-                    val = val.replace("%", "").strip()
-                fval = float(val)
-                if 0 < fval < 1:
-                    nums.append(fval)
-                elif 1 <= fval <= 15:
-                    nums.append(fval / 100.0)
-            except:
-                pass
-                
-        if len(nums) >= 2:
-            # Sort numbers. Smallest is typically CRP, middle is Mature ERP, largest is Total ERP (or vice versa).
-            # e.g., CRP = 2.18%, Mature ERP = 4.23%, Total ERP = 6.41%
-            # Let's map them carefully.
-            # In India: CRP = ~2.18%, Mature = ~4.23%, Total = ~6.41%
-            nums.sort()
-            if len(nums) == 2:
-                # We have two rates. Say, CRP and Total ERP. Mature ERP is Total - CRP.
-                crp = nums[0]
-                total_erp = nums[1]
-                mature_erp = total_erp - crp
-            else:
-                # We have 3 or more rates.
-                # Let's assume:
-                # CRP is the country premium
-                # Mature ERP is mature market
-                # Total ERP is sum
-                # Let's see: 2.18% + 4.23% = 6.41%.
-                # So the largest is total_erp. The other two are mature_erp and crp.
-                total_erp = nums[-1]
-                # Usually mature_erp is larger than CRP for India. So nums[1] is mature_erp, nums[0] is CRP.
-                crp = nums[0]
-                mature_erp = nums[1]
+        if crp_col_idx is not None and total_col_idx is not None:
+            val_crp = row_data.iloc[crp_col_idx]
+            crp = float(str(val_crp).replace("%", "").strip()) / 100.0 if isinstance(val_crp, str) and "%" in str(val_crp) else float(val_crp)
+            
+            val_total = row_data.iloc[total_col_idx]
+            total_erp = float(str(val_total).replace("%", "").strip()) / 100.0 if isinstance(val_total, str) and "%" in str(val_total) else float(val_total)
+            
+            mature_erp = total_erp - crp
         else:
-            # Fall back to structured column indices if found
-            if mature_col_idx is not None:
-                val = row_data.iloc[mature_col_idx]
-                mature_erp = float(val.replace("%", "").strip()) / 100.0 if isinstance(val, str) else float(val)
-            if crp_col_idx is not None:
-                val = row_data.iloc[crp_col_idx]
-                crp = float(val.replace("%", "").strip()) / 100.0 if isinstance(val, str) else float(val)
-            if total_col_idx is not None:
-                val = row_data.iloc[total_col_idx]
-                total_erp = float(val.replace("%", "").strip()) / 100.0 if isinstance(val, str) else float(val)
-            else:
-                total_erp = mature_erp + crp
-                
-        # If target_country is US, CRP is 0.
+            raise ValueError(f"Could not find Total ERP and CRP columns in Damodaran spreadsheet for {target_country}.")
+            
         if target_country.lower() == "united states":
             crp = 0.0
             total_erp = mature_erp
+            
+        if mature_erp < 0.03 or mature_erp > 0.08:
+            raise ValueError(f"Damodaran mature_market_erp out of plausible range: {mature_erp:.4f}. Expected ~0.04-0.05. Parser likely reading wrong column.")
             
     except Exception as e:
         logger.error(f"Error parsing Damodaran CRP Excel: {e}")

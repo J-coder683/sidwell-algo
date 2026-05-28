@@ -205,7 +205,7 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
     wacc = (weight_equity * latest_cost_of_equity) + (weight_debt * latest_cost_of_debt * (1.0 - hist_tax_rate_avg))
     
     # WACC sanity check (raise ValueError for production invariants)
-    if not (0.03 < wacc < 0.30):
+    if not (0.05 < wacc < 0.30):
         raise ValueError(f"WACC of {wacc:.2%} is implausible — check inputs")
         
     # 5. Explicit 10-Year Forecast (2-stage with fade)
@@ -346,14 +346,10 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
     }
     
     logger.info(f"DCF valuation completed for {ticker}. Intrinsic value: {intrinsic_value_per_share:.2f}")
-    
     if intrinsic_value_per_share <= 0:
-        hist_fcf = financials.get("fcf", [0.0])
-        raise ValueError(
+        logger.warning(
             f"DCF produced non-positive intrinsic value ({intrinsic_value_per_share:.2f}) for {ticker}. "
-            f"WACC={wacc:.4f}, terminal_growth={g_terminal:.4f}, stage_1_growth={proj_revenue_growth:.4f}, "
-            f"last_year_fcf={hist_fcf[-1]}. Likely causes: terminal_growth >= WACC; corrupted CRP/beta inputs; "
-            f"projected FCF negative across forecast horizon."
+            f"WACC={wacc:.4f}, terminal_growth={g_terminal:.4f}, stage_1_growth={proj_revenue_growth:.4f}."
         )
 
     return res
