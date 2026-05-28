@@ -725,4 +725,20 @@ libglib2.0-0
 | `tests/test_framework_reasoning_integration.py` | 10 | All pass |
 | `tests/test_exports.py` | 29 pass, 4 skip | Skip = PDF on Windows |
 | All prior tests | 107 | Unchanged, all pass |
-| **Total** | **167 pass, 4 skip** | |
+| **Total** | **172 pass, 4 skip** | |
+
+### 20.10 Debian Trixie `packages.txt` Fix (v0.6.1)
+
+Streamlit Cloud deployment failed due to an `apt-get` conflict during the Debian Trixie t64 transition. Specifically, `libglib2.0-0` demanded `libffi7` (Bullseye), but only `libffi8` (Trixie) was available, conflicting with the `libglib2.0-0t64` base image. A minimal, modernized `packages.txt` (`libpango-1.0-0`, `libcairo2`, `libpangoft2-1.0-0`, `libgdk-pixbuf-2.0-0`, `fonts-dejavu-core`, `shared-mime-info`) resolved the conflict and allowed `weasyprint` to install successfully.
+
+---
+
+## 21. v0.6.2 — Phase 1 FMP Migration
+
+Yahoo Finance aggressively rate-limited US ticker scraping in late May 2026, causing `app.py` to fail consistently for US tickers. Phase 1 of the data migration replaces `yfinance` with Financial Modeling Prep (FMP) for US tickers ONLY.
+
+- **Dispatcher Architecture:** `data.public.fetch_financials` was refactored to route `.NS` and `.BO` suffixes to the legacy `yfinance` fetcher, while all other tickers route to `_fetch_financials_fmp`.
+- **FMP Endpoints:** The FMP fetcher normalizes data from `/profile`, `/income-statement`, `/balance-sheet-statement`, `/cash-flow-statement`, `/key-metrics`, `/shares-float`, and `/analyst-stock-recommendations` into the exact shape expected by the downstream lenses.
+- **Graceful Error Handling:** Specific error catches surface actionable messages in Streamlit (e.g., missing API key, 429 quota limits, missing free-tier coverage).
+- **Authentication:** `FMP_API_KEY` is injected via Streamlit Secrets and `.env`.
+- Phase 2 (v0.6.3) will migrate Indian tickers to a `screener.in` scraper and drop `yfinance` entirely.

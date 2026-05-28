@@ -36,11 +36,11 @@ def test_fetch_risk_free_rate(mock_set_json, mock_get_json, mock_fred_class, moc
 def test_fetch_financials(mock_set_json, mock_get_json, mock_ticker_class):
     # Test cache hit
     mock_get_json.side_effect = [
-        {"ticker": "MOCK", "current_price": 10.0, "revenue": [100]}, # financials key
+        {"ticker": "MOCK.NS", "current_price": 10.0, "revenue": [100]}, # financials key
         {"current_price": 10.0} # price key
     ]
-    res = public.fetch_financials("MOCK")
-    assert res["ticker"] == "MOCK"
+    res = public.fetch_financials("MOCK.NS")
+    assert res["ticker"] == "MOCK.NS"
     assert res["current_price"] == 10.0
     mock_ticker_class.assert_not_called()
     
@@ -94,7 +94,7 @@ def test_fetch_financials(mock_set_json, mock_get_json, mock_ticker_class):
         columns=cols
     )
     
-    res = public.fetch_financials("MOCK")
+    res = public.fetch_financials("MOCK.NS")
     assert res["current_price"] == 25.0
     assert res["revenue"] == [82.64, 90.91, 100.0, 110.0]
     assert res["capex"] == [2.48, 2.73, 3.0, 3.3] # converted absolute value
@@ -344,3 +344,113 @@ def test_extract_text_failure_returns_empty_string(tmp_path):
     bad_pdf.write_bytes(b"this is not a valid PDF")
     result = _extract_text(bad_pdf)
     assert result == ""
+
+@patch("data.public._fetch_financials_fmp")
+def test_fetch_financials_us_dispatches_to_fmp(mock_fmp):
+    mock_fmp.return_value = {"ticker": "AAPL"}
+    res = public.fetch_financials("AAPL")
+    assert res["ticker"] == "AAPL"
+    mock_fmp.assert_called_once_with("AAPL")
+
+@patch("data.public._fetch_financials_yfinance")
+def test_fetch_financials_india_dispatches_to_yfinance(mock_yf):
+    mock_yf.return_value = {"ticker": "ASIANPAINT.NS"}
+    res = public.fetch_financials("ASIANPAINT.NS")
+    assert res["ticker"] == "ASIANPAINT.NS"
+    mock_yf.assert_called_once_with("ASIANPAINT.NS")
+
+@patch("data.public.requests.Session.get")
+@patch("os.getenv")
+@patch("data.cache.get_json")
+@patch("data.cache.set_json")
+def test_fmp_normalized_shape_matches_yfinance_shape(mock_set_json, mock_get_json, mock_getenv, mock_get):
+    mock_getenv.return_value = "mock_fmp_key"
+    mock_get_json.return_value = None
+    
+    # Mock all FMP endpoints
+    def mock_fmp_responses(url, timeout=10):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.ok = True
+        
+        if "/profile/" in url:
+            mock_resp.json.return_value = [{"price": 100.0, "mktCap": 1000.0, "beta": 1.2, "lastDiv": 1.5, "dividendYield": 0.015}]
+        elif "/income-statement/" in url:
+            mock_resp.json.return_value = [{"date": f"202{i}-12-31", "revenue": 100, "grossProfit": 50, "operatingIncome": 20, "interestExpense": 2, "incomeTaxExpense": 3, "incomeBeforeTax": 18, "netIncome": 15} for i in range(4, 0, -1)]
+        elif "/balance-sheet-statement/" in url:
+            mock_resp.json.return_value = [{"totalAssets": 200, "totalStockholdersEquity": 100, "cashAndCashEquivalents": 50, "totalDebt": 30, "intangibleAssets": 10, "goodwill": 5} for i in range(4, 0, -1)]
+        elif "/cash-flow-statement/" in url:
+            mock_resp.json.return_value = [{"capitalExpenditure": -10, "depreciationAndAmortization": 5, "changeInWorkingCapital": -2, "freeCashFlow": 15} for i in range(4, 0, -1)]
+        elif "/key-metrics/" in url:
+            mock_resp.json.return_value = [{"weightedAverageShsOut": 10, "peRatio": 15.0} for i in range(4, 0, -1)]
+        elif "/shares-float/" in url:
+            mock_resp.json.return_value = [{"insiderHolding": 5.0}]
+        elif "/analyst-stock-recommendations/" in url:
+            mock_resp.json.return_value = [{"ratingScore": 2.5}]
+        return mock_resp
+        
+    mock_get.side_effect = mock_fmp_responses
+    
+    fmp_res = public.fetch_financials("AAPL")
+    
+    # Run original yfinance test to get its shape
+    with patch("yfinance.Ticker") as mock_ticker_class:
+        mock_ticker = MagicMock()
+        mock_ticker_class.return_value = mock_ticker
+        mock_ticker.info = {"currentPrice": 25.0, "marketCap": 250.0, "sharesOutstanding": 10.0}
+        cols = [pd.Timestamp(f"202{i}-12-31") for i in range(1, 5)]
+        mock_ticker.income_stmt = pd.DataFrame([[100]*4]*7, index=["Total Revenue", "Gross Profit", "EBIT", "Interest Expense", "Tax Provision", "Pretax Income", "Net Income"], columns=cols)
+        mock_ticker.balance_sheet = pd.DataFrame([[100]*4]*4, index=["Total Assets", "Stockholders Equity", "Cash And Cash Equivalents", "Total Debt"], columns=cols)
+        mock_ticker.cashflow = pd.DataFrame([[100]*4]*4, index=["Operating Cash Flow", "Capital Expenditure", "Depreciation And Amortization", "Change In Working Capital"], columns=cols)
+        
+        yf_res = public._fetch_financials_yfinance("ASIANPAINT.NS")
+        
+    assert set(fmp_res.keys()) == set(yf_res.keys())
+
+@patch("data.public.requests.Session.get")
+@patch("os.getenv")
+@patch("data.cache.get_json")
+def test_fmp_429_surfaces_friendly_error(mock_get_json, mock_getenv, mock_get):
+    mock_getenv.return_value = "mock_fmp_key"
+    mock_get_json.return_value = None
+    
+    mock_resp = MagicMock()
+    mock_resp.status_code = 429
+    mock_get.return_value = mock_resp
+    
+    with pytest.raises(ValueError, match="FMP daily quota"):
+        public.fetch_financials("AAPL")
+
+@patch("data.public.requests.Session.get")
+@patch("os.getenv")
+@patch("data.cache.get_json")
+@patch("data.cache.set_json")
+def test_fmp_capex_sign_flipped_to_positive(mock_set_json, mock_get_json, mock_getenv, mock_get):
+    mock_getenv.return_value = "mock_fmp_key"
+    mock_get_json.return_value = None
+    
+    def mock_fmp_responses(url, timeout=10):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.ok = True
+        if "/profile/" in url:
+            mock_resp.json.return_value = [{"price": 100.0, "mktCap": 1000.0}]
+        elif "/income-statement/" in url:
+            mock_resp.json.return_value = [{"date": f"202{i}-12-31"} for i in range(4, 0, -1)]
+        elif "/balance-sheet-statement/" in url:
+            mock_resp.json.return_value = [{}] * 4
+        elif "/cash-flow-statement/" in url:
+            # FMP returns negative for outflows
+            mock_resp.json.return_value = [{"capitalExpenditure": -25.5}] * 4
+        elif "/key-metrics/" in url:
+            mock_resp.json.return_value = [{}] * 4
+        elif "/shares-float/" in url:
+            mock_resp.json.return_value = []
+        elif "/analyst-stock-recommendations/" in url:
+            mock_resp.json.return_value = []
+        return mock_resp
+        
+    mock_get.side_effect = mock_fmp_responses
+    
+    res = public.fetch_financials("AAPL")
+    assert all(cx == 25.5 for cx in res["capex"])

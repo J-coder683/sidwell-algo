@@ -52,7 +52,7 @@ logger = logging.getLogger("sidwell.app")
 def _inject_secrets():
     """Load API keys from st.secrets into os.environ if available."""
     try:
-        for key in ("GEMINI_API_KEY", "FRED_API_KEY"):
+        for key in ("GEMINI_API_KEY", "FRED_API_KEY", "FMP_API_KEY"):
             if key in st.secrets and not os.environ.get(key):
                 os.environ[key] = st.secrets[key]
     except Exception:
@@ -471,7 +471,15 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
         try:
             results = _run_pipeline(ticker)
         except ValueError as e:
-            st.error(f"**Data error:** {e}")
+            err_msg = str(e)
+            if "FMP_API_KEY required" in err_msg or "FMP_API_KEY invalid" in err_msg:
+                st.error(f"**Configuration Error:** {err_msg}")
+            elif "FMP daily quota" in err_msg:
+                st.error(f"**Rate Limit Exceeded:** {err_msg}")
+            elif "FMP free tier does not cover" in err_msg:
+                st.error(f"**Data Unavailable:** {err_msg}")
+            else:
+                st.error(f"**Data error:** {err_msg}")
             st.stop()
         except Exception as e:
             st.error(f"**Pipeline failed:** {e}")
