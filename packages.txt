@@ -1,5 +1,3 @@
-# System packages for Streamlit Cloud (Ubuntu/Debian)
-# Required by weasyprint for PDF generation
 fonts-dejavu-core
 libpango-1.0-0
 libpangoft2-1.0-0
