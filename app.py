@@ -52,7 +52,7 @@ logger = logging.getLogger("sidwell.app")
 def _inject_secrets():
     """Load API keys from st.secrets into os.environ if available."""
     try:
-        for key in ("GEMINI_API_KEY", "FRED_API_KEY", "FMP_API_KEY"):
+        for key in ("GEMINI_API_KEY", "FRED_API_KEY"):
             if key in st.secrets and not os.environ.get(key):
                 os.environ[key] = st.secrets[key]
     except Exception:

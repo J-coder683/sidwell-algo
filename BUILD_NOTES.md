@@ -746,3 +746,12 @@ Yahoo Finance aggressively rate-limited US ticker scraping in late May 2026, cau
 ### 21.1 FMP /stable/ Endpoint Migration (v0.6.2.1)
 
 FMP API endpoint regime: Sidwell uses FMP's `/stable/` endpoints (current as of v0.6.2.1). The legacy `/api/v3/` endpoints were deprecated for new accounts after Aug 31, 2025 and return HTTP 403 Legacy Endpoint. Initial v0.6.2 commit targeted `/api/v3/` which broke live demos for the user's post-cutoff account. Migrated to `/stable/` pattern on May 29, 2026: base URL changed, ticker moved from URL path to symbol query parameter, response shape unchanged.
+
+
+## v0.6.3a — Stockanalysis.com Scraper (Tier 1)
+- Dropped Financial Modeling Prep (FMP) due to aggressive paywalling and 402/403 errors on the free tier for most US tickers.
+- Implemented a custom scraper for stockanalysis.com targeting their SvelteKit __data.json endpoints.
+- This approach bypasses HTML parsing by directly resolving the devalue indexed object graph, returning pristine JSON floats without complex string cleaning.
+- Handled the missing interest_expense field by using a conservative proxy: debt * 0.05 (5% blended rate). This is documented for any ticker hitting the US scraper path.
+- Period slicing logic drops the TTM column and extracts the last 4 complete Fiscal Years in chronological order.
+- Indian tickers (.NS, .BO) continue to route via yfinance temporarily until the v0.6.3b screener.in scraper is built.
