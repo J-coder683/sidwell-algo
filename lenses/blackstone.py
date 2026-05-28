@@ -5,6 +5,7 @@ Implementation of the Blackstone playbook for private equity evaluation.
 """
 
 import numpy as np
+from analysis import framework_parser
 
 BLACKSTONE_FAVORED_THEMES = {
     "Computers/Peripherals",
@@ -263,6 +264,19 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
     }
     
     # --- SCORING ---
+    # =========================================================================
+    # Inject framework_reasoning into every check (v0.6)
+    # =========================================================================
+    for check_id, check_dict in checks.items():
+        check_num = int(check_id.split("_")[0])
+        reasoning = framework_parser.get_reasoning("blackstone", check_num)
+        if reasoning is None:
+            raise ValueError(
+                f"framework_reasoning missing for blackstone check {check_id} "
+                f"(check_num={check_num}). Update analysis/framework_parser.py."
+            )
+        check_dict["framework_reasoning"] = reasoning
+
     score = sum(1 for c in checks.values() if c["passed"])
     
     precond_1 = sum([pass_8, pass_9, pass_10]) >= 2

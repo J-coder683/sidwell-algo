@@ -630,3 +630,99 @@ The v0.5 build added three new test files. Final test count: **107 tests pass** 
 6. `test_asianpaints_actual` — uses `FIXTURE_INPUTS` + `_make_asianpaints_qualitative()`; asserts verdict == "SKIP" (Part B fails on chaos/fulcrum/ABF)
 7. `test_unavailable_qualitative_graceful_degrade` — passes `_make_unavailable_qualitative()`; asserts clean run and valid verdict
 8. `test_sector_not_in_lookup_fails_check_1` — sets `target_industry = "Alien Technology"` (not in `SECTOR_MEDIAN_EV_EBITDA`) and inflates P/B above 0.70×; asserts Check 1 == FAIL (conservative fallback per spec §2)
+
+---
+
+## 20. v0.6 — Streamlit Frontend + Per-Lens PDF + DCF Excel Export
+
+### 20.1 Architecture overview
+
+v0.6 adds a Streamlit web frontend on top of the existing CLI pipeline. The architecture is additive — no existing modules were deleted or restructured. The three new capabilities are:
+
+1. **`app.py`** — Streamlit entrypoint. Sidebar ticker input → `_run_pipeline()` cached function → 6-tab layout (DCF + 5 lenses).
+2. **`exports/excel.py`** — `export_dcf_excel()` returns bytes for a 7-sheet openpyxl workbook.
+3. **`exports/pdf.py`** — `export_lens_pdf()` returns bytes for a per-lens PDF via weasyprint.
+
+### 20.2 Pipeline refactor: `analyze()` function
+
+`value.py` gained an `analyze(ticker, lenses_to_run=None)` function that extracts the monolithic `main()` pipeline body into a callable form returning all results as a dict. `main()` now calls `analyze()` then prints the console summary. CLI behaviour is identical to v0.5.
+
+The Streamlit app does NOT call `analyze()` directly — it uses its own `@st.cache_data`-wrapped `_run_pipeline()` so that expensive calls (financials, Damodaran, qualitative) are separately cached at their natural TTLs:
+
+| Source | TTL | Rationale |
+|---|---|---|
+| `_fetch_financials` | 24h | Matches `TTL_PRICES` in `data/public.py` |
+| `_fetch_rf_rate` | 24h | Same as prices |
+| `_fetch_damodaran` | 30d | Matches `TTL_MACRO` |
+| `_extract_qualitative` | 30d | Matches `QUALITATIVE_CACHE_TTL` |
+| `_run_pipeline` | 24h | Full pipeline result |
+
+### 20.3 `framework_reasoning` injection (Steps 1–2)
+
+`analysis/framework_parser.py` parses each framework `.md` file at import time and builds a `{check_number: reasoning_text}` dict by regex-matching `**Logic:**` paragraphs. The parser strips markdown bold markers before storing. 21 unit tests cover all 5 frameworks.
+
+Each lens evaluator (`lenses/buffett.py`, `marks.py`, `kkr.py`, `blackstone.py`, `apollo.py`) injects `framework_reasoning` into every check dict in a single loop block before the scoring block. The injection raises `ValueError` if any check number has no Logic paragraph (loud fail, not silent). 10 integration tests cover all 5 lenses × 2 (has_reasoning + count_checks).
+
+In the Streamlit app, `framework_reasoning` is shown only for **failed** checks in a styled blockquote below the check detail. Passed checks show only the threshold and detail — no redundant reasoning.
+
+### 20.4 Excel export: formula strategy
+
+The 7-sheet workbook uses cross-sheet Excel formulas wherever possible:
+
+- **2_Assumptions** holds all editable WACC/growth inputs. All downstream sheets reference these cells via `'2_Assumptions'!$B$N` patterns.
+- **3_Stage1_Explicit / 4_Stage2_Fade** — Revenue Year 1 is hardcoded (from pipeline projection), subsequent years use `=prior_rev*(1+WACC_ref)`. EBIT, Tax, NOPAT, CapEx, NWC, FCF, discount factor, and PV FCF are all formulas referencing Assumptions where applicable.
+- **5_Terminal** — Gordon-growth TV formula: `=B3*(1+B4)/(B3-B4)` with B3/B4 cross-referenced to Assumptions.
+- **6_Valuation_Bridge** — `EV = SUM(Stage1 PVs) + SUM(Stage2 PVs) + PV Terminal`. Intrinsic = (EV - Net Debt) / Shares. All cells are live Excel formulas.
+- **7_Sensitivity** — 5×5 grid. Each of the 25 cells contains a full DCF formula:
+  ```
+  =(SUMPRODUCT($H$2:$H$11, (1+wacc_adj)^(-ROW(INDIRECT("1:10"))))
+    + $H$11*(1+g_adj)/(wacc_adj-g_adj)/(1+wacc_adj)^10
+    - net_debt)
+    / shares
+  ```
+  where `wacc_adj = '2_Assumptions'!$B$3 + <offset>/10000` and `g_adj` similarly. The FCF helper column (H) is hardcoded at export time (re-export to refresh). This satisfies the "full DCF formula string" requirement from the v0.6 spec and user clarification.
+
+### 20.5 PDF export: HTML-from-scratch approach
+
+The user's amended plan (fix 2) required building PDF HTML from scratch in `exports/pdf.py` — not by extracting helpers from `reports/render.py`. The decision rationale: PDF layout (cover page, page breaks, verdict pills, part-section headers, framework-reasoning blockquotes) is PDF-specific. Reusing the markdown render path would produce flat text with no structure.
+
+`exports/pdf.py` builds HTML in 4 sections: cover, exec summary, check-by-check (grouped by Part), sources. Styling lives in `exports/pdf_style.css` (A4, EB Garamond body, verdict pill classes matching the Streamlit theme).
+
+The `framework_reasoning` blockquote appears only for failed checks — identical policy to the Streamlit UI.
+
+### 20.6 PDF tests: Windows vs Linux split
+
+weasyprint requires `libgobject-2.0-0` (GTK/GLib), which is not available on Windows without manual MSYS2 setup. The 4 `TestPDFExport` tests are marked `@pytest.mark.skipif(not _pdf_available(), ...)` so `pytest` passes on both Windows (dev) and Linux (Streamlit Cloud / CI). The 6 `TestPDFHTMLGeneration` tests validate the HTML builder without needing system libs — they always run.
+
+On Streamlit Cloud the PDF tests will run via `packages.txt` which installs:
+```
+fonts-dejavu-core
+libpango-1.0-0
+libpangoft2-1.0-0
+libpangocairo-1.0-0
+libcairo2
+libgobject-2.0-0
+libglib2.0-0
+```
+
+### 20.7 Version bump: v0.5 → v0.6
+
+`SIDWELL_VERSION` in `reports/render.py` was bumped from `"v0.5"` to `"v0.6"`. The snapshot `tests/expected_report.md` was hand-edited (not script-regenerated) to update the version string on line 4. No other snapshot content changed.
+
+### 20.8 Streamlit secrets / config
+
+`.streamlit/config.toml` — theme: navy primary (`#1e3a5f`), white background, sans-serif font. Layout `wide` with CSS cap at 1100px.
+
+`.streamlit/secrets.toml.example` — template showing `GEMINI_API_KEY` and `FRED_API_KEY`. The actual `secrets.toml` is gitignored.
+
+`app.py` injects secrets into `os.environ` at startup via `_inject_secrets()`. If secrets are missing the app degrades gracefully: qualitative layer returns `status=unavailable`, RF rate falls back to the file-cached value or a hardcoded country default.
+
+### 20.9 Test summary
+
+| File | Tests | Status |
+|---|---|---|
+| `tests/test_framework_parser.py` | 21 | All pass |
+| `tests/test_framework_reasoning_integration.py` | 10 | All pass |
+| `tests/test_exports.py` | 29 pass, 4 skip | Skip = PDF on Windows |
+| All prior tests | 107 | Unchanged, all pass |
+| **Total** | **167 pass, 4 skip** | |

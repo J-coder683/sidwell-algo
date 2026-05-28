@@ -8,6 +8,7 @@ Part C (8-11): Risk Architecture (pre-conditions)
 Part D (12-14): Second-Level Thinking & Contrarianism (LLM-driven)
 """
 import logging
+from analysis import framework_parser
 
 logger = logging.getLogger("sidwell.lenses.marks")
 
@@ -361,6 +362,19 @@ def evaluate_marks_lens(
         "detail": detail_14,
         "part": "D",
     }
+
+    # =========================================================================
+    # Inject framework_reasoning into every check (v0.6)
+    # =========================================================================
+    for check_id, check_dict in checks.items():
+        check_num = int(check_id.split("_")[0])
+        reasoning = framework_parser.get_reasoning("marks", check_num)
+        if reasoning is None:
+            raise ValueError(
+                f"framework_reasoning missing for marks check {check_id} "
+                f"(check_num={check_num}). Update analysis/framework_parser.py."
+            )
+        check_dict["framework_reasoning"] = reasoning
 
     # =========================================================================
     # Scoring & Verdict (per frameworks/marks.md)

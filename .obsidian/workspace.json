@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "frameworks/buffett.md",
+                "file": "FRONTEND_SPEC_v0.6.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "buffett"
+              "title": "FRONTEND_SPEC_v0.6"
             }
           }
         ]
@@ -185,13 +185,26 @@
   },
   "active": "541d8329291d1c6f",
   "lastOpenFiles": [
-    "tests/__pycache__/regen_expected_report.cpython-312.pyc",
-    "tests/regen_expected_report.py",
-    "tests/__pycache__/test_marks.cpython-312-pytest-9.0.3.pyc",
-    "lenses/__pycache__/marks.cpython-312.pyc",
-    "tests/test_marks.py",
-    "frameworks/marks.md",
+    "packages.txt",
+    "app.py",
+    "exports/__pycache__/pdf.cpython-312.pyc",
+    "exports/pdf.py",
+    "exports/pdf_style.css",
+    "exports/__pycache__/excel.cpython-312.pyc",
+    "exports/__pycache__/__init__.cpython-312.pyc",
+    "exports/__pycache__",
+    "tests/__pycache__/test_exports.cpython-312-pytest-9.0.3.pyc",
+    "tests/test_exports.py",
+    "exports/excel.py",
     "frameworks/buffett.md",
+    "output/aapl_report.md",
+    "tests/fictitious_report.md",
+    "frameworks/blackstone.md",
+    "ANTIGRAVITY_PROMPT_v0.5.md",
+    "frameworks/apollo.md",
+    "frameworks/kkr.md",
+    "tests/expected_calculations.md",
+    "frameworks/marks.md",
     "frameworks/_future_lenses.md"
   ]
 }

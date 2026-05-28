@@ -5,6 +5,7 @@ Implementation of the Apollo Global Management playbook for private credit / dis
 """
 
 import numpy as np
+from analysis import framework_parser
 
 SECTOR_MEDIAN_EV_EBITDA = {
     "Household Products":                          16.0,
@@ -342,6 +343,19 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
     }
     
     # --- SCORING ---
+    # =========================================================================
+    # Inject framework_reasoning into every check (v0.6)
+    # =========================================================================
+    for check_id, check_dict in checks.items():
+        check_num = int(check_id.split("_")[0])
+        reasoning = framework_parser.get_reasoning("apollo", check_num)
+        if reasoning is None:
+            raise ValueError(
+                f"framework_reasoning missing for apollo check {check_id} "
+                f"(check_num={check_num}). Update analysis/framework_parser.py."
+            )
+        check_dict["framework_reasoning"] = reasoning
+
     score = sum(1 for c in checks.values() if c["passed"])
     
     precond_1 = pass_16

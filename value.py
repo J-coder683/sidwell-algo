@@ -24,6 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("sidwell.cli")
 
+
 def load_dotenv():
     """
     Manually load .env file if it exists to avoid external library dependencies.
@@ -42,6 +43,113 @@ def load_dotenv():
                     val = val.strip().strip("'").strip('"')
                     os.environ[key] = val
                     logger.debug(f"Loaded env var: {key}")
+
+
+def analyze(ticker: str, lenses_to_run: list | None = None) -> dict:
+    """
+    Run the full Sidwell analysis pipeline for a ticker and return all results
+    as a dict.
+
+    Parameters
+    ----------
+    ticker : str
+        Stock ticker (e.g. "ASIANPAINT.NS", "AAPL").
+    lenses_to_run : list[str] | None
+        Which lenses to evaluate. Defaults to all 5 when None.
+        Valid values: "buffett", "marks", "kkr", "blackstone", "apollo".
+
+    Returns
+    -------
+    dict with keys:
+        financials, damodaran_data, rf_rate, dcf_results,
+        qualitative_results, docs,
+        buffett_results, marks_results, kkr_results, blackstone_results,
+        apollo_results, report_path
+        (lens results are None when that lens is not in lenses_to_run)
+    """
+    if lenses_to_run is None:
+        lenses_to_run = ["buffett", "marks", "kkr", "blackstone", "apollo"]
+
+    lenses_to_run = [ln.lower() for ln in lenses_to_run]
+
+    logger.info(f"Starting Sidwell analysis pipeline for {ticker} (lenses: {lenses_to_run})")
+
+    # Step 1: Fetch Financials and Market Pricing
+    financials = public.fetch_financials(ticker)
+
+    # Step 2: Fetch Risk-Free Rate from FRED
+    rf_rate = public.fetch_risk_free_rate(ticker)
+
+    # Step 3: Fetch Damodaran ERP and Sector Betas
+    damodaran_data = public.fetch_damodaran_data(ticker)
+
+    # Step 4: Run DCF Valuation Engine
+    dcf_results = dcf.run_dcf_valuation(financials, damodaran_data, rf_rate)
+
+    # Step 5: Discover documents and run qualitative analysis (graceful degrade)
+    docs = doc_module.discover_documents(ticker)
+    qualitative_results = qualitative.extract_qualitative(ticker, docs)
+
+    # Step 6-10: Evaluate requested lenses
+    buffett_results = None
+    marks_results = None
+    kkr_results = None
+    blackstone_results = None
+    apollo_results = None
+
+    if "buffett" in lenses_to_run:
+        buffett_results = buffett.evaluate_buffett_lens(
+            financials, dcf_results, qualitative_results=qualitative_results
+        )
+
+    if "marks" in lenses_to_run:
+        marks_results = marks.evaluate_marks_lens(
+            financials, dcf_results, qualitative_results=qualitative_results
+        )
+
+    if "kkr" in lenses_to_run:
+        kkr_results = kkr.evaluate_kkr_lens(
+            financials, dcf_results, qualitative_results=qualitative_results
+        )
+
+    if "blackstone" in lenses_to_run:
+        blackstone_results = blackstone.evaluate_blackstone_lens(
+            financials, dcf_results, qualitative_results=qualitative_results
+        )
+
+    if "apollo" in lenses_to_run:
+        apollo_results = apollo.evaluate_apollo_lens(
+            financials, dcf_results, qualitative_results=qualitative_results
+        )
+
+    # Step 11: Render Markdown Report and Save
+    report_path = render.render_markdown_report(
+        dcf_results, buffett_results if buffett_results else {},
+        financials,
+        qualitative_results=qualitative_results,
+        marks_results=marks_results if marks_results else {},
+        kkr_results=kkr_results if kkr_results else {},
+        blackstone_results=blackstone_results if blackstone_results else {},
+        apollo_results=apollo_results if apollo_results else {},
+    )
+
+    return {
+        "ticker": ticker,
+        "financials": financials,
+        "damodaran_data": damodaran_data,
+        "rf_rate": rf_rate,
+        "dcf_results": dcf_results,
+        "qualitative_results": qualitative_results,
+        "docs": docs,
+        "buffett_results": buffett_results,
+        "marks_results": marks_results,
+        "kkr_results": kkr_results,
+        "blackstone_results": blackstone_results,
+        "apollo_results": apollo_results,
+        "report_path": report_path,
+        "lenses_run": lenses_to_run,
+    }
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -62,56 +170,18 @@ def main():
     load_dotenv()
 
     try:
-        # Step 1: Fetch Financials and Market Pricing
-        financials = public.fetch_financials(ticker)
+        results = analyze(ticker)
 
-        # Step 2: Fetch Risk-Free Rate from FRED
-        rf_rate = public.fetch_risk_free_rate(ticker)
-
-        # Step 3: Fetch Damodaran ERP and Sector Betas
-        damodaran_data = public.fetch_damodaran_data(ticker)
-
-        # Step 4: Run DCF Valuation Engine
-        dcf_results = dcf.run_dcf_valuation(financials, damodaran_data, rf_rate)
-
-        # Step 5: Discover documents and run qualitative analysis (graceful degrade)
-        docs = doc_module.discover_documents(ticker)
-        qualitative_results = qualitative.extract_qualitative(ticker, docs)
-
-        # Step 6: Evaluate Buffett Investor Lens (14 checks)
-        buffett_results = buffett.evaluate_buffett_lens(
-            financials, dcf_results, qualitative_results=qualitative_results
-        )
-
-        # Step 7: Evaluate Marks Investor Lens (14 checks)
-        marks_results = marks.evaluate_marks_lens(
-            financials, dcf_results, qualitative_results=qualitative_results
-        )
-
-        # Step 8: Evaluate KKR Investor Lens (18 checks)
-        kkr_results = kkr.evaluate_kkr_lens(
-            financials, dcf_results, qualitative_results=qualitative_results
-        )
-
-        # Step 9: Evaluate Blackstone Investor Lens (14 checks)
-        blackstone_results = blackstone.evaluate_blackstone_lens(
-            financials, dcf_results, qualitative_results=qualitative_results
-        )
-
-        # Step 10: Evaluate Apollo Investor Lens (16 checks)
-        apollo_results = apollo.evaluate_apollo_lens(
-            financials, dcf_results, qualitative_results=qualitative_results
-        )
-
-        # Step 11: Render Markdown Report and Save
-        report_path = render.render_markdown_report(
-            dcf_results, buffett_results, financials,
-            qualitative_results=qualitative_results,
-            marks_results=marks_results,
-            kkr_results=kkr_results,
-            blackstone_results=blackstone_results,
-            apollo_results=apollo_results,
-        )
+        financials = results["financials"]
+        dcf_results = results["dcf_results"]
+        buffett_results = results["buffett_results"]
+        marks_results = results["marks_results"]
+        kkr_results = results["kkr_results"]
+        blackstone_results = results["blackstone_results"]
+        apollo_results = results["apollo_results"]
+        qualitative_results = results["qualitative_results"]
+        docs = results["docs"]
+        report_path = results["report_path"]
 
         # Print a short console summary
         print("\n" + "="*50)
@@ -146,6 +216,7 @@ def main():
     except Exception as e:
         logger.error(f"Execution failed for ticker {ticker}: {e}", exc_info=True)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

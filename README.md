@@ -1,55 +1,82 @@
-# Sidwell — Personal Investment-Decision Engine (v0.5)
+# Sidwell — Personal Investment-Decision Engine (v0.6)
 
 Sidwell is a Python tool that values companies and applies investor frameworks to produce investment recommendations.
-Version 0.5 (v0.5) implements the core **DCF (Discounted Cash Flow)** valuation engine, **Warren Buffett's 14 investment checks**, **Howard Marks's 14 risk-first checks**, **KKR's 18 checks**, **Blackstone's 14 checks**, and **Apollo's 16 checks** for public market equities. Version 0.5 includes a **qualitative ingestion layer** that reads PDF documents (concall transcripts, investor decks, MD&A sections) from a Drive-synced folder and runs structured Gemini extraction, integrating a coherence signal, management humility, cycle position, and more into the respective checks.
+Version 0.6 adds a **Streamlit web frontend**, **per-lens PDF export** (weasyprint), and a **7-sheet DCF Excel workbook** with live formulas, on top of the v0.5 engine (DCF 2-stage + fade, 5 investor lenses: Buffett/Marks/KKR/Blackstone/Apollo, Gemini qualitative layer).
 
 ## Directory Structure
 
 ```
-sidwell/
-├── value.py                  # CLI entry point — parses ticker, dispatches
+├── app.py                    # Streamlit frontend (v0.6)
+├── value.py                  # CLI entry point — also exports analyze()
 ├── data/
 │   ├── __init__.py
 │   ├── public.py             # yfinance + FRED + Damodaran fetchers with caching
 │   ├── documents.py          # PDF discovery from Drive-synced folder (v0.2)
-│   ├── alternative.py        # Alternative data stub (earnings calls, news, Trendlyne)
-│   ├── private.py            # YAML reader stub (phase 5)
 │   └── cache.py              # ~/.sidwell/cache/ TTL-based file cache
-├── analysis/                 # Qualitative analysis layer (v0.2)
+├── analysis/                 # Qualitative + framework parsing (v0.2+)
 │   ├── __init__.py
 │   ├── qualitative.py        # Gemini-based structured extraction with 30-day cache
+│   ├── framework_parser.py   # Logic paragraph extractor for all 5 frameworks (v0.6)
 │   └── prompts/
-│       └── qualitative_extraction.md  # Version-controlled Gemini prompt
+│       └── qualitative_extraction.md
 ├── valuation/
 │   ├── __init__.py
-│   ├── dcf.py                # DCF Valuation Engine with WACC sourcing
-│   ├── comps.py              # Comparable Companies Analysis (CCA) stub
-│   ├── precedent.py          # Precedent Transactions Analysis (PTA) stub
-│   └── lbo.py                # LBO valuation engine stub
+│   └── dcf.py                # 2-stage DCF with fade + sector terminal growth
 ├── lenses/
 │   ├── __init__.py
-│   ├── buffett.py            # Warren Buffett's 14 checks & verdict engine
-│   ├── marks.py              # Howard Marks's 14 checks & verdict engine
-│   ├── kkr.py                # KKR's 18 checks & verdict engine
-│   ├── blackstone.py         # Blackstone's 14 checks & verdict engine
-│   ├── apollo.py             # Apollo's 16 checks & verdict engine
-│   └── distressed.py         # Distressed / Special Situations lens stub
+│   ├── buffett.py            # Warren Buffett's 14 checks
+│   ├── marks.py              # Howard Marks's 14 checks
+│   ├── kkr.py                # KKR's 18 checks
+│   ├── blackstone.py         # Blackstone's 14 checks
+│   └── apollo.py             # Apollo's 16 checks
+├── exports/                  # Export functions (v0.6)
+│   ├── __init__.py
+│   ├── excel.py              # 7-sheet DCF workbook with live formulas
+│   ├── pdf.py                # Per-lens PDF export via weasyprint
+│   └── pdf_style.css         # A4 PDF stylesheet
 ├── reports/
 │   ├── __init__.py
 │   └── render.py             # Markdown report builder
-├── frameworks/               # Investor lens reference documents
+├── frameworks/               # Investor lens reference documents (.md)
 ├── tests/
-│   ├── test_dcf.py           # Valuation & projection unit tests (including hand calc)
-│   ├── test_buffett.py       # Buffett lens scoring & verdict tests (incl. hybrid check #8)
-│   ├── test_data.py          # Offline mock-based data + documents tests
-│   ├── test_qualitative.py   # Qualitative module mock-based tests (v0.2)
-│   ├── test_snapshot.py      # Regression snapshot test vs. hand-derived expected output
-│   └── expected_calculations.md  # Formula derivations (source of truth)
-├── output/                   # Generated reports (markdown format)
-├── requirements.txt          # Python dependencies
-├── README.md                 # Project documentation
-└── .env.example              # Environment variables template
+│   ├── fixture_company.py    # Shared test fixtures
+│   ├── test_dcf.py
+│   ├── test_buffett.py
+│   ├── test_marks.py
+│   ├── test_kkr.py
+│   ├── test_blackstone.py
+│   ├── test_apollo.py
+│   ├── test_framework_parser.py   # 21 tests (v0.6)
+│   ├── test_framework_reasoning_integration.py  # 10 tests (v0.6)
+│   ├── test_exports.py            # 29 pass + 4 skip on Windows (v0.6)
+│   ├── test_data.py
+│   ├── test_qualitative.py
+│   ├── test_snapshot.py
+│   └── expected_report.md         # Hand-derived snapshot
+├── .streamlit/
+│   ├── config.toml                # Theme + server config (v0.6)
+│   └── secrets.toml.example       # API key template (v0.6)
+├── packages.txt              # Streamlit Cloud system packages (v0.6)
+├── output/                   # Generated markdown reports
+├── requirements.txt
+└── README.md
 ```
+
+## Streamlit App (v0.6)
+
+Run the web frontend locally:
+```bash
+streamlit run app.py
+```
+
+Deploy to [Streamlit Community Cloud](https://share.streamlit.io):
+1. Push this repo to GitHub.
+2. Connect at share.streamlit.io → select `app.py` as entrypoint.
+3. Configure secrets (`GEMINI_API_KEY`, `FRED_API_KEY`) in app settings.
+
+The app shows 6 tabs: DCF Valuation, Buffett, Marks, KKR, Blackstone, Apollo.
+Each lens tab shows check expanders (with framework reasoning for failed checks),
+and export buttons for PDF (Linux/Cloud only) and Excel.
 
 ## Installation
 
@@ -101,4 +128,4 @@ To run the unit tests (all offline using unittest mocks — no live API calls):
 python -m pytest tests/
 ```
 
-All 24 tests must be green.
+All 167 tests must be green (4 PDF tests skip on Windows — they pass on Streamlit Cloud Linux).

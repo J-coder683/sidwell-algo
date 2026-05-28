@@ -1,0 +1,298 @@
+/* exports/pdf_style.css
+   ----------------------
+   Styles for Sidwell per-lens PDF exports (weasyprint).
+   A4 page, 2cm margins, EB Garamond serif body.
+   Status colors and verdict pills match the Streamlit UI theme.
+*/
+
+/* ---- Page setup ---- */
+@page {
+    size: A4;
+    margin: 2cm 2cm 2.2cm 2cm;
+    @bottom-center {
+        content: "Sidwell v0.6 — " attr(data-ticker) " | Page " counter(page) " of " counter(pages);
+        font-family: "Calibri", "Arial", sans-serif;
+        font-size: 8pt;
+        color: #888888;
+    }
+}
+
+/* ---- Typography ---- */
+body {
+    font-family: "EB Garamond", "Georgia", "Times New Roman", serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: #1a1a1a;
+}
+
+h1 {
+    font-family: "EB Garamond", "Georgia", serif;
+    font-size: 22pt;
+    color: #1e3a5f;
+    margin-top: 0;
+    margin-bottom: 0.4em;
+    border-bottom: 2px solid #1e3a5f;
+    padding-bottom: 0.2em;
+}
+
+h2 {
+    font-family: "EB Garamond", "Georgia", serif;
+    font-size: 14pt;
+    color: #1e3a5f;
+    margin-top: 1.6em;
+    margin-bottom: 0.4em;
+    border-bottom: 1px solid #d0d8e4;
+    padding-bottom: 0.15em;
+}
+
+h3 {
+    font-size: 11pt;
+    font-weight: bold;
+    color: #2c3e60;
+    margin-top: 1.2em;
+    margin-bottom: 0.3em;
+}
+
+p {
+    margin: 0.4em 0;
+}
+
+/* ---- Cover page ---- */
+.cover-page {
+    page-break-after: always;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 24cm;
+    text-align: center;
+    padding: 2cm 1cm;
+}
+
+.cover-wordmark {
+    font-family: "EB Garamond", "Georgia", serif;
+    font-size: 38pt;
+    color: #1e3a5f;
+    font-style: italic;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.1em;
+}
+
+.cover-tagline {
+    font-size: 10pt;
+    color: #666;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 2em;
+}
+
+.cover-ticker {
+    font-size: 18pt;
+    font-weight: bold;
+    color: #1a1a1a;
+    margin-bottom: 0.3em;
+}
+
+.cover-lens {
+    font-size: 13pt;
+    color: #4a5568;
+    margin-bottom: 1.5em;
+}
+
+.cover-meta {
+    font-size: 9pt;
+    color: #888;
+    margin-top: 2em;
+}
+
+/* ---- Verdict pills ---- */
+.verdict-pill {
+    display: inline-block;
+    padding: 4px 18px;
+    border-radius: 18px;
+    font-size: 12pt;
+    font-weight: bold;
+    font-family: "Calibri", "Arial", sans-serif;
+    letter-spacing: 0.04em;
+}
+
+.verdict-buy   { background: #2d7a3e; color: #ffffff; }
+.verdict-wait  { background: #c08a1c; color: #ffffff; }
+.verdict-watch { background: #3b6ca8; color: #ffffff; }
+.verdict-skip  { background: #a43030; color: #ffffff; }
+
+/* ---- Score bar ---- */
+.score-block {
+    margin: 1em 0;
+    padding: 0.8em 1em;
+    background: #f5f7fa;
+    border-left: 4px solid #1e3a5f;
+    border-radius: 0 4px 4px 0;
+    font-family: "Calibri", "Arial", sans-serif;
+}
+
+.score-number {
+    font-size: 18pt;
+    font-weight: bold;
+    color: #1e3a5f;
+}
+
+/* ---- Reason block ---- */
+.reason-block {
+    margin: 1em 0;
+    padding: 0.7em 1em;
+    background: #f0f4f8;
+    border-radius: 4px;
+    font-size: 10pt;
+    font-style: italic;
+}
+
+/* ---- Executive summary table ---- */
+.summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.8em 0;
+    font-family: "Calibri", "Arial", sans-serif;
+    font-size: 9.5pt;
+}
+
+.summary-table th {
+    background: #1e3a5f;
+    color: #ffffff;
+    padding: 5px 8px;
+    text-align: left;
+    font-weight: bold;
+}
+
+.summary-table td {
+    padding: 4px 8px;
+    border-bottom: 1px solid #e0e0e0;
+    vertical-align: top;
+}
+
+.summary-table tr:nth-child(even) td {
+    background: #f5f7fa;
+}
+
+/* ---- Part sections ---- */
+.part-section {
+    page-break-before: always;
+    margin-top: 0;
+}
+
+.part-section:first-of-type {
+    page-break-before: avoid;
+}
+
+.part-header {
+    background: #1e3a5f;
+    color: #ffffff;
+    padding: 6px 12px;
+    font-family: "Calibri", "Arial", sans-serif;
+    font-size: 11pt;
+    font-weight: bold;
+    border-radius: 4px 4px 0 0;
+    margin-bottom: 0;
+}
+
+/* ---- Check rows ---- */
+.check-row {
+    border-bottom: 1px solid #e8ecf0;
+    padding: 6px 0;
+    margin-bottom: 0;
+}
+
+.check-row-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    font-family: "Calibri", "Arial", sans-serif;
+    font-size: 10pt;
+}
+
+.check-status-pass { color: #2d7a3e; font-weight: bold; font-size: 12pt; }
+.check-status-fail { color: #a43030; font-weight: bold; font-size: 12pt; }
+
+.check-name {
+    font-weight: bold;
+    color: #1a1a1a;
+    flex: 1;
+}
+
+.check-detail {
+    font-size: 9pt;
+    color: #555;
+    margin-top: 2px;
+    padding-left: 20px;
+    font-family: "Calibri", "Arial", sans-serif;
+}
+
+.check-threshold {
+    font-size: 8.5pt;
+    color: #777;
+    margin-top: 1px;
+    padding-left: 20px;
+    font-family: "Calibri", "Arial", sans-serif;
+    font-style: italic;
+}
+
+/* ---- Framework reasoning (shown for FAILED checks) ---- */
+.framework-reasoning {
+    margin-top: 5px;
+    margin-left: 20px;
+    margin-bottom: 6px;
+    padding: 6px 12px;
+    border-left: 3px solid #b0bec5;
+    background: #f9fafb;
+    font-size: 9pt;
+    color: #444;
+    font-style: italic;
+    font-family: "EB Garamond", "Georgia", serif;
+    line-height: 1.45;
+}
+
+/* ---- Pre-conditions block ---- */
+.precond-block {
+    padding: 6px 10px;
+    margin: 0.6em 0;
+    border: 1px solid #d0d8e4;
+    border-radius: 4px;
+    font-family: "Calibri", "Arial", sans-serif;
+    font-size: 9.5pt;
+}
+
+.precond-pass-all {
+    border-color: #2d7a3e;
+    background: #f0f9f3;
+    color: #1a4d27;
+}
+
+.precond-fail {
+    border-color: #a43030;
+    background: #fdf0f0;
+    color: #6b1e1e;
+}
+
+/* ---- Sources page ---- */
+.sources-page {
+    page-break-before: always;
+}
+
+.sources-list {
+    font-size: 9pt;
+    color: #444;
+    font-family: "Calibri", "Arial", sans-serif;
+    line-height: 1.6;
+    padding-left: 1.2em;
+}
+
+/* ---- Divider ---- */
+hr {
+    border: none;
+    border-top: 1px solid #dde3eb;
+    margin: 0.8em 0;
+}
+
+/* ---- Utilities ---- */
+.text-muted { color: #888; }
+.text-small { font-size: 8.5pt; }
+.monospace  { font-family: "Courier New", monospace; font-size: 9pt; }

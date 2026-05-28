@@ -5,7 +5,7 @@ from datetime import datetime
 
 logger = logging.getLogger("sidwell.reports.render")
 
-SIDWELL_VERSION = "v0.5"
+SIDWELL_VERSION = "v0.6"
 
 _PART_ORDER = {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4}
 

@@ -1,7 +1,7 @@
 # Investment Analysis Report: FICTITIOUS.NS
 **Generated on**: January 01, 2026
 **Valuation Engine**: Discounted Cash Flow (DCF)
-**Investor Lenses**: Warren Buffett + Howard Marks + KKR + Blackstone + Apollo (v0.5)
+**Investor Lenses**: Warren Buffett + Howard Marks + KKR + Blackstone + Apollo (v0.6)
 
 ## Executive Summary
 | Metric | Value | Source / Detail |
