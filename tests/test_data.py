@@ -26,72 +26,6 @@ def test_fetch_risk_free_rate(mock_set_json, mock_get_json, mock_fred_class, moc
     assert rate == 0.043
     mock_set_json.assert_called_with("fred_DGS10.json", 4.3)
 
-@patch("yfinance.Ticker")
-@patch("data.cache.get_json")
-@patch("data.cache.set_json")
-def test_fetch_financials(mock_set_json, mock_get_json, mock_ticker_class):
-    mock_get_json.side_effect = [
-        {"ticker": "MOCK.NS", "current_price": 10.0, "revenue": [100]},
-        {"current_price": 10.0}
-    ]
-    res = public.fetch_financials("MOCK.NS")
-    assert res["ticker"] == "MOCK.NS"
-    assert res["current_price"] == 10.0
-    mock_ticker_class.assert_not_called()
-    
-    mock_get_json.side_effect = [None, None]
-    
-    mock_ticker = MagicMock()
-    mock_ticker_class.return_value = mock_ticker
-    
-    mock_ticker.info = {
-        "currentPrice": 25.0,
-        "marketCap": 250.0,
-        "sharesOutstanding": 10.0
-    }
-    
-    cols = [pd.Timestamp("2021-12-31"), pd.Timestamp("2022-12-31"), pd.Timestamp("2023-12-31"), pd.Timestamp("2024-12-31")]
-    
-    mock_ticker.income_stmt = pd.DataFrame(
-        data=[
-            [82.64, 90.91, 100.0, 110.0],
-            [41.32, 45.45, 50.0, 55.0],
-            [12.40, 13.64, 15.0, 16.5],
-            [0.0, 0.0, 0.0, 0.0],
-            [3.12, 3.43, 3.77, 4.15],
-            [12.40, 13.64, 15.0, 16.5],
-            [9.28, 10.21, 11.22, 12.34]
-        ],
-        index=["Total Revenue", "Gross Profit", "EBIT", "Interest Expense", "Tax Provision", "Pretax Income", "Net Income"],
-        columns=cols
-    )
-    mock_ticker.balance_sheet = pd.DataFrame(
-        data=[
-            [100.0, 100.0, 100.0, 100.0],
-            [80.0, 80.0, 80.0, 80.0],
-            [20.0, 20.0, 20.0, 20.0],
-            [0.0, 0.0, 0.0, 0.0]
-        ],
-        index=["Total Assets", "Stockholders Equity", "Cash And Cash Equivalents", "Total Debt"],
-        columns=cols
-    )
-    mock_ticker.cashflow = pd.DataFrame(
-        data=[
-            [8.40, 9.29, 10.22, 11.24],
-            [-2.48, -2.73, -3.0, -3.3],
-            [1.65, 1.82, 2.0, 2.2],
-            [0.0, 0.0, 0.0, 0.0]
-        ],
-        index=["Operating Cash Flow", "Capital Expenditure", "Depreciation And Amortization", "Change In Working Capital"],
-        columns=cols
-    )
-    
-    res = public.fetch_financials("MOCK.NS")
-    assert res["current_price"] == 25.0
-    assert res["revenue"] == [82.64, 90.91, 100.0, 110.0]
-    assert res["capex"] == [2.48, 2.73, 3.0, 3.3]
-    assert res["fcf"] == pytest.approx([5.92, 6.56, 7.22, 7.94])
-
 def test_find_column():
     cols = ["Industry Name", "Number of firms", "Beta", "D/E Ratio", "Effective Tax rate", "Unlevered beta", "Cash/Firm value", "Unlevered beta corrected for cash", "HiLo Risk"]
     
@@ -328,9 +262,9 @@ def test_fetch_financials_us_dispatches_to_stockanalysis(mock_sa):
     assert res["ticker"] == "AAPL"
     mock_sa.assert_called_once_with("AAPL")
 
-@patch("data.public._fetch_financials_yfinance")
-def test_fetch_financials_india_dispatches_to_yfinance(mock_yf):
-    mock_yf.return_value = {"ticker": "ASIANPAINT.NS"}
-    res = public.fetch_financials("ASIANPAINT.NS")
-    assert res["ticker"] == "ASIANPAINT.NS"
-    mock_yf.assert_called_once_with("ASIANPAINT.NS")
+@patch("data.scrapers.screener.fetch_screener_financials")
+def test_fetch_financials_india_dispatches_to_screener(mock_scr):
+    mock_scr.return_value = {"ticker": "RELIANCE.NS"}
+    res = public.fetch_financials("RELIANCE.NS")
+    assert res["ticker"] == "RELIANCE.NS"
+    mock_scr.assert_called_once_with("RELIANCE.NS")

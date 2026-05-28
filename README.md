@@ -10,7 +10,7 @@ Version 0.6 adds a **Streamlit web frontend**, **per-lens PDF export** (weasypri
 ├── value.py                  # CLI entry point — also exports analyze()
 ├── data/
 │   ├── __init__.py
-│   ├── public.py             # yfinance + FRED + Damodaran fetchers with caching
+│   ├── public.py             # screener.in / stockanalysis.com + FRED + Damodaran fetchers with caching
 │   ├── documents.py          # PDF discovery from Drive-synced folder (v0.2)
 │   └── cache.py              # ~/.sidwell/cache/ TTL-based file cache
 ├── analysis/                 # Qualitative + framework parsing (v0.2+)

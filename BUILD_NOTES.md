@@ -755,3 +755,6 @@ FMP API endpoint regime: Sidwell uses FMP's `/stable/` endpoints (current as of 
 - Handled the missing interest_expense field by using a conservative proxy: debt * 0.05 (5% blended rate). This is documented for any ticker hitting the US scraper path.
 - Period slicing logic drops the TTM column and extracts the last 4 complete Fiscal Years in chronological order.
 - Indian tickers (.NS, .BO) continue to route via yfinance temporarily until the v0.6.3b screener.in scraper is built.
+
+## §23 v0.6.3b Screener.in Integration
+Replaced yfinance entirely with a direct HTML scraper for screener.in. Anonymous access only. Data is fetched from consolidated view. Unit conversions (Crore -> Rupees) are applied natively. Beta is defaulted to 1.0 (with WARNING) as it is not present on Screener. Expandable rows for cash and capex are extracted directly from the HTML.
