@@ -385,7 +385,7 @@ def _render_dcf_tab(dcf_results: dict, financials: dict):
             ("Industry (Beta source)", assumptions.get("target_industry", "—")),
         ]
         df = pd.DataFrame(rows, columns=["Assumption", "Value"])
-        st.dataframe(df, hide_index=True, use_container_width=True)
+        st.dataframe(df, hide_index=True, width="stretch")
 
     # ---- Projections table ----
     with st.expander("10-Year Cash Flow Projections", expanded=False):
@@ -401,7 +401,7 @@ def _render_dcf_tab(dcf_results: dict, financials: dict):
                     "PV FCF": f"{currency}{p.get('pv_fcf', 0):,.2f}",
                     "Stage": p.get("stage", "—"),
                 })
-            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
         else:
             st.caption("Projection data unavailable.")
 
@@ -438,7 +438,7 @@ with st.sidebar:
         key="ticker_input",
     )
 
-    analyze_btn = st.button("Analyze", type="primary", use_container_width=True)
+    analyze_btn = st.button("Analyze", type="primary", width="stretch")
 
     st.divider()
     st.caption(
@@ -472,7 +472,10 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
             results = _run_pipeline(ticker)
         except ValueError as e:
             err_msg = str(e)
-            st.error(f"**Data error:** {err_msg}")
+            if "non-positive intrinsic value" in err_msg:
+                st.error(f"DCF model failed for {ticker} — non-positive intrinsic. See logs.")
+            else:
+                st.error(f"**Data error:** {err_msg}")
             st.stop()
         except Exception as e:
             st.error(f"**Pipeline failed:** {e}")

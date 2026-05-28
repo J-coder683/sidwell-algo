@@ -758,3 +758,13 @@ FMP API endpoint regime: Sidwell uses FMP's `/stable/` endpoints (current as of 
 
 ## §23 v0.6.3b Screener.in Integration
 Replaced yfinance entirely with a direct HTML scraper for screener.in. Anonymous access only. Data is fetched from consolidated view. Unit conversions (Crore -> Rupees) are applied natively. Beta is defaulted to 1.0 (with WARNING) as it is not present on Screener. Expandable rows for cash and capex are extracted directly from the HTML.
+
+## 24. Screener.in Data Layer Fallbacks (v0.6.4)
+
+When extracting data from screener.in, the parser relies on an asynchronous API for expanding sub-rows (e.g., 'Material Cost %', 'Other Assets'). For certain industries like Banks or Service companies, these rows may be structurally absent from the company's financial statements:
+
+- **Banks and Financials**: Material Cost is entirely absent from the P&L. The system correctly logs an expected WARNING ('Raw material cost not found... falling back to revenue - expenses') and proceeds to calculate gross profit as Revenue - Expenses, which functionally aligns with EBIT for these firms.
+- **Cash, Capex, and Working Capital Changes**: If these explicit sub-rows are not available in the API response, the system falls back to proxy estimates (e.g., defaulting cash to 0.0, computing CapEx as absolute Cash from Investing, and falling back to a residual working capital method).
+
+These fallback WARNINGs are intentional behavior and ensure pipeline resilience across diverse sectors.
+

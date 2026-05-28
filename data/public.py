@@ -271,10 +271,19 @@ def fetch_damodaran_data(ticker: str) -> dict:
         excel_file = pd.ExcelFile(crp_path)
         # Typically the country premium data is in sheet 1 or a sheet containing 'ERP' or 'country'
         sheet_name = None
+        sheet_name = None
         for name in excel_file.sheet_names:
-            if "premium" in name.lower() or "erp" in name.lower() or name == excel_file.sheet_names[0]:
+            if "erp" in name.lower() and "country" in name.lower():
                 sheet_name = name
                 break
+        if not sheet_name:
+            # Fallback
+            for name in excel_file.sheet_names:
+                if "premium" in name.lower() or "erp" in name.lower():
+                    sheet_name = name
+                    break
+        if not sheet_name:
+            sheet_name = excel_file.sheet_names[0]
         
         df_crp = pd.read_excel(crp_path, sheet_name=sheet_name)
         
@@ -284,14 +293,20 @@ def fetch_damodaran_data(ticker: str) -> dict:
         country_row_idx = None
         
         # Scan cells to find target country
+        found_countries = []
         for col in df_crp.columns:
-            matches = df_crp[df_crp[col].astype(str).str.strip().str.lower() == target_country.lower()]
+            normalized_col = df_crp[col].astype(str).str.replace('\xa0', ' ').str.strip().str.lower()
+            if col == df_crp.columns[0]:
+                found_countries = normalized_col.dropna().tolist()
+                
+            matches = df_crp[normalized_col.str.startswith(target_country.lower())]
             if not matches.empty:
                 country_col = col
                 country_row_idx = matches.index[0]
                 break
                 
         if country_row_idx is None:
+            logger.error(f"Available countries in sheet: {found_countries[:50]}...")
             raise ValueError(f"Could not find country '{target_country}' in Damodaran CRP spreadsheet.")
             
         # Clean headers by looking at the row above or just scanning headers
@@ -312,7 +327,7 @@ def fetch_damodaran_data(ticker: str) -> dict:
         header_row_idx = None
         for i in range(max(0, country_row_idx - 5), country_row_idx):
             row_str = df_crp.iloc[i].astype(str).str.lower().values
-            if any("risk premium" in val or "crp" in val or "erp" in val for val in row_str):
+            if any("risk premium" in str(val) or "crp" in str(val) or "erp" in str(val) for val in row_str):
                 header_row_idx = i
                 break
                 
@@ -399,15 +414,7 @@ def fetch_damodaran_data(ticker: str) -> dict:
             
     except Exception as e:
         logger.error(f"Error parsing Damodaran CRP Excel: {e}")
-        # Default fallbacks if parsing failed completely but download succeeded
-        if target_country == "India":
-            mature_erp = 0.0423
-            crp = 0.0218
-            total_erp = 0.0641
-        else:
-            mature_erp = 0.0423
-            crp = 0.0
-            total_erp = 0.0423
+        raise e
             
     # 4. Parse Betas
     beta_data = _parse_damodaran_beta_sheet(beta_path, target_industry, is_india)

@@ -160,7 +160,7 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
     
     # 7. Working capital optimization
     wc_change_4y = financials["working_capital_change"]
-    sum_wc_change = sum(wc_change_4y)
+    sum_wc_change = sum(x if x is not None else 0 for x in wc_change_4y)
     mean_rev = np.mean(rev_4y)
     hard_7 = sum_wc_change < -0.05 * mean_rev
     

@@ -138,21 +138,27 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
     hist_deprec_ratios = []
     for i in range(hist_years_count):
         if hist_revenue[i] > 0:
-            hist_deprec_ratios.append(financials["depreciation"][i] / hist_revenue[i])
+            val = financials["depreciation"][i]
+            val = val if val is not None else 0.0
+            hist_deprec_ratios.append(val / hist_revenue[i])
     hist_deprec_ratio_avg = sum(hist_deprec_ratios) / hist_years_count if hist_deprec_ratios else 0.02
     
     # CapEx Ratio
     hist_capex_ratios = []
     for i in range(hist_years_count):
         if hist_revenue[i] > 0:
-            hist_capex_ratios.append(financials["capex"][i] / hist_revenue[i])
+            val = financials["capex"][i]
+            val = val if val is not None else 0.0
+            hist_capex_ratios.append(val / hist_revenue[i])
     hist_capex_ratio_avg = sum(hist_capex_ratios) / hist_years_count if hist_capex_ratios else 0.03
     
     # NWC Change Ratio (relative to revenue)
     hist_nwc_ratios = []
     for i in range(hist_years_count):
         if hist_revenue[i] > 0:
-            hist_nwc_ratios.append(financials["working_capital_change"][i] / hist_revenue[i])
+            val = financials["working_capital_change"][i]
+            val = val if val is not None else 0.0
+            hist_nwc_ratios.append(val / hist_revenue[i])
     hist_nwc_ratio_avg = sum(hist_nwc_ratios) / hist_years_count if hist_nwc_ratios else 0.0
     
     # 2. Cost of Equity (CAPM)
@@ -340,4 +346,14 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
     }
     
     logger.info(f"DCF valuation completed for {ticker}. Intrinsic value: {intrinsic_value_per_share:.2f}")
+    
+    if intrinsic_value_per_share <= 0:
+        hist_fcf = financials.get("fcf", [0.0])
+        raise ValueError(
+            f"DCF produced non-positive intrinsic value ({intrinsic_value_per_share:.2f}) for {ticker}. "
+            f"WACC={wacc:.4f}, terminal_growth={g_terminal:.4f}, stage_1_growth={proj_revenue_growth:.4f}, "
+            f"last_year_fcf={hist_fcf[-1]}. Likely causes: terminal_growth >= WACC; corrupted CRP/beta inputs; "
+            f"projected FCF negative across forecast horizon."
+        )
+
     return res
