@@ -127,6 +127,22 @@ def fetch_screener_financials(ticker: str) -> dict:
     company_id_match = re.search(r'data-company-id=["\'](\d+)["\']', resp.text)
     company_id = company_id_match.group(1) if company_id_match else None
     
+    scraped_industry = None
+    scraped_broad_industry = None
+    scraped_sector = None
+    
+    for a in soup.find_all('a'):
+        href = a.get('href', '')
+        if 'market' in str(href):
+            title = a.get('title', '')
+            if title == 'Industry':
+                scraped_industry = a.text.strip()
+            elif title == 'Broad Industry':
+                scraped_broad_industry = a.text.strip()
+            elif title == 'Sector':
+                scraped_sector = a.text.strip()
+    
+    
     pl_table = soup.find('section', id='profit-loss').find('table') if soup.find('section', id='profit-loss') else None
     bs_table = soup.find('section', id='balance-sheet').find('table') if soup.find('section', id='balance-sheet') else None
     cf_table = soup.find('section', id='cash-flow').find('table') if soup.find('section', id='cash-flow') else None
@@ -350,8 +366,17 @@ def fetch_screener_financials(ticker: str) -> dict:
     fin["depreciation"] = _crore_to_rupee(depreciation)
     fin["working_capital_change"] = _crore_to_rupee(working_capital_change)
     fin["fcf"] = _crore_to_rupee(fcf)
+    historical_shares = [shares_out] * 4 if shares_out else [None]*4
+    fin["historical_shares"] = historical_shares
     
-    fin["historical_shares"] = [shares_out] * 4 if shares_out else [None]*4
+    fin["scraped_sector"] = scraped_sector
+    fin["scraped_broad_industry"] = scraped_broad_industry
+    fin["scraped_industry"] = scraped_industry
+    
+    if not scraped_sector and not scraped_broad_industry and not scraped_industry:
+        logger.info(f"Could not extract sector/industry for {ticker} from screener.in")
+    
+    fin["source"] = "Screener.in"
     fin["book_value_per_share"] = (fin["total_equity"][-1] / shares_out) if shares_out and shares_out > 0 and len(fin["total_equity"]) > 0 and fin["total_equity"][-1] is not None else 0.0
 
     price_dict = {"current_price": current_price}

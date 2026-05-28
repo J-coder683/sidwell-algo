@@ -81,7 +81,7 @@ def analyze(ticker: str, lenses_to_run: list | None = None) -> dict:
     rf_rate = public.fetch_risk_free_rate(ticker)
 
     # Step 3: Fetch Damodaran ERP and Sector Betas
-    damodaran_data = public.fetch_damodaran_data(ticker)
+    damodaran_data = public.fetch_damodaran_data(ticker, financials)
 
     # Step 4: Run DCF Valuation Engine
     dcf_results = dcf.run_dcf_valuation(financials, damodaran_data, rf_rate)

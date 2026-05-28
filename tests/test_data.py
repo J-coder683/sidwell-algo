@@ -268,3 +268,36 @@ def test_fetch_financials_india_dispatches_to_screener(mock_scr):
     res = public.fetch_financials("RELIANCE.NS")
     assert res["ticker"] == "RELIANCE.NS"
     mock_scr.assert_called_once_with("RELIANCE.NS")
+
+
+from data.public import get_industry_for_ticker, _normalize_sector_key, TICKER_INDUSTRY_MAP
+
+def test_get_industry_scraped_industry_priority():
+    financials = {'scraped_industry': 'Semiconductors'}
+    ind, src = get_industry_for_ticker('MU', financials)
+    assert ind == 'Semiconductor'
+    assert src == 'scraped_industry'
+
+def test_get_industry_scraped_sector_fallback():
+    financials = {'scraped_industry': None, 'scraped_sector': 'Technology'}
+    ind, src = get_industry_for_ticker('AAPL', financials)
+    assert ind == 'Software (System & Application)'
+    assert src == 'scraped_sector'
+
+def test_get_industry_ticker_override_wins():
+    TICKER_INDUSTRY_MAP['TEST_OVERRIDE'] = 'Chemical (Specialty)'
+    financials = {'scraped_industry': 'Semiconductors'}
+    ind, src = get_industry_for_ticker('TEST_OVERRIDE', financials)
+    assert ind == 'Chemical (Specialty)'
+    assert src == 'ticker_override'
+    del TICKER_INDUSTRY_MAP['TEST_OVERRIDE']
+
+def test_get_industry_default_fallback_logs_warning(caplog):
+    financials = {'scraped_industry': 'unknown-industry'}
+    ind, src = get_industry_for_ticker('UNKNOWN', financials)
+    assert ind == 'Chemical (Specialty)'
+    assert src == 'default'
+    assert 'Unmapped sector for UNKNOWN' in caplog.text
+
+def test_normalize_sector_key_handles_nbsp_and_case():
+    assert _normalize_sector_key('Software—Infrastructure\xa0') == 'software-infrastructure'

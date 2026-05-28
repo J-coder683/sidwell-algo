@@ -779,3 +779,11 @@ These fallback WARNINGs are intentional behavior and ensure pipeline resilience 
 ## 25. v0.6.4.1 Hotfix — WACC Floor and ERP Parser Integrity
 
 WACC floor was briefly lowered to 3% during v0.6.4 debugging of MU. This was a methodology violation (masking a symptom rather than fixing root cause). Restored to 5%. The actual fix was upstream in the Damodaran ERP parser (see Fix 2).
+
+## 26. v0.6.4.2 Auto-Detect Industry
+
+Architecture shift: TICKER_INDUSTRY_MAP (per-ticker, does not scale) replaced with SECTOR_TO_DAMODARAN_MAP (per-sector, ~120 entries cover any ticker).
+Sector/industry extracted from already-scraped data; no extra HTTP calls.
+New maintenance pattern: WARNING log surfaces unmapped sector strings; user adds one line to SECTOR_TO_DAMODARAN_MAP; instantly works for that ticker AND every other ticker in the same sector.
+Damodaran taxonomy is finer than scraped sectors in some places - mapping uses "closest reasonable" Damodaran category; documented choices flagged with a code comment.
+Note: HDFCBANK crashing in DCF is an existing limitation for Banks which need special handling at the DCF level (remains unchanged).

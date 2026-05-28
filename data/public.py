@@ -13,65 +13,221 @@ TTL_PRICES = 24 * 60 * 60         # 24 hours
 TTL_FINANCIALS = 7 * 24 * 60 * 60   # 7 days
 TTL_MACRO = 30 * 24 * 60 * 60       # 30 days
 
-# Ticker → Damodaran industry mapping.
-# Values must match Damodaran's category strings EXACTLY.
-# Validated by category-string audit (see BUILD_NOTES v0.1.1 Category Audit).
-TICKER_INDUSTRY_MAP = {
-    # Indian consumer / paints / household
-    "ASIANPAINT.NS":  "Household Products",
-    "BERGEPAINT.NS":  "Household Products",
-    "PIDILITIND.NS":  "Chemical (Diversified)",
-    "HINDUNILVR.NS":  "Household Products",
-    "NESTLEIND.NS":   "Food Processing",
-    "ITC.NS":         "Tobacco",
-    "BRITANNIA.NS":   "Food Processing",
-    # Indian financials
-    "HDFCBANK.NS":    "Bank (Money Center)",
-    "ICICIBANK.NS":   "Bank (Money Center)",
-    "BAJFINANCE.NS":  "Financial Svcs. (Non-bank & Insurance)",
-    # Indian IT
-    "TCS.NS":         "Software (System & Application)",
-    "INFY.NS":        "Software (System & Application)",
-    
-    # Common US tickers
-    "MU":      "Semiconductor",
-    "NVDA":    "Semiconductor",
-    "AMD":     "Semiconductor",
-    "INTC":    "Semiconductor",
-    "AVGO":    "Semiconductor",
-    "TSM":     "Semiconductor",
-    "QCOM":    "Semiconductor",
-    "TSLA":    "Auto & Truck",
-    "F":       "Auto & Truck",
-    "GM":      "Auto & Truck",
-    "JPM":     "Bank (Money Center)",
-    "BAC":     "Bank (Money Center)",
-    "GS":      "Bank (Money Center)",
-    "WMT":     "Retail (General)",
-    "COST":    "Retail (General)",
-    "HD":      "Retail (Building Supply)",
-    "V":       "Financial Svcs. (Non-bank & Insurance)",
-    "MA":      "Financial Svcs. (Non-bank & Insurance)",
-    "META":    "Software (System & Application)",
-    "DIS":     "Entertainment",
-    "NFLX":    "Entertainment",
-    "BA":      "Aerospace/Defense",
-    # US placeholders for testing
-    "AAPL":           "Computers/Peripherals",
-    "MSFT":           "Software (System & Application)",
+def _normalize_sector_key(s: str) -> str:
+    if not s: return ""
+    return (s.lower()
+            .replace("\u00a0", " ")
+            .replace("\u2014", "-")  # em-dash to hyphen
+            .replace("\u2013", "-")  # en-dash to hyphen
+            .strip())
+
+TICKER_INDUSTRY_MAP = {}
+
+SECTOR_TO_DAMODARAN_MAP = {
+    # === US (stockanalysis Industry — normalized) ===
+    "semiconductors":                    "Semiconductor",
+    "semiconductor equipment & materials": "Semiconductor Equip",
+    "software-infrastructure":           "Software (System & Application)",
+    "software-application":              "Software (System & Application)",
+    "consumer electronics":              "Computers/Peripherals",
+    "information technology services":   "Information Services",
+    "internet content & information":    "Software (Internet)",
+    "internet retail":                   "Retail (Online)",
+    "computer hardware":                 "Computers/Peripherals",
+    "electronic components":             "Electronics (General)",
+    "communication equipment":           "Telecom. Equipment",
+    "banks-diversified":                 "Bank (Money Center)",
+    "banks-regional":                    "Banks (Regional)",
+    "asset management":                  "Investments & Asset Management",
+    "capital markets":                   "Investments & Asset Management",
+    "credit services":                   "Financial Svcs. (Non-bank & Insurance)",
+    "insurance-life":                    "Insurance (Life)",
+    "insurance-property & casualty":     "Insurance (Prop/Cas.)",
+    "insurance-diversified":             "Insurance (General)",
+    "drug manufacturers-general":        "Drugs (Pharmaceutical)",
+    "drug manufacturers-specialty & generic": "Drugs (Pharmaceutical)",
+    "biotechnology":                     "Drugs (Biotechnology)",
+    "medical devices":                   "Healthcare Products",
+    "medical instruments & supplies":    "Healthcare Products",
+    "diagnostics & research":            "Healthcare Information and Technology",
+    "healthcare plans":                  "Healthcare Services",
+    "medical care facilities":           "Healthcare Services",
+    "oil & gas integrated":              "Oil/Gas (Integrated)",
+    "oil & gas e&p":                     "Oil/Gas (Production and Exploration)",
+    "oil & gas midstream":               "Oil/Gas Distribution",
+    "oil & gas refining & marketing":    "Oil/Gas (Integrated)",
+    "auto manufacturers":                "Auto & Truck",
+    "auto parts":                        "Auto Parts",
+    "specialty retail":                  "Retail (Special Lines)",
+    "discount stores":                   "Retail (General)",
+    "home improvement retail":           "Retail (Building Supply)",
+    "footwear & accessories":            "Apparel",
+    "apparel manufacturing":             "Apparel",
+    "restaurants":                       "Restaurant/Dining",
+    "beverages-non-alcoholic":           "Beverage (Soft)",
+    "beverages-wineries & distilleries": "Beverage (Alcoholic)",
+    "household & personal products":     "Household Products",
+    "packaged foods":                    "Food Processing",
+    "tobacco":                           "Tobacco",
+    "aerospace & defense":               "Aerospace/Defense",
+    "specialty industrial machinery":    "Machinery",
+    "farm & heavy construction machinery": "Machinery",
+    "industrial distribution":           "Retail (Distributors)",
+    "railroads":                         "Transportation",
+    "airlines":                          "Air Transport",
+    "trucking":                          "Trucking",
+    "marine shipping":                   "Shipbuilding & Marine",
+    "specialty chemicals":               "Chemical (Specialty)",
+    "chemicals":                         "Chemical (Diversified)",
+    "agricultural inputs":               "Chemical (Basic)",
+    "steel":                             "Steel",
+    "copper":                            "Metals & Mining",
+    "gold":                              "Metals & Mining",
+    "building materials":                "Building Materials",
+    "utilities-regulated electric":      "Utility (General)",
+    "utilities-regulated gas":           "Utility (General)",
+    "reit-diversified":                  "R.E.I.T.",
+    "reit-residential":                  "R.E.I.T.",
+    "reit-office":                       "R.E.I.T.",
+    "entertainment":                     "Entertainment",
+    "broadcasting":                      "Broadcasting",
+    "publishing":                        "Publishing & Newspapers",
+    "advertising agencies":              "Advertising",
+
+    # === US Sector-level fallback (broader; if industry not in map) ===
+    "technology":                        "Software (System & Application)",
+    "financial services":                "Financial Svcs. (Non-bank & Insurance)",
+    "healthcare":                        "Healthcare Services",
+    "energy":                            "Oil/Gas (Integrated)",
+    "consumer cyclical":                 "Retail (General)",
+    "consumer defensive":                "Household Products",
+    "industrials":                       "Machinery",
+    "basic materials":                   "Chemical (Diversified)",
+    "utilities":                         "Utility (General)",
+    "real estate":                       "R.E.I.T.",
+    "communication services":            "Telecom. Services",
+
+    # === India — most-specific tier (screener Industry) ===
+    "refineries & marketing":            "Oil/Gas (Integrated)",
+    "computers - software & consulting": "Software (System & Application)",
+    "private sector bank":               "Bank (Money Center)",
+    "public sector bank":                "Bank (Money Center)",
+    "other bank":                        "Bank (Money Center)",
+    "non banking financial company (nbfc)": "Financial Svcs. (Non-bank & Insurance)",
+    "housing finance company":           "Financial Svcs. (Non-bank & Insurance)",
+    "pharmaceuticals":                   "Drugs (Pharmaceutical)",
+    "cement & cement products":          "Cement & Aggregates",
+    "paints":                            "Household Products",
+    "personal products":                 "Household Products",
+    "packaged foods":                    "Food Processing",
+    "tea & coffee":                      "Food Processing",
+    "telecom - services":                "Telecom. Services",
+    "power generation & distribution":   "Power",
+    "automobile":                        "Auto & Truck",
+    "automobile - 2 & 3 wheelers":       "Auto & Truck",
+    "auto components & equipments":      "Auto Parts",
+    "iron & steel":                      "Steel",
+    "non - ferrous metals":              "Metals & Mining",
+    "specialty chemicals":               "Chemical (Specialty)",
+    "fertilizers & agrochemicals":       "Chemical (Basic)",
+    "construction":                      "Construction Supplies",
+    "engineering":                       "Engineering",
+    "life insurance":                    "Insurance (Life)",
+    "general insurance":                 "Insurance (General)",
+    "asset management company":          "Investments & Asset Management",
+    "airlines":                          "Air Transport",
+    "logistics":                         "Trucking",
+    "hospitals & healthcare services":   "Healthcare Services",
+    "realty":                            "R.E.I.T.",
+    "diversified retail":                "Retail (General)",
+    "e-commerce":                        "Retail (Online)",
+
+    # === India — Broad Industry tier (screener Broad Industry) ===
+    "petroleum products":                "Oil/Gas (Integrated)",
+    "it - software":                     "Software (System & Application)",
+    "it - services":                     "Information Services",
+    "banks":                             "Bank (Money Center)",
+    "finance":                           "Financial Svcs. (Non-bank & Insurance)",
+    "telecom - services":                "Telecom. Services",
+    "insurance":                         "Insurance (General)",
+    "pharmaceuticals & biotechnology":   "Drugs (Pharmaceutical)",
+    "healthcare services":               "Healthcare Services",
+    "cement & cement products":          "Cement & Aggregates",
+    "automobiles":                       "Auto & Truck",
+    "auto components":                   "Auto Parts",
+    "chemicals & petrochemicals":        "Chemical (Diversified)",
+    "fertilizers":                       "Chemical (Basic)",
+    "ferrous metals":                    "Steel",
+    "non - ferrous metals":              "Metals & Mining",
+    "minerals & mining":                 "Metals & Mining",
+    "power":                             "Power",
+    "gas":                               "Oil/Gas Distribution",
+    "consumer durables":                 "Household Products",
+    "household products":                "Household Products",
+    "food products":                     "Food Processing",
+    "beverages":                         "Beverage (Soft)",
+    "tobacco products":                  "Tobacco",
+    "transport infrastructure":          "Engineering",
+    "construction":                      "Construction Supplies",
+    "capital markets":                   "Investments & Asset Management",
+    "realty":                            "R.E.I.T.",
+    "retailing":                         "Retail (General)",
+    "entertainment":                     "Entertainment",
+    "media":                             "Broadcasting",
+
+    # === India — Sector tier (broadest, screener Sector) ===
+    "oil, gas & consumable fuels":       "Oil/Gas (Integrated)",
+    "information technology":            "Software (System & Application)",
+    "financial services":                "Financial Svcs. (Non-bank & Insurance)",
+    "healthcare":                        "Healthcare Services",
+    "consumer goods":                    "Household Products",
+    "consumer durables":                 "Household Products",
+    "fast moving consumer goods":        "Household Products",
+    "automobile and auto components":    "Auto & Truck",
+    "metals & mining":                   "Metals & Mining",
+    "chemicals":                         "Chemical (Diversified)",
+    "construction materials":            "Cement & Aggregates",
+    "utilities":                         "Utility (General)",
+    "telecommunication":                 "Telecom. Services",
+    "realty":                            "R.E.I.T.",
+    "services":                          "Information Services",
+    "capital goods":                     "Machinery",
 }
 
 DEFAULT_INDUSTRY = "Chemical (Specialty)"  # conservative fallback when ticker not mapped
 
-def get_industry_for_ticker(ticker: str) -> tuple:
-    """
-    Returns (industry_name, source_tag) where source_tag is:
-      - "mapped":  ticker found in TICKER_INDUSTRY_MAP
-      - "default": fell back to DEFAULT_INDUSTRY
+def get_industry_for_ticker(ticker: str, financials: dict) -> tuple[str, str]:
+    """Returns (damodaran_industry, source_tag).
+    Source tag: 'ticker_override' | 'scraped_industry' | 'scraped_broad_industry' | 'scraped_sector' | 'default'
     """
     upper = ticker.upper()
+    
+    # Tier 1: Manual override (keep TICKER_INDUSTRY_MAP small — only true edge cases)
     if upper in TICKER_INDUSTRY_MAP:
-        return TICKER_INDUSTRY_MAP[upper], "mapped"
+        return TICKER_INDUSTRY_MAP[upper], "ticker_override"
+    
+    # Tier 2: Try scraped industry (more specific than sector)
+    industry = _normalize_sector_key(financials.get("scraped_industry"))
+    if industry and industry in SECTOR_TO_DAMODARAN_MAP:
+        return SECTOR_TO_DAMODARAN_MAP[industry], "scraped_industry"
+        
+    # Tier 3: Try scraped broad industry
+    broad_industry = _normalize_sector_key(financials.get("scraped_broad_industry"))
+    if broad_industry and broad_industry in SECTOR_TO_DAMODARAN_MAP:
+        return SECTOR_TO_DAMODARAN_MAP[broad_industry], "scraped_broad_industry"
+    
+    # Tier 4: Try scraped sector (broader)
+    sector = _normalize_sector_key(financials.get("scraped_sector"))
+    if sector and sector in SECTOR_TO_DAMODARAN_MAP:
+        return SECTOR_TO_DAMODARAN_MAP[sector], "scraped_sector"
+    
+    # Log unmapped strings so we can extend the map iteratively
+    if industry or broad_industry or sector:
+        logger.warning(
+            f"Unmapped sector for {ticker}: industry='{industry}', broad_industry='{broad_industry}', sector='{sector}'. "
+            f"Add to SECTOR_TO_DAMODARAN_MAP. Falling back to {DEFAULT_INDUSTRY}."
+        )
+    
     return DEFAULT_INDUSTRY, "default"
 
 def get_beta_sheet_name(beta_path: str, is_india: bool) -> str:
@@ -242,7 +398,7 @@ def _parse_damodaran_beta_sheet(beta_path: str, target_industry: str, is_india: 
     }
 
 
-def fetch_damodaran_data(ticker: str) -> dict:
+def fetch_damodaran_data(ticker: str, financials: dict) -> dict:
     """
     Downloads and parses Damodaran's Country Risk Premium (ctryprem.xlsx) and
     Beta by Sector (betaGlobal.xls) spreadsheets.
@@ -256,7 +412,7 @@ def fetch_damodaran_data(ticker: str) -> dict:
     """
     is_india = ticker.endswith(".NS") or ticker.endswith(".BO")
     target_country = "India" if is_india else "United States"
-    target_industry, industry_source = get_industry_for_ticker(ticker)
+    target_industry, industry_source = get_industry_for_ticker(ticker, financials)
     
     cache_key_crp = "damodaran_ctryprem.xlsx"
     cache_key_beta = "damodaran_betaGlobal.xls"

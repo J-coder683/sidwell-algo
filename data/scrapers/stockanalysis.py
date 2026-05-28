@@ -120,6 +120,8 @@ def fetch_stockanalysis_financials(ticker: str) -> dict:
     
     market_cap, shares_out, stock_beta, trailing_pe, dividend_yield = None, None, 1.0, None, 0.0
     current_price = None
+    scraped_sector = None
+    scraped_industry = None
     
     for node in overview_nodes:
         node_data = node.get("data", [])
@@ -135,6 +137,14 @@ def fetch_stockanalysis_financials(ticker: str) -> dict:
                         stock_beta = 1.0
                 if "quote" in res and isinstance(res["quote"], dict):
                     current_price = res["quote"].get("p")
+                
+                if "infoTable" in res and isinstance(res["infoTable"], list):
+                    for entry in res["infoTable"]:
+                        if isinstance(entry, dict):
+                            if entry.get("t") == "Sector":
+                                scraped_sector = str(entry.get("v", ""))
+                            elif entry.get("t") == "Industry":
+                                scraped_industry = str(entry.get("v", ""))
     
     # Compute stats cleanly from Income Statement to avoid T/B/M string parsing
     try:
@@ -180,6 +190,12 @@ def fetch_stockanalysis_financials(ticker: str) -> dict:
     fin["stock_beta"] = stock_beta
     fin["trailing_pe"] = trailing_pe
     fin["dividend_yield"] = dividend_yield
+    
+    fin["scraped_sector"] = scraped_sector if scraped_sector else None
+    fin["scraped_industry"] = scraped_industry if scraped_industry else None
+    
+    if not scraped_sector and not scraped_industry:
+        logger.info(f"Could not extract sector/industry for {ticker.upper()} from stockanalysis.com")
     fin["insider_ownership"] = 0.0
     fin["recommendation_mean"] = None
     
