@@ -34,7 +34,7 @@ This document outlines key technical assumptions, calculation methods, architect
 - **Line Items**: EBIT, D&A, CapEx, and Net Working Capital changes are projected as historical 4-year averages relative to Revenue.
 - **Terminal Growth ($g_{terminal}$)**: Capped at $\min(4.0\%, R_f - 1.0\%)$. For India, this is set to **4.00%**.
 - **WACC**: Capped WACC is **13.20%**. 
-- **WACC Invariant Assertion**: The engine strictly enforces `0.05 < wacc < 0.30` (using `raise ValueError` in production code) to fail loudly on unit-conversion errors.
+- **WACC Invariant Assertion**: The engine strictly enforces `0.03 < wacc < 0.30` (using `raise ValueError` in production code) to fail loudly on unit-conversion errors while accommodating non-US/highly-leveraged structures.
 
 ---
 

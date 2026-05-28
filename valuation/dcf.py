@@ -205,7 +205,7 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
     wacc = (weight_equity * latest_cost_of_equity) + (weight_debt * latest_cost_of_debt * (1.0 - hist_tax_rate_avg))
     
     # WACC sanity check (raise ValueError for production invariants)
-    if not (0.05 < wacc < 0.30):
+    if not (0.03 < wacc < 0.30):
         raise ValueError(f"WACC of {wacc:.2%} is implausible — check inputs")
         
     # 5. Explicit 10-Year Forecast (2-stage with fade)
