@@ -374,13 +374,25 @@ def _render_lens_tab(lens_results: dict, lens_key: str, financials: dict,
 
 def _render_dcf_tab(dcf_results: dict, financials: dict):
     ticker = financials["ticker"]
-    intrinsic = dcf_results["intrinsic_value_per_share"]
     price = dcf_results["current_price"]
-    wacc = dcf_results["wacc"]
     assumptions = dcf_results["assumptions"]
 
     is_india = ticker.endswith(".NS") or ticker.endswith(".BO")
     currency = "₹" if is_india else "$"
+
+    # Banks: DCF is not applicable. Show the "coming soon" note instead of the
+    # intrinsic/WACC metrics and Excel export (both rely on None fields).
+    if dcf_results.get("not_applicable"):
+        st.info(
+            dcf_results.get("not_applicable_reason", "DCF not applicable.")
+            + "\n\nBanks are still analysed through all five investor lenses on real "
+            "financials — see the lens tabs."
+        )
+        st.metric("Current Price", f"{currency}{price:,.2f}")
+        return
+
+    intrinsic = dcf_results["intrinsic_value_per_share"]
+    wacc = dcf_results["wacc"]
 
     upside = (intrinsic - price) / price if price > 0 else 0
 

@@ -776,6 +776,12 @@ def export_dcf_excel(dcf_results: dict, financials: dict) -> bytes:
                            file_name=f"{ticker}_DCF_v0.6.xlsx",
                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     """
+    if dcf_results.get("not_applicable"):
+        raise ValueError(
+            "DCF Excel export is not available for banks — DCF is not applicable "
+            "(no intrinsic value, WACC, or projections). A bank valuation model "
+            "(DDM/excess-returns) is coming soon."
+        )
     wb = Workbook()
     # Remove default empty sheet
     if "Sheet" in wb.sheetnames:

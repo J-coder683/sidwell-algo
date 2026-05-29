@@ -44,6 +44,115 @@ def format_currency(val: float, is_india: bool) -> str:
 def _verdict_emoji(verdict: str) -> str:
     return "✅" if verdict == "BUY" else "⏳" if verdict == "WAIT" else "👀" if verdict == "WATCH" else "❌"
 
+def _render_dcf_valuation_body(md, dcf_results, financials, assumptions, intrinsic_val, is_india):
+    """Renders the full DCF section 2 body (WACC sourcing, projections, terminal
+    value, valuation bridge). Only called for non-bank tickers — banks have no
+    DCF and get a 'not applicable' note instead (see render_markdown_report)."""
+    md.append("Every component of the Weighted Average Cost of Capital (WACC) is explicitly sourced and modeled below:")
+    md.append("")
+    md.append("### WACC Components & Assumptions")
+    md.append("| Component | Value | Source / Reference |")
+    md.append("| :--- | :--- | :--- |")
+    md.append(f"| **Risk-Free Rate ($R_f$)** | {assumptions['risk_free_rate']*100:.2f}% | FRED Series: `{'INDIRLTLT01STM` (India 10Y G-Sec)' if is_india else 'DGS10` (US 10Y Treasury)'} |")
+    md.append(f"| **Mature Market ERP** | {assumptions['mature_market_erp']*100:.2f}% | Damodaran NYU Stern (Mature Equity Risk Premium) |")
+    md.append(f"| **Country Risk Premium** | {assumptions['country_risk_premium']*100:.2f}% | Damodaran NYU Stern (Country default spread adjusted) |")
+    md.append(f"| **Total Equity Risk Premium** | {assumptions['total_erp']*100:.2f}% | Damodaran mature ERP + country premium = {assumptions['total_erp']*100:.2f}% |")
+    source_tag = "from Damodaran sheet" if assumptions.get('industry_source') == 'mapped' else 'hardcoded fallback (Damodaran lookup failed)'
+    md.append(f"| **Industry Unlevered Beta** | {assumptions['beta_unlevered']:.2f} | Damodaran '{assumptions.get('target_industry', 'Chemical (Specialty)')}' ({source_tag}) |")
+    if financials.get("stock_beta") == 1.0 and financials.get("source", "").lower() == "screener.in":
+        beta_str = f"Damodaran industry $\\beta$ for {assumptions.get('target_industry')}; company-specific $\\beta$ unavailable on screener.in"
+    else:
+        src = financials.get('source', 'stockanalysis.com')
+        beta_str = f"Direct $\\beta$ from {src}"
+    md.append(f"| **Beta ($\\beta$)** | {assumptions['beta_levered']:.2f} | {beta_str} |")
+    md.append(f"| **Cost of Equity ($K_e$)** | {assumptions['cost_of_equity']*100:.2f}% | CAPM: $R_f + \\beta \\times ERP$ = {assumptions['cost_of_equity']*100:.2f}% |")
+    md.append(f"| **Cost of Debt ($K_d$)** | {assumptions['cost_of_debt']*100:.2f}% | {assumptions['debt_source']} |")
+    md.append(f"| **Effective Tax Rate ($t$)** | {assumptions['tax_rate']*100:.2f}% | 4-year historical average from filings |")
+    md.append(f"| **Equity Weight ($W_e$)** | {assumptions['equity_weight']*100:.2f}% | Market Cap / (Market Cap + Total Debt) |")
+    md.append(f"| **Debt Weight ($W_d$)** | {assumptions['debt_weight']*100:.2f}% | Total Debt / (Market Cap + Total Debt) |")
+    md.append(f"| **Computed WACC** | **{assumptions['wacc']*100:.2f}%** | Weighted cost of capital = **{assumptions['wacc']*100:.2f}%** |")
+    md.append("")
+
+    md.append("### 5-Year High-Growth Forecast (Stage 1)")
+    md.append("Projections are based on historical averages relative to Revenue. Revenue growth is projected at **{:.2f}%** (historical 4y CAGR capped between 5% and 20%).".format(assumptions["revenue_growth"]*100))
+    md.append("")
+
+    stage1_projs = [p for p in dcf_results["projections"] if p.get("stage", "high") == "high"]
+    proj_headers = ["Metric"] + [p["year"] for p in stage1_projs]
+    md.append("| " + " | ".join(proj_headers) + " |")
+    md.append("| " + " | ".join([":---"] * len(proj_headers)) + " |")
+
+    rev_p = ["Revenue"] + [format_currency(p["revenue"], is_india) for p in stage1_projs]
+    md.append("| " + " | ".join(rev_p) + " |")
+    ebit_p = ["EBIT"] + [format_currency(p["ebit"], is_india) for p in stage1_projs]
+    md.append("| " + " | ".join(ebit_p) + " |")
+    tax_p = ["Taxes"] + [format_currency(p["tax"], is_india) for p in stage1_projs]
+    md.append("| " + " | ".join(tax_p) + " |")
+    dep_p = ["D&A"] + [format_currency(p["depreciation"], is_india) for p in stage1_projs]
+    md.append("| " + " | ".join(dep_p) + " |")
+    cap_p = ["CapEx"] + [format_currency(p["capex"], is_india) for p in stage1_projs]
+    md.append("| " + " | ".join(cap_p) + " |")
+    nwc_p = ["NWC Change (CF)"] + [format_currency(p["working_capital_change"], is_india) for p in stage1_projs]
+    md.append("| " + " | ".join(nwc_p) + " |")
+    fcf_p = ["Free Cash Flow"] + [format_currency(p["fcf"], is_india) for p in stage1_projs]
+    md.append("| " + " | ".join(fcf_p) + " |")
+    df_p = ["Discount Factor"] + [f"{p['discount_factor']:.4f}" for p in stage1_projs]
+    md.append("| " + " | ".join(df_p) + " |")
+    pv_p = ["PV of Cash Flow"] + [format_currency(p["pv_fcf"], is_india) for p in stage1_projs]
+    md.append("| " + " | ".join(pv_p) + " |")
+    md.append("")
+
+    stage2_projs = [p for p in dcf_results["projections"] if p.get("stage") == "fade"]
+    if stage2_projs:
+        md.append(f"### 5-Year Fade Forecast (Stage 2) — growth fading from {assumptions['stage_1_growth']*100:.2f}% to {assumptions['terminal_growth_rate']*100:.2f}%")
+        md.append("")
+
+        proj_headers2 = ["Metric"] + [p["year"] for p in stage2_projs]
+        md.append("| " + " | ".join(proj_headers2) + " |")
+        md.append("| " + " | ".join([":---"] * len(proj_headers2)) + " |")
+
+        rev_p2 = ["Revenue"] + [format_currency(p["revenue"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(rev_p2) + " |")
+        ebit_p2 = ["EBIT"] + [format_currency(p["ebit"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(ebit_p2) + " |")
+        tax_p2 = ["Taxes"] + [format_currency(p["tax"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(tax_p2) + " |")
+        dep_p2 = ["D&A"] + [format_currency(p["depreciation"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(dep_p2) + " |")
+        cap_p2 = ["CapEx"] + [format_currency(p["capex"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(cap_p2) + " |")
+        nwc_p2 = ["NWC Change (CF)"] + [format_currency(p["working_capital_change"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(nwc_p2) + " |")
+        fcf_p2 = ["Free Cash Flow"] + [format_currency(p["fcf"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(fcf_p2) + " |")
+        df_p2 = ["Discount Factor"] + [f"{p['discount_factor']:.4f}" for p in stage2_projs]
+        md.append("| " + " | ".join(df_p2) + " |")
+        pv_p2 = ["PV of Cash Flow"] + [format_currency(p["pv_fcf"], is_india) for p in stage2_projs]
+        md.append("| " + " | ".join(pv_p2) + " |")
+        md.append("")
+
+    md.append("### Terminal Value")
+    last_year_num = len(dcf_results["projections"])
+    fcf_final = dcf_results["projections"][-1]["fcf"] if dcf_results["projections"] else 0.0
+    g_term = assumptions.get('terminal_growth_rate', 0.0)
+    md.append(f"- Final fade year (Year {last_year_num}) FCF: {format_currency(fcf_final, is_india)}")
+    md.append(f"- Terminal growth (Gordon): {g_term*100:.2f}%")
+    md.append(f"- Sector mapping: {assumptions.get('sector_terminal_source', 'Unknown')}")
+    md.append(f"- Terminal Value: {format_currency(dcf_results['terminal_value'], is_india)}")
+    md.append(f"- PV of Terminal Value (discounted from Year {last_year_num}): {format_currency(dcf_results['pv_terminal_value'], is_india)}")
+    md.append("")
+
+    md.append("### Valuation Bridge")
+    md.append(f"- **PV of Explicit FCFs**: {format_currency(dcf_results['pv_fcf'], is_india)}")
+    md.append(f"- **PV of Terminal Value (g = {g_term*100:.2f}%)**: {format_currency(dcf_results['pv_terminal_value'], is_india)}")
+    md.append(f"- **Enterprise Value**: {format_currency(dcf_results['enterprise_value'], is_india)}")
+    md.append(f"- **Add: Cash & Equivalents**: {format_currency(assumptions['latest_cash'], is_india)}")
+    md.append(f"- **Less: Total Debt**: {format_currency(assumptions['latest_debt'], is_india)}")
+    md.append(f"- **Equity Value**: {format_currency(dcf_results['equity_value'], is_india)}")
+    md.append(f"- **Shares Outstanding**: {assumptions['shares_outstanding']:,.0f}")
+    md.append(f"- **Intrinsic Value per Share**: **{format_currency(intrinsic_val, is_india)}**")
+    md.append("")
+
 def render_markdown_report(
     dcf_results: dict,
     buffett_results: dict,
@@ -85,6 +194,10 @@ def render_markdown_report(
     current_price = dcf_results["current_price"]
     intrinsic_val = dcf_results["intrinsic_value_per_share"]
     assumptions = dcf_results["assumptions"]
+    # Banks: DCF is not applicable. intrinsic_val / wacc / enterprise_value are
+    # None, so the valuation displays are replaced with a "coming soon" message.
+    dcf_na = bool(dcf_results.get("not_applicable"))
+    dcf_na_reason = dcf_results.get("not_applicable_reason", "DCF not applicable.")
 
     md = []
 
@@ -97,9 +210,9 @@ def render_markdown_report(
     md.append(f"**Investor Lenses**: Warren Buffett + Howard Marks + KKR + Blackstone + Apollo ({SIDWELL_VERSION})")
     md.append("")
 
-    # DCF Coverage Gap Warning
-    intrinsic_to_price_pct = (intrinsic_val / current_price) * 100 if current_price > 0 else 0
-    if intrinsic_to_price_pct < 30.0 or intrinsic_to_price_pct > 300.0:
+    # DCF Coverage Gap Warning (skipped for banks — no DCF intrinsic value)
+    intrinsic_to_price_pct = (intrinsic_val / current_price) * 100 if (not dcf_na and current_price > 0) else 0
+    if not dcf_na and (intrinsic_to_price_pct < 30.0 or intrinsic_to_price_pct > 300.0):
         md.append("> [!WARNING]")
         md.append("> **DCF COVERAGE GAP WARNING**: The computed DCF intrinsic value")
         md.append("> deviates significantly from the current market price (intrinsic")
@@ -126,16 +239,19 @@ def render_markdown_report(
     md.append("| Metric | Value | Source / Detail |")
     md.append("| :--- | :--- | :--- |")
     md.append(f"| **Current Price** | {format_currency(current_price, is_india)} | Yahoo Finance |")
-    md.append(f"| **Intrinsic Value (DCF)** | {format_currency(intrinsic_val, is_india)} | Sidwell DCF Engine |")
 
-    if intrinsic_val <= 0:
-        mos_display = "DCF produced non-positive intrinsic value — model failed"
-    elif intrinsic_val < current_price:
-        mos_display = f"Trading at {current_price/intrinsic_val:.1f}x intrinsic value (target ≤ 0.75x)"
+    if dcf_na:
+        md.append("| **Intrinsic Value** | N/A — DCF not applicable to banks | Bank valuation (DDM) coming soon |")
+        md.append("| **Margin of Safety** | N/A — awaiting bank valuation model | Pending DDM/excess-returns |")
     else:
-        mos_display = f"{(intrinsic_val - current_price)/intrinsic_val*100:.2f}% margin of safety"
-
-    md.append(f"| **Margin of Safety** | {mos_display} | Current Discount to Intrinsic |")
+        md.append(f"| **Intrinsic Value (DCF)** | {format_currency(intrinsic_val, is_india)} | Sidwell DCF Engine |")
+        if intrinsic_val <= 0:
+            mos_display = "DCF produced non-positive intrinsic value — model failed"
+        elif intrinsic_val < current_price:
+            mos_display = f"Trading at {current_price/intrinsic_val:.1f}x intrinsic value (target ≤ 0.75x)"
+        else:
+            mos_display = f"{(intrinsic_val - current_price)/intrinsic_val*100:.2f}% margin of safety"
+        md.append(f"| **Margin of Safety** | {mos_display} | Current Discount to Intrinsic |")
 
     # Buffett verdict row
     buffett_emoji = _verdict_emoji(buffett_results["verdict"])
@@ -233,110 +349,17 @@ def render_markdown_report(
     # 2. DCF Valuation & WACC Sourcing
     # -------------------------------------------------------------------------
     md.append("## 2. DCF Valuation & WACC Sourcing")
-    md.append("Every component of the Weighted Average Cost of Capital (WACC) is explicitly sourced and modeled below:")
-    md.append("")
-    md.append("### WACC Components & Assumptions")
-    md.append("| Component | Value | Source / Reference |")
-    md.append("| :--- | :--- | :--- |")
-    md.append(f"| **Risk-Free Rate ($R_f$)** | {assumptions['risk_free_rate']*100:.2f}% | FRED Series: `{'INDIRLTLT01STM` (India 10Y G-Sec)' if is_india else 'DGS10` (US 10Y Treasury)'} |")
-    md.append(f"| **Mature Market ERP** | {assumptions['mature_market_erp']*100:.2f}% | Damodaran NYU Stern (Mature Equity Risk Premium) |")
-    md.append(f"| **Country Risk Premium** | {assumptions['country_risk_premium']*100:.2f}% | Damodaran NYU Stern (Country default spread adjusted) |")
-    md.append(f"| **Total Equity Risk Premium** | {assumptions['total_erp']*100:.2f}% | Damodaran mature ERP + country premium = {assumptions['total_erp']*100:.2f}% |")
-    source_tag = "from Damodaran sheet" if assumptions.get('industry_source') == 'mapped' else 'hardcoded fallback (Damodaran lookup failed)'
-    md.append(f"| **Industry Unlevered Beta** | {assumptions['beta_unlevered']:.2f} | Damodaran '{assumptions.get('target_industry', 'Chemical (Specialty)')}' ({source_tag}) |")
-    if financials.get("stock_beta") == 1.0 and financials.get("source", "").lower() == "screener.in":
-        beta_str = f"Damodaran industry $\\beta$ for {assumptions.get('target_industry')}; company-specific $\\beta$ unavailable on screener.in"
+    if dcf_na:
+        md.append("")
+        md.append("> [!NOTE]")
+        md.append(f"> **{dcf_na_reason}**")
+        md.append(">")
+        md.append("> Banks are analysed through all five investor lenses on real financials;")
+        md.append("> only the FCF-based DCF valuation is skipped here. A dividend-discount /")
+        md.append("> excess-returns model for banks is planned.")
+        md.append("")
     else:
-        src = financials.get('source', 'stockanalysis.com')
-        beta_str = f"Direct $\\beta$ from {src}"
-    md.append(f"| **Beta ($\\beta$)** | {assumptions['beta_levered']:.2f} | {beta_str} |")
-    md.append(f"| **Cost of Equity ($K_e$)** | {assumptions['cost_of_equity']*100:.2f}% | CAPM: $R_f + \\beta \\times ERP$ = {assumptions['cost_of_equity']*100:.2f}% |")
-    md.append(f"| **Cost of Debt ($K_d$)** | {assumptions['cost_of_debt']*100:.2f}% | {assumptions['debt_source']} |")
-    md.append(f"| **Effective Tax Rate ($t$)** | {assumptions['tax_rate']*100:.2f}% | 4-year historical average from filings |")
-    md.append(f"| **Equity Weight ($W_e$)** | {assumptions['equity_weight']*100:.2f}% | Market Cap / (Market Cap + Total Debt) |")
-    md.append(f"| **Debt Weight ($W_d$)** | {assumptions['debt_weight']*100:.2f}% | Total Debt / (Market Cap + Total Debt) |")
-    md.append(f"| **Computed WACC** | **{assumptions['wacc']*100:.2f}%** | Weighted cost of capital = **{assumptions['wacc']*100:.2f}%** |")
-    md.append("")
-
-    md.append("### 5-Year High-Growth Forecast (Stage 1)")
-    md.append("Projections are based on historical averages relative to Revenue. Revenue growth is projected at **{:.2f}%** (historical 4y CAGR capped between 5% and 20%).".format(assumptions["revenue_growth"]*100))
-    md.append("")
-
-    stage1_projs = [p for p in dcf_results["projections"] if p.get("stage", "high") == "high"]
-    proj_headers = ["Metric"] + [p["year"] for p in stage1_projs]
-    md.append("| " + " | ".join(proj_headers) + " |")
-    md.append("| " + " | ".join([":---"] * len(proj_headers)) + " |")
-
-    rev_p = ["Revenue"] + [format_currency(p["revenue"], is_india) for p in stage1_projs]
-    md.append("| " + " | ".join(rev_p) + " |")
-    ebit_p = ["EBIT"] + [format_currency(p["ebit"], is_india) for p in stage1_projs]
-    md.append("| " + " | ".join(ebit_p) + " |")
-    tax_p = ["Taxes"] + [format_currency(p["tax"], is_india) for p in stage1_projs]
-    md.append("| " + " | ".join(tax_p) + " |")
-    dep_p = ["D&A"] + [format_currency(p["depreciation"], is_india) for p in stage1_projs]
-    md.append("| " + " | ".join(dep_p) + " |")
-    cap_p = ["CapEx"] + [format_currency(p["capex"], is_india) for p in stage1_projs]
-    md.append("| " + " | ".join(cap_p) + " |")
-    nwc_p = ["NWC Change (CF)"] + [format_currency(p["working_capital_change"], is_india) for p in stage1_projs]
-    md.append("| " + " | ".join(nwc_p) + " |")
-    fcf_p = ["Free Cash Flow"] + [format_currency(p["fcf"], is_india) for p in stage1_projs]
-    md.append("| " + " | ".join(fcf_p) + " |")
-    df_p = ["Discount Factor"] + [f"{p['discount_factor']:.4f}" for p in stage1_projs]
-    md.append("| " + " | ".join(df_p) + " |")
-    pv_p = ["PV of Cash Flow"] + [format_currency(p["pv_fcf"], is_india) for p in stage1_projs]
-    md.append("| " + " | ".join(pv_p) + " |")
-    md.append("")
-    
-    stage2_projs = [p for p in dcf_results["projections"] if p.get("stage") == "fade"]
-    if stage2_projs:
-        md.append(f"### 5-Year Fade Forecast (Stage 2) — growth fading from {assumptions['stage_1_growth']*100:.2f}% to {assumptions['terminal_growth_rate']*100:.2f}%")
-        md.append("")
-        
-        proj_headers2 = ["Metric"] + [p["year"] for p in stage2_projs]
-        md.append("| " + " | ".join(proj_headers2) + " |")
-        md.append("| " + " | ".join([":---"] * len(proj_headers2)) + " |")
-
-        rev_p2 = ["Revenue"] + [format_currency(p["revenue"], is_india) for p in stage2_projs]
-        md.append("| " + " | ".join(rev_p2) + " |")
-        ebit_p2 = ["EBIT"] + [format_currency(p["ebit"], is_india) for p in stage2_projs]
-        md.append("| " + " | ".join(ebit_p2) + " |")
-        tax_p2 = ["Taxes"] + [format_currency(p["tax"], is_india) for p in stage2_projs]
-        md.append("| " + " | ".join(tax_p2) + " |")
-        dep_p2 = ["D&A"] + [format_currency(p["depreciation"], is_india) for p in stage2_projs]
-        md.append("| " + " | ".join(dep_p2) + " |")
-        cap_p2 = ["CapEx"] + [format_currency(p["capex"], is_india) for p in stage2_projs]
-        md.append("| " + " | ".join(cap_p2) + " |")
-        nwc_p2 = ["NWC Change (CF)"] + [format_currency(p["working_capital_change"], is_india) for p in stage2_projs]
-        md.append("| " + " | ".join(nwc_p2) + " |")
-        fcf_p2 = ["Free Cash Flow"] + [format_currency(p["fcf"], is_india) for p in stage2_projs]
-        md.append("| " + " | ".join(fcf_p2) + " |")
-        df_p2 = ["Discount Factor"] + [f"{p['discount_factor']:.4f}" for p in stage2_projs]
-        md.append("| " + " | ".join(df_p2) + " |")
-        pv_p2 = ["PV of Cash Flow"] + [format_currency(p["pv_fcf"], is_india) for p in stage2_projs]
-        md.append("| " + " | ".join(pv_p2) + " |")
-        md.append("")
-
-    md.append("### Terminal Value")
-    last_year_num = len(dcf_results["projections"])
-    fcf_final = dcf_results["projections"][-1]["fcf"] if dcf_results["projections"] else 0.0
-    g_term = assumptions.get('terminal_growth_rate', 0.0)
-    md.append(f"- Final fade year (Year {last_year_num}) FCF: {format_currency(fcf_final, is_india)}")
-    md.append(f"- Terminal growth (Gordon): {g_term*100:.2f}%")
-    md.append(f"- Sector mapping: {assumptions.get('sector_terminal_source', 'Unknown')}")
-    md.append(f"- Terminal Value: {format_currency(dcf_results['terminal_value'], is_india)}")
-    md.append(f"- PV of Terminal Value (discounted from Year {last_year_num}): {format_currency(dcf_results['pv_terminal_value'], is_india)}")
-    md.append("")
-
-    md.append("### Valuation Bridge")
-    md.append(f"- **PV of Explicit FCFs**: {format_currency(dcf_results['pv_fcf'], is_india)}")
-    md.append(f"- **PV of Terminal Value (g = {g_term*100:.2f}%)**: {format_currency(dcf_results['pv_terminal_value'], is_india)}")
-    md.append(f"- **Enterprise Value**: {format_currency(dcf_results['enterprise_value'], is_india)}")
-    md.append(f"- **Add: Cash & Equivalents**: {format_currency(assumptions['latest_cash'], is_india)}")
-    md.append(f"- **Less: Total Debt**: {format_currency(assumptions['latest_debt'], is_india)}")
-    md.append(f"- **Equity Value**: {format_currency(dcf_results['equity_value'], is_india)}")
-    md.append(f"- **Shares Outstanding**: {assumptions['shares_outstanding']:,.0f}")
-    md.append(f"- **Intrinsic Value per Share**: **{format_currency(intrinsic_val, is_india)}**")
-    md.append("")
+        _render_dcf_valuation_body(md, dcf_results, financials, assumptions, intrinsic_val, is_india)
 
     # -------------------------------------------------------------------------
     # 3. Buffett Investor Lens (14 checks)
@@ -504,35 +527,47 @@ def render_markdown_report(
     # 4. Margin-of-Safety Check
     # -------------------------------------------------------------------------
     md.append("## 4. Margin-of-Safety Check")
-    buffett_checks = buffett_results["checks"]
-    mos_check = buffett_checks.get("12_margin_of_safety", {})
-    mos = mos_check.get("value", -1.0)
-    mos_passed = mos_check.get("passed", False)
-
-    md.append(f"Current Stock Price: **{format_currency(current_price, is_india)}**")
-    md.append(f"DCF Intrinsic Value: **{format_currency(intrinsic_val, is_india)}**")
-    md.append(f"Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)")
-
-    if intrinsic_val <= 0:
-        mos_computed_str = "DCF produced non-positive intrinsic value — model failed"
-    elif intrinsic_val < current_price:
-        mos_computed_str = f"Trading at {current_price/intrinsic_val:.1f}x intrinsic value (target ≤ 0.75x)"
+    if dcf_na:
+        md.append(f"Current Stock Price: **{format_currency(current_price, is_india)}**")
+        md.append("Intrinsic Value: **N/A — DCF not applicable to banks**")
+        md.append("")
+        md.append("### Status: [N/A] ⏸️")
+        md.append(
+            "Margin of safety cannot be computed without a valuation. A bank "
+            "valuation model (DDM / excess-returns) is coming soon; until then "
+            "this check is excluded from the Buffett and Marks scores."
+        )
+        md.append("")
     else:
-        mos_computed_str = f"{(intrinsic_val - current_price)/intrinsic_val*100:.2f}% margin of safety"
+        buffett_checks = buffett_results["checks"]
+        mos_check = buffett_checks.get("12_margin_of_safety", {})
+        mos = mos_check.get("value", -1.0)
+        mos_passed = mos_check.get("passed", False)
 
-    md.append(f"Computed Margin of Safety: {mos_computed_str}")
+        md.append(f"Current Stock Price: **{format_currency(current_price, is_india)}**")
+        md.append(f"DCF Intrinsic Value: **{format_currency(intrinsic_val, is_india)}**")
+        md.append(f"Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)")
 
-    if mos_passed:
-        md.append("### Status: [PASS] ✅")
-        md.append("The current stock price trades at a discount of more than 25% to its intrinsic value, offering an attractive entry point.")
-    else:
-        md.append("### Status: [FAIL] ❌")
-        if intrinsic_val > 0 and current_price > intrinsic_val:
-            ratio = current_price / intrinsic_val
-            md.append(f"The stock trades above the safety threshold. Trading at {ratio:.1f}x intrinsic value is insufficient for investment under the Buffett framework.")
+        if intrinsic_val <= 0:
+            mos_computed_str = "DCF produced non-positive intrinsic value — model failed"
+        elif intrinsic_val < current_price:
+            mos_computed_str = f"Trading at {current_price/intrinsic_val:.1f}x intrinsic value (target ≤ 0.75x)"
         else:
-            md.append(f"The stock trades above the safety threshold. A discount of {mos*100:.2f}% is insufficient for investment under the Buffett framework.")
-    md.append("")
+            mos_computed_str = f"{(intrinsic_val - current_price)/intrinsic_val*100:.2f}% margin of safety"
+
+        md.append(f"Computed Margin of Safety: {mos_computed_str}")
+
+        if mos_passed:
+            md.append("### Status: [PASS] ✅")
+            md.append("The current stock price trades at a discount of more than 25% to its intrinsic value, offering an attractive entry point.")
+        else:
+            md.append("### Status: [FAIL] ❌")
+            if intrinsic_val > 0 and current_price > intrinsic_val:
+                ratio = current_price / intrinsic_val
+                md.append(f"The stock trades above the safety threshold. Trading at {ratio:.1f}x intrinsic value is insufficient for investment under the Buffett framework.")
+            else:
+                md.append(f"The stock trades above the safety threshold. A discount of {mos*100:.2f}% is insufficient for investment under the Buffett framework.")
+        md.append("")
 
     # -------------------------------------------------------------------------
     # 5. Investment Verdict
@@ -684,7 +719,8 @@ def _render_lens_table(md: list, lens_results: dict, current_price: float, intri
                 # Show part subtotal
                 part_items = [item for item in sorted_items if item[1].get("part") == current_part]
                 part_pass = sum(1 for k, chk in part_items if chk["passed"])
-                md.append(f"_{part_labels.get(current_part, current_part)}: **{part_pass}/{len(part_items)} passed**_")
+                part_total = sum(1 for k, chk in part_items if chk.get("applicable", True))
+                md.append(f"_{part_labels.get(current_part, current_part)}: **{part_pass}/{part_total} passed**_")
                 md.append("")
             current_part = part
             md.append(f"### {part_labels.get(part, part)}")
@@ -693,11 +729,15 @@ def _render_lens_table(md: list, lens_results: dict, current_price: float, intri
             md.append("| :--- | :---: | :--- | :--- | :--- |")
             table_open = True
 
-        status = "✅" if c["passed"] else "❌"
+        applicable = c.get("applicable", True)
+        status = "⏸️" if not applicable else ("✅" if c["passed"] else "❌")
         v = c["value"]
 
         # Format value
-        if key == "12_margin_of_safety" and lens_name == "Buffett":
+        if not applicable:
+            # Not-applicable check (e.g. margin of safety for banks — no valuation).
+            v_str = "N/A"
+        elif key == "12_margin_of_safety" and lens_name == "Buffett":
             if intrinsic_val <= 0:
                 v_str = "Model failed"
             elif intrinsic_val < current_price:

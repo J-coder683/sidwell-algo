@@ -168,7 +168,64 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
             val = val if val is not None else 0.0
             hist_nwc_ratios.append(val / hist_revenue[i])
     hist_nwc_ratio_avg = sum(hist_nwc_ratios) / hist_years_count if hist_nwc_ratios else 0.0
-    
+
+    # ── Bank short-circuit ────────────────────────────────────────────────────
+    # FCF-based DCF does not capture bank economics (net interest margin,
+    # regulatory capital), so we do not value banks with it. Banks are still
+    # scraped and analysed like any other company — only this DCF valuation is
+    # skipped. The historical ratios computed above (revenue growth, tax rate,
+    # margins) are real and feed the lenses; we just return them with no
+    # intrinsic value. A DDM / excess-returns model will fill this gap later.
+    if financials.get("is_bank"):
+        bank_target_industry = macro_data.get("target_industry", "Bank (Money Center)")
+        bank_assumptions = {
+            "revenue_growth": proj_revenue_growth,
+            "ebit_margin": hist_ebit_margin_avg,
+            "tax_rate": hist_tax_rate_avg,
+            "deprec_ratio": hist_deprec_ratio_avg,
+            "capex_ratio": hist_capex_ratio_avg,
+            "nwc_ratio": hist_nwc_ratio_avg,
+            "target_industry": bank_target_industry,
+            "industry_source": macro_data.get("industry_source", "default"),
+            # WACC / valuation inputs are not computed for banks.
+            "terminal_growth_rate": None,
+            "risk_free_rate": risk_free_rate,
+            "wacc": None,
+            "cost_of_equity": None,
+            "cost_of_debt": None,
+            "beta_unlevered": None,
+            "beta_levered": None,
+            "shares_outstanding": shares_outstanding,
+            "latest_cash": latest_cash,
+            "latest_debt": latest_debt,
+            "dcf_methodology": "N/A — bank (DCF not applicable)",
+        }
+        logger.info(
+            f"DCF skipped for {ticker}: bank detected. FCF-DCF not applicable; "
+            f"awaiting DDM/excess-returns model."
+        )
+        return {
+            "ticker": ticker,
+            "current_price": current_price,
+            "market_cap": market_cap,
+            "intrinsic_value_per_share": None,
+            "wacc": None,
+            "enterprise_value": None,
+            "equity_value": None,
+            "pv_fcf": None,
+            "pv_terminal_value": None,
+            "terminal_value": None,
+            "projections": [],
+            "assumptions": bank_assumptions,
+            "not_applicable": True,
+            "not_applicable_reason": (
+                "DCF not applicable to banks — FCF-based DCF doesn't capture bank "
+                "economics (net interest margin, regulatory capital). A DDM / "
+                "excess-returns model is coming soon."
+            ),
+        }
+    # ──────────────────────────────────────────────────────────────────────────
+
     # 2. Cost of Equity (CAPM)
     beta_unlevered = macro_data["industry_unlevered_beta"]
     total_erp = macro_data["total_erp"]

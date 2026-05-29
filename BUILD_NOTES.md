@@ -834,16 +834,21 @@ Note: HDFCBANK crashing in DCF is an existing limitation for Banks which need sp
 }
 ```
 
-**Live coverage baseline** (4-ticker verification run):
+**Live coverage baseline** (4-ticker verification run, 2026-05-29, v0.7.6.3 / Gemini, PROMPT_VERSION v0.8):
 
-| Ticker | Format | Sections Found | Fallback? | PDF Pages |
+| Ticker | Format | Sections Found (n/4) | Fallback? | Pages Extracted |
 |---|---|---|---|---|
-| RELIANCE.NS | Two-page spread, Integrated Report | MD&A, Risk Factors, Chairman's Letter | No | 187 |
-| TCS.NS | Single-page modern | TBD | TBD | TBD |
-| HDFCBANK.NS | Bank format | TBD | TBD | TBD |
-| TATAMOTORS.NS | Traditional layout | TBD | TBD | TBD |
+| RELIANCE.NS | Two-page spread, Integrated Report | 3/4 — MD&A, Risk Factors, Business Overview | No | 33 |
+| TCS.NS | Single-page modern | 2/4 — MD&A, Risk Factors | No | 274 |
+| HDFCBANK.NS | Bank format | 4/4 — MD&A, Risk Factors, Chairman's Letter, Business Overview | No | 229 |
+| TATAMOTORS.NS | Traditional layout | n/a — slug unresolved (see note) | n/a | n/a |
 
-*(Table to be filled with actual run results post-deployment.)*
+Notes:
+- "Pages Extracted" is the section-extraction page count from the log (sum of section page ranges), **not** the document's total page count — that's why RELIANCE shows 33 here vs the 187-page document total cited in the discovery finding above.
+- All three resolved tickers used the **TOC-aware path** (no fallback). The qualitative pipeline itself is healthy end-to-end on Gemini.
+- RELIANCE found Business Overview where the v0.7.6 discovery run found Chairman's Letter — expected drift, as the FY annual report rotates and section detection is heuristic on the TOC.
+- **TATAMOTORS.NS did not resolve**: `Could not resolve screener.in slug for TATAMOTORS.NS`. This is the Tata Motors demerger (PV business now trades as TMPV.NS), not a pipeline bug — the test ticker is stale, analogous to ZOMATO→ETERNAL. Re-run against the correct post-demerger symbol to complete this row.
+- **HDFCBANK.NS qualitative succeeded (4/4) but the full run crashed downstream** in `lenses/buffett.py:125` with a `ZeroDivisionError`. Root cause is a **data-layer gap, not a lens bug**: the screener.in scraper returns `revenue`, `gross_profit`, and `ebit` as all-zero arrays `[0.0, 0.0, 0.0, 0.0]` for banks (only `net_income` parses). Banks report "Interest Earned + Other Income," not a "Sales" row the scraper matches. Per methodology rule #8 the fix belongs in `data/scrapers/screener.py` (bank-aware revenue/EBIT row mapping); even with the crash guarded, DCF + all 5 lenses would be garbage for banks until the scraper handles bank P&L layouts. **Banks are effectively unsupported in the data layer.** Tracked separately; does not affect qualitative coverage.
 
 ### Part B — Bedrock / Claude Haiku 3.5 Migration
 
@@ -869,4 +874,65 @@ Note: HDFCBANK crashing in DCF is an existing limitation for Banks which need sp
 ### PROMPT_VERSION
 
 Bumped `v0.5 → v0.6`. This invalidates all Gemini-era cached qualitative results. All subsequent runs will re-extract using the new Bedrock pipeline.
+
+## §29 v0.7.7 — Bank Handling (scrape normally, skip DCF, defer MoS to DDM)
+
+**Discovery** (from the v0.7.6.3 4-ticker verification, §28): `HDFCBANK.NS` extracted
+qualitative perfectly (4/4 sections) but the full run crashed with `ZeroDivisionError`
+at `lenses/buffett.py`. Root cause was a **data-layer gap**: `data/scrapers/screener.py`
+returned `revenue`, `gross_profit`, and `ebit` as all-zero arrays for banks (only
+`net_income` parsed). Banks label the screener.in P&L rows **"Revenue"** (not "Sales")
+and **"Financing Profit"** (not "Operating Profit").
+
+**User decision**: Banks can't be valued by FCF-DCF (DDM/excess-returns is the right
+tool, planned). Scrape banks like any other company so the lenses run on real data;
+skip only the DCF; show "DCF not applicable to banks — DDM coming soon" in the report.
+
+### Part A — Data layer (`data/scrapers/screener.py`)
+- `sales` row matcher now accepts `["Sales", "Revenue"]`; `op_profit` accepts
+  `["Operating Profit", "Financing Profit"]` (`_get_row_data` already supported a
+  candidate list). All other bank rows ("Interest", "Depreciation", "Profit before
+  tax", "Tax %", "Net Profit") already matched.
+- New `fin["is_bank"]` — single source of truth (methodology rule #8), keyword match
+  on the screener.in classification fields. Backfilled on cached payloads too.
+
+### Part B — DCF skip (`valuation/dcf.py`)
+- `run_dcf_valuation` short-circuits for `financials["is_bank"]` **after** computing
+  the historical ratios (so the lenses still get `revenue_growth`/`tax_rate`/
+  `target_industry`) but **before** the WACC block. Returns `not_applicable=True`,
+  `intrinsic_value_per_share=None`, `wacc=None`, `projections=[]`, plus a reason.
+- The cyclical + structurally-cash-burning branches are untouched for non-banks.
+
+### Part C — Lens scoring (`lenses/buffett.py`, `lenses/marks.py`)
+- New optional `ddm_results` kwarg on Buffett/Marks. Intrinsic value resolves from
+  `ddm_results` first, then the DCF. For banks both are `None` today.
+- Valuation-dependent checks marked `applicable=False` when intrinsic is `None`:
+  Buffett **#12** (margin of safety); Marks **#1** (deep MoS) **and #2** (asymmetric
+  payoff — also derived from intrinsic value). These auto-activate once a DDM supplies
+  an intrinsic value, with no further lens changes.
+- Scoring: new `max_score = count of applicable checks`. **Banks score Buffett /13
+  and Marks /12** (vs /14 each for non-banks). Verdict gates require the MoS check to
+  be applicable, so **a bank can never be BUY/WAIT without a valuation** (falls through
+  to WATCH/SKIP) — consistent with methodology rule #1 (no verdict without the math).
+- Framework `.md` files are **unchanged** (rule #5); the per-bank denominator is an
+  interpretation documented here, not a spec edit.
+
+### Part D — Rendering & exports
+- `reports/render.py`: section 2 renders a "DCF not applicable" note for banks (DCF
+  body extracted to `_render_dcf_valuation_body`, called only for non-banks); exec
+  summary, section-4 MoS check, and lens tables show N/A (⏸️) for the deferred checks.
+- `app.py` `_render_dcf_tab`, `exports/excel.py` `export_dcf_excel`, and
+  `exports/pdf.py` cover page all guard the `None` DCF fields for banks.
+
+### Verification
+- `HDFCBANK.NS` runs end-to-end (was a crash): Buffett 7/13 SKIP, Marks 11/12 WATCH,
+  KKR 9/18, BX 7/14, Apollo 7/16; report section 2 shows the bank note.
+- `ASIANPAINT.NS` regression: unchanged (Intrinsic ₹636.27, WACC 12.37%, all /14·/18·/16).
+- 219 tests pass (212 prior + 7 new in `tests/test_bank_handling.py`), 4 skipped.
+
+### Version note
+The cosmetic `SIDWELL_VERSION` constant in `reports/render.py` was left at `"v0.6"`
+(already decoupled from the git tag, and embedded in the snapshot fixture — bumping it
+would break the hand-edited snapshot, rule #6). This work is tracked as the logical
+**v0.7.7**. `TATAMOTORS.NS` (§28) still needs re-pointing to its post-demerger symbol.
 

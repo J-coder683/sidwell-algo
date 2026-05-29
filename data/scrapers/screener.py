@@ -164,6 +164,12 @@ def fetch_screener_financials(ticker: str) -> dict:
         for k in _HIST_NUMERIC_KEYS:
             if k in cached_fin and isinstance(cached_fin[k], list):
                 cached_fin[k] = [(v if v is not None else 0.0) for v in cached_fin[k]]
+        # Backfill is_bank for payloads cached before the flag existed.
+        if "is_bank" not in cached_fin:
+            cached_fin["is_bank"] = any(
+                "bank" in (cached_fin.get(s) or "").lower()
+                for s in ("scraped_sector", "scraped_broad_industry", "scraped_industry")
+            )
         return cached_fin
         
     logger.info(f"Fetching {ticker.upper()} from screener.in...")
@@ -231,9 +237,12 @@ def fetch_screener_financials(ticker: str) -> dict:
         return [(val * 1e7) if val is not None else None for val in arr]
 
     # Income Statement
-    sales = _slice_row(_get_row_data(pl_table, "Sales"))
+    # Banks label these rows differently on screener.in: "Revenue" instead of
+    # "Sales", and "Financing Profit" instead of "Operating Profit". _get_row_data
+    # accepts a candidate list and returns the first label that matches.
+    sales = _slice_row(_get_row_data(pl_table, ["Sales", "Revenue"]))
     expenses = _slice_row(_get_row_data(pl_table, "Expenses"))
-    op_profit = _slice_row(_get_row_data(pl_table, "Operating Profit"))
+    op_profit = _slice_row(_get_row_data(pl_table, ["Operating Profit", "Financing Profit"]))
     interest = _slice_row(_get_row_data(pl_table, "Interest"))
     depreciation = _slice_row(_get_row_data(pl_table, "Depreciation"))
     pbt = _slice_row(_get_row_data(pl_table, "Profit before tax"))
@@ -437,7 +446,16 @@ def fetch_screener_financials(ticker: str) -> dict:
     fin["scraped_sector"] = scraped_sector
     fin["scraped_broad_industry"] = scraped_broad_industry
     fin["scraped_industry"] = scraped_industry
-    
+
+    # Bank flag (single source of truth, per methodology rule #8 — data-layer
+    # responsibility). Banks are scraped like any other company, but DCF is not
+    # applicable to them (see valuation/dcf.py). Detection is keyword-based on the
+    # screener.in classification fields.
+    fin["is_bank"] = any(
+        "bank" in (s or "").lower()
+        for s in (scraped_sector, scraped_broad_industry, scraped_industry)
+    )
+
     if not scraped_sector and not scraped_broad_industry and not scraped_industry:
         logger.info(f"Could not extract sector/industry for {ticker} from screener.in")
     

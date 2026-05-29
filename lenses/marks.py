@@ -17,6 +17,7 @@ def evaluate_marks_lens(
     financials: dict,
     dcf_results: dict,
     qualitative_results: dict = None,
+    ddm_results: dict = None,
 ) -> dict:
     """
     Evaluates a company through Howard Marks's risk-first framework.
@@ -24,6 +25,10 @@ def evaluate_marks_lens(
     financials: dict from public.fetch_financials (v0.3+)
     dcf_results: dict from dcf.run_dcf_valuation
     qualitative_results: optional dict from analysis.qualitative (v0.2+)
+    ddm_results: optional dict from a bank valuation model (DDM/excess-returns,
+        not yet built). When it supplies an intrinsic value it takes precedence
+        over the DCF, which lets the valuation-dependent checks (#1 deep MoS and
+        #2 asymmetric payoff) auto-activate for banks once that model lands.
 
     Returns a dict with check details, score, verdict, and reason.
     Same interface as evaluate_buffett_lens.
@@ -43,7 +48,13 @@ def evaluate_marks_lens(
     latest_ebitda = hist_ebit[-1] + hist_depreciation[-1]
     market_cap = financials.get("market_cap", 0)
     current_price = dcf_results["current_price"]
-    intrinsic_value = dcf_results["intrinsic_value_per_share"]
+    # Prefer a bank valuation (DDM/excess-returns) intrinsic value if present;
+    # fall back to the DCF. For banks today both are None → the two valuation-
+    # dependent checks (1 deep MoS, 2 asymmetric payoff) are marked N/A and
+    # excluded from the denominator.
+    intrinsic_value = (ddm_results or {}).get("intrinsic_value_per_share")
+    if intrinsic_value is None:
+        intrinsic_value = dcf_results.get("intrinsic_value_per_share")
 
     checks = {}
 
@@ -51,59 +62,89 @@ def evaluate_marks_lens(
     # PART A — Margin of Safety & Asymmetric Payoff (Checks 1-4)
     # =========================================================================
 
+    # Checks 1 and 2 both derive from the valuation intrinsic value. When no
+    # valuation model applies (banks have no DCF and no DDM yet), intrinsic_value
+    # is None: mark both N/A (applicable=False) so they are excluded from the
+    # denominator. They auto-activate once ddm_results supplies an intrinsic value.
+    valuation_available = intrinsic_value is not None
+
     # 1. Deep margin of safety (40%, deeper than Buffett's 25%)
     # Test: (intrinsic - price) / intrinsic > 0.40
-    if intrinsic_value > 0:
-        mos = (intrinsic_value - current_price) / intrinsic_value
+    if not valuation_available:
+        checks["1_deep_mos"] = {
+            "name": "Deep margin of safety",
+            "metric_name": "MoS (Marks 40% threshold)",
+            "value": None,
+            "threshold_str": "> 40%",
+            "passed": False,
+            "applicable": False,
+            "detail": "N/A — DCF not applicable to banks; awaiting DDM/excess-returns model.",
+            "part": "A",
+        }
     else:
-        mos = -1.0
-    check_1_passed = mos > 0.40
-    checks["1_deep_mos"] = {
-        "name": "Deep margin of safety",
-        "metric_name": "MoS (Marks 40% threshold)",
-        "value": mos,
-        "threshold_str": "> 40%",
-        "passed": check_1_passed,
-        "detail": (
-            f"MoS = {mos*100:+.2f}% > 40%"
-            if check_1_passed
-            else (
-                f"MoS = {mos*100:+.2f}% (< 40% threshold) — "
-                f"Price {current_price:.2f} vs Intrinsic {intrinsic_value:.2f}"
-            )
-        ),
-        "part": "A",
-    }
+        if intrinsic_value > 0:
+            mos = (intrinsic_value - current_price) / intrinsic_value
+        else:
+            mos = -1.0
+        check_1_passed = mos > 0.40
+        checks["1_deep_mos"] = {
+            "name": "Deep margin of safety",
+            "metric_name": "MoS (Marks 40% threshold)",
+            "value": mos,
+            "threshold_str": "> 40%",
+            "passed": check_1_passed,
+            "detail": (
+                f"MoS = {mos*100:+.2f}% > 40%"
+                if check_1_passed
+                else (
+                    f"MoS = {mos*100:+.2f}% (< 40% threshold) — "
+                    f"Price {current_price:.2f} vs Intrinsic {intrinsic_value:.2f}"
+                )
+            ),
+            "part": "A",
+        }
 
     # 2. Asymmetric upside-to-downside payoff (3:1)
     # Placeholder per spec: +-20% bands on intrinsic value; tighten in v0.4.
     # Test: (upside - price) / (price - downside) > 3.0
-    if intrinsic_value > 0:
-        upside_scenario = intrinsic_value * 1.20
-        downside_scenario = intrinsic_value * 0.80
-        if current_price < downside_scenario:
-            asymmetry_ratio = float("inf")  # All upside, no downside priced in
-        elif current_price > upside_scenario:
-            asymmetry_ratio = 0.0
-        else:
-            asymmetry_ratio = (upside_scenario - current_price) / max(current_price - downside_scenario, 1e-9)
-        check_2_passed = asymmetry_ratio > 3.0
+    if not valuation_available:
+        checks["2_asymmetric_payoff"] = {
+            "name": "Asymmetric upside-to-downside payoff",
+            "metric_name": "Upside/Downside ratio (+-20% bands, placeholder)",
+            "value": None,
+            "threshold_str": "> 3.0x",
+            "passed": False,
+            "applicable": False,
+            "detail": "N/A — DCF not applicable to banks; awaiting DDM/excess-returns model.",
+            "part": "A",
+        }
     else:
-        asymmetry_ratio = 0.0
-        check_2_passed = False
-    checks["2_asymmetric_payoff"] = {
-        "name": "Asymmetric upside-to-downside payoff",
-        "metric_name": "Upside/Downside ratio (+-20% bands, placeholder)",
-        "value": asymmetry_ratio,
-        "threshold_str": "> 3.0x",
-        "passed": check_2_passed,
-        "detail": (
-            f"Asymmetry ratio = {asymmetry_ratio:.2f} > 3.0"
-            if check_2_passed
-            else f"Asymmetry ratio = {asymmetry_ratio:.2f} (< 3.0 threshold)"
-        ),
-        "part": "A",
-    }
+        if intrinsic_value > 0:
+            upside_scenario = intrinsic_value * 1.20
+            downside_scenario = intrinsic_value * 0.80
+            if current_price < downside_scenario:
+                asymmetry_ratio = float("inf")  # All upside, no downside priced in
+            elif current_price > upside_scenario:
+                asymmetry_ratio = 0.0
+            else:
+                asymmetry_ratio = (upside_scenario - current_price) / max(current_price - downside_scenario, 1e-9)
+            check_2_passed = asymmetry_ratio > 3.0
+        else:
+            asymmetry_ratio = 0.0
+            check_2_passed = False
+        checks["2_asymmetric_payoff"] = {
+            "name": "Asymmetric upside-to-downside payoff",
+            "metric_name": "Upside/Downside ratio (+-20% bands, placeholder)",
+            "value": asymmetry_ratio,
+            "threshold_str": "> 3.0x",
+            "passed": check_2_passed,
+            "detail": (
+                f"Asymmetry ratio = {asymmetry_ratio:.2f} > 3.0"
+                if check_2_passed
+                else f"Asymmetry ratio = {asymmetry_ratio:.2f} (< 3.0 threshold)"
+            ),
+            "part": "A",
+        }
 
     # 3. Downside protection — tangible book / market cap
     # v0.3 simplified: use latest total equity as proxy for tangible book.
@@ -380,16 +421,21 @@ def evaluate_marks_lens(
     # Scoring & Verdict (per frameworks/marks.md)
     # =========================================================================
     score = sum(1 for c in checks.values() if c["passed"])
+    # max_score excludes checks marked not-applicable (deep MoS + asymmetric
+    # payoff for banks, where no valuation model exists yet). Non-bank checks
+    # never set "applicable", so they default to True and max_score stays 14.
+    max_score = sum(1 for c in checks.values() if c.get("applicable", True))
     deep_mos_passes = checks["1_deep_mos"]["passed"]
     asymmetric_passes = checks["2_asymmetric_payoff"]["passed"]
     multiple_passes = checks["4_multiple_expansion"]["passed"]
+    valuation_applicable = checks["1_deep_mos"].get("applicable", True)
 
-    if score >= 11 and deep_mos_passes and asymmetric_passes:
+    if valuation_applicable and score >= 11 and deep_mos_passes and asymmetric_passes:
         verdict = "BUY"
         reason = "Risk architecture clean, deep MoS, asymmetric payoff, contrarian setup present."
-    elif score >= 9 and (not deep_mos_passes or not multiple_passes):
+    elif valuation_applicable and score >= 9 and (not deep_mos_passes or not multiple_passes):
         verdict = "WAIT"
-        if intrinsic_value > 0:
+        if intrinsic_value is not None and intrinsic_value > 0:
             target = intrinsic_value * 0.60  # 40% MoS price = 60% of intrinsic
             reason = (
                 f"Risk architecture acceptable but MoS or multiple position inadequate. "
@@ -400,18 +446,24 @@ def evaluate_marks_lens(
     elif score >= 9:
         verdict = "WATCH"
         reason = "Mixed signals across Marks framework; monitor for cycle/sentiment change."
+        if not valuation_applicable:
+            reason = (
+                "Risk architecture acceptable; margin of safety and asymmetric "
+                "payoff pending a bank valuation model (DDM) — monitor until then."
+            )
     else:
         verdict = "SKIP"
         reason = "Insufficient asymmetric edge under Marks framework."
 
     logger.info(
         f"Marks lens evaluation completed for {financials['ticker']}. "
-        f"Score: {score}/14, Verdict: {verdict}"
+        f"Score: {score}/{max_score}, Verdict: {verdict}"
     )
     return {
         "ticker": financials["ticker"],
         "checks": checks,
         "score": score,
+        "max_score": max_score,
         "verdict": verdict,
         "reason": reason,
     }

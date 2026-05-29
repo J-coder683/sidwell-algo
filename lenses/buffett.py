@@ -8,6 +8,7 @@ def evaluate_buffett_lens(
     financials: dict,
     dcf_results: dict,
     qualitative_results: dict = None,
+    ddm_results: dict = None,
 ) -> dict:
     """
     Evaluates a company against Warren Buffett's 14-check framework.
@@ -21,6 +22,10 @@ def evaluate_buffett_lens(
     financials: dict from public.fetch_financials (v0.3+)
     dcf_results: dict from dcf.run_dcf_valuation
     qualitative_results: optional dict from analysis.qualitative (v0.2+)
+    ddm_results: optional dict from a bank valuation model (DDM/excess-returns,
+        not yet built). When it supplies an intrinsic value it takes precedence
+        over the DCF, which lets the margin-of-safety check (#12) auto-activate
+        for banks once that model lands.
 
     Returns a dict with check details, part summaries, total score, and verdict.
     """
@@ -43,7 +48,12 @@ def evaluate_buffett_lens(
     hist_fcf = financials["fcf"]
 
     current_price = dcf_results["current_price"]
-    intrinsic_value = dcf_results["intrinsic_value_per_share"]
+    # Prefer a bank valuation (DDM/excess-returns) intrinsic value if present;
+    # fall back to the DCF. For banks today both are None → margin-of-safety
+    # check is marked N/A and excluded from the denominator (see check 12).
+    intrinsic_value = (ddm_results or {}).get("intrinsic_value_per_share")
+    if intrinsic_value is None:
+        intrinsic_value = dcf_results.get("intrinsic_value_per_share")
     tax_rate = dcf_results["assumptions"]["tax_rate"]
 
     checks = {}
@@ -312,28 +322,44 @@ def evaluate_buffett_lens(
 
     # 12. Margin of safety
     # Test: (intrinsic - price) / intrinsic > 0.25
-    if intrinsic_value > 0:
-        mos = (intrinsic_value - current_price) / intrinsic_value
+    # When no valuation model applies (banks have no DCF and no DDM yet),
+    # intrinsic_value is None: mark the check N/A (applicable=False) so it is
+    # excluded from the denominator. It auto-activates once ddm_results supplies
+    # an intrinsic value.
+    if intrinsic_value is None:
+        checks["12_margin_of_safety"] = {
+            "name": "Margin of safety",
+            "metric_name": "Discount to Intrinsic Value",
+            "value": None,
+            "threshold_str": "> 25.0%",
+            "passed": False,
+            "applicable": False,
+            "detail": "N/A — DCF not applicable to banks; awaiting DDM/excess-returns model.",
+            "part": "D",
+        }
     else:
-        mos = -1.0
-    if intrinsic_value <= 0:
-        mos_detail = "DCF produced non-positive intrinsic value — model failed"
-    elif intrinsic_value < current_price:
-        mos_detail = (
-            f"Trading at {current_price/intrinsic_value:.1f}x intrinsic value "
-            f"(target ≤ 0.75x) (Price: {current_price:.2f}, Intrinsic: {intrinsic_value:.2f})"
-        )
-    else:
-        mos_detail = f"mos = {mos*100:.2f}% (Price: {current_price:.2f}, Intrinsic: {intrinsic_value:.2f})"
-    checks["12_margin_of_safety"] = {
-        "name": "Margin of safety",
-        "metric_name": "Discount to Intrinsic Value",
-        "value": mos,
-        "threshold_str": "> 25.0%",
-        "passed": mos > 0.25,
-        "detail": mos_detail,
-        "part": "D",
-    }
+        if intrinsic_value > 0:
+            mos = (intrinsic_value - current_price) / intrinsic_value
+        else:
+            mos = -1.0
+        if intrinsic_value <= 0:
+            mos_detail = "DCF produced non-positive intrinsic value — model failed"
+        elif intrinsic_value < current_price:
+            mos_detail = (
+                f"Trading at {current_price/intrinsic_value:.1f}x intrinsic value "
+                f"(target ≤ 0.75x) (Price: {current_price:.2f}, Intrinsic: {intrinsic_value:.2f})"
+            )
+        else:
+            mos_detail = f"mos = {mos*100:.2f}% (Price: {current_price:.2f}, Intrinsic: {intrinsic_value:.2f})"
+        checks["12_margin_of_safety"] = {
+            "name": "Margin of safety",
+            "metric_name": "Discount to Intrinsic Value",
+            "value": mos,
+            "threshold_str": "> 25.0%",
+            "passed": mos > 0.25,
+            "detail": mos_detail,
+            "part": "D",
+        }
 
     # 13. Hard understandability blacklist
     # Test: ticker not in avoided sectors (crypto, etc.)
@@ -390,12 +416,18 @@ def evaluate_buffett_lens(
     # Scoring & Verdict (per frameworks/buffett.md)
     # =========================================================================
     score = sum(1 for c in checks.values() if c["passed"])
-    check_12_passes = checks["12_margin_of_safety"]["passed"]
+    # max_score excludes checks marked not-applicable (e.g. margin of safety for
+    # banks, where no valuation model exists yet). Non-bank checks never set
+    # "applicable", so they default to True and max_score stays 14.
+    max_score = sum(1 for c in checks.values() if c.get("applicable", True))
+    check_12 = checks["12_margin_of_safety"]
+    check_12_passes = check_12["passed"]
+    mos_applicable = check_12.get("applicable", True)
 
-    if score >= 12 and check_12_passes:
+    if mos_applicable and score >= 12 and check_12_passes:
         verdict = "BUY"
         reason = "Excellent business meeting Buffett quality, management, and price criteria."
-    elif score >= 10 and not check_12_passes:
+    elif mos_applicable and score >= 10 and not check_12_passes:
         verdict = "WAIT"
         reason = (
             f"High-quality business that satisfies most Buffett criteria but lacks "
@@ -405,18 +437,24 @@ def evaluate_buffett_lens(
     elif score >= 10:
         verdict = "WATCH"
         reason = "Most quality criteria pass; monitor for resolution of failed checks."
+        if not mos_applicable:
+            reason = (
+                "Most quality criteria pass; margin of safety pending a bank "
+                "valuation model (DDM) — monitor until then."
+            )
     else:
         verdict = "SKIP"
         reason = "Does not meet enough Buffett criteria across business quality, management, and price."
 
     logger.info(
         f"Buffett lens evaluation completed for {financials['ticker']}. "
-        f"Score: {score}/14, Verdict: {verdict}"
+        f"Score: {score}/{max_score}, Verdict: {verdict}"
     )
     return {
         "ticker": financials["ticker"],
         "checks": checks,
         "score": score,
+        "max_score": max_score,
         "verdict": verdict,
         "reason": reason,
     }

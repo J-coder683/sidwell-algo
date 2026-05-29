@@ -188,8 +188,12 @@ def main():
         print(f" SIDWELL ANALYSIS COMPLETED FOR {ticker} ")
         print("="*50)
         print(f"Current Price   : {financials['current_price']:.2f}")
-        print(f"Intrinsic Value : {dcf_results['intrinsic_value_per_share']:.2f}")
-        print(f"WACC            : {dcf_results['wacc']*100:.2f}%")
+        if dcf_results.get("not_applicable"):
+            print(f"Intrinsic Value : N/A — DCF not applicable to banks (DDM coming soon)")
+            print(f"WACC            : N/A")
+        else:
+            print(f"Intrinsic Value : {dcf_results['intrinsic_value_per_share']:.2f}")
+            print(f"WACC            : {dcf_results['wacc']*100:.2f}%")
         print(f"Buffett Score   : {buffett_results['score']}/{buffett_results.get('max_score', 14)}")
         print(f"Buffett Verdict : {buffett_results['verdict']}")
         print(f"Marks Score     : {marks_results['score']}/{marks_results.get('max_score', 14)}")

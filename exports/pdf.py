@@ -149,18 +149,31 @@ def _build_cover_html(lens_results: dict, financials: dict, dcf_results: dict,
     score = lens_results.get("score", 0)
     reason = lens_results.get("reason", "")
 
-    # Determine total checks
-    total_checks = len(lens_results.get("checks", {}))
+    # Determine total checks (max_score excludes not-applicable checks, e.g.
+    # margin of safety for banks; falls back to the raw count).
+    total_checks = lens_results.get("max_score", len(lens_results.get("checks", {})))
     lens_display = _LENS_DISPLAY_NAMES.get(lens_name, lens_name.upper())
     date_str = datetime.now().strftime("%B %d, %Y")
 
-    intrinsic = dcf_results.get("intrinsic_value_per_share", 0)
     price = dcf_results.get("current_price", 0)
-    upside = (intrinsic - price) / price * 100 if price > 0 else 0
-    upside_sign = "+" if upside >= 0 else ""
-
     is_india = ticker.endswith(".NS") or ticker.endswith(".BO")
     currency = "₹" if is_india else "$"
+
+    # Banks have no DCF intrinsic value (None) — render N/A instead of a number.
+    intrinsic = dcf_results.get("intrinsic_value_per_share")
+    if intrinsic is None:
+        intrinsic_line = (
+            f"Intrinsic Value: N/A (DCF not applicable to banks) &nbsp;|&nbsp;\n"
+            f"         Market Price: {currency}{price:,.2f}"
+        )
+    else:
+        upside = (intrinsic - price) / price * 100 if price > 0 else 0
+        upside_sign = "+" if upside >= 0 else ""
+        intrinsic_line = (
+            f"Intrinsic Value: {currency}{intrinsic:,.2f} &nbsp;|&nbsp;\n"
+            f"         Market Price: {currency}{price:,.2f} &nbsp;|&nbsp;\n"
+            f"         Implied: {upside_sign}{upside:.1f}%"
+        )
 
     return f"""
 <div class="cover-page">
@@ -179,9 +192,7 @@ def _build_cover_html(lens_results: dict, financials: dict, dcf_results: dict,
     {_esc(reason)}
   </div>
   <div class="cover-meta">
-    <div>Intrinsic Value: {currency}{intrinsic:,.2f} &nbsp;|&nbsp;
-         Market Price: {currency}{price:,.2f} &nbsp;|&nbsp;
-         Implied: {upside_sign}{upside:.1f}%</div>
+    <div>{intrinsic_line}</div>
     <div style="margin-top:0.4em;">{date_str}</div>
     <div style="margin-top:0.2em; font-size:8pt; color:#aaa;">
       This report is for personal investment research only.
