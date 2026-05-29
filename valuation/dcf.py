@@ -347,9 +347,46 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
     
     logger.info(f"DCF valuation completed for {ticker}. Intrinsic value: {intrinsic_value_per_share:.2f}")
     if intrinsic_value_per_share <= 0:
-        logger.warning(
-            f"DCF produced non-positive intrinsic value ({intrinsic_value_per_share:.2f}) for {ticker}. "
-            f"WACC={wacc:.4f}, terminal_growth={g_terminal:.4f}, stage_1_growth={proj_revenue_growth:.4f}."
+        # Heuristic cyclical detection
+        import numpy as np
+        fcf_4y = financials["fcf"]
+        fcf_abs_mean = abs(np.mean(fcf_4y)) if abs(np.mean(fcf_4y)) > 1e6 else 1e6  # avoid div-by-zero
+        fcf_cv = np.std(fcf_4y, ddof=1) / fcf_abs_mean
+        fcf_sign_flips = sum(1 for i in range(1, len(fcf_4y)) if fcf_4y[i] * fcf_4y[i-1] < 0)
+        min_fcf = min(fcf_4y)
+        
+        is_likely_cyclical = (
+            fcf_cv > 1.5                    # coefficient of variation > 150% (very high volatility)
+            or fcf_sign_flips >= 1          # at least one sign change within window
+            or (min_fcf < 0 and max(fcf_4y) > 0)  # straddles zero
         )
+        
+        if is_likely_cyclical:
+            # Format FCF for the message
+            fcf_display = [f"${v/1e9:.1f}B" for v in fcf_4y]
+            raise ValueError(
+                f"DCF cannot value {ticker}: this company appears to be cyclical.\n"
+                f"4-year FCF window: {fcf_display} \u2014 straddles or includes a trough.\n"
+                f"FCF coefficient of variation: {fcf_cv:.2f} (>1.5 indicates high volatility).\n"
+                f"Sign changes in 4y window: {fcf_sign_flips}.\n"
+                f"\n"
+                f"The DCF model uses 4y FCF as the normalized base, which doesn't work for cyclicals "
+                f"where the historical window catches a peak or trough.\n"
+                f"\n"
+                f"This is a KNOWN MODEL LIMITATION, not a data error. Lens checks will not run for "
+                f"this ticker until v0.7+ adds cyclical normalization (mid-cycle EBITDA margins, "
+                f"7-10 year window, or peak-trough averaging).\n"
+                f"\n"
+                f"Affected sectors include: Semiconductors (MU, AMAT, WDC), Memory/DRAM, Steel, "
+                f"Mining, Oil & Gas E&P, Shipping, Commodity chemicals."
+            )
+        else:
+            # Existing generic message stays for non-cyclical negative intrinsic
+            raise ValueError(
+                f"DCF produced non-positive intrinsic value ({intrinsic_value_per_share:.2f}) for {ticker}. "
+                f"WACC={wacc:.4f}, terminal_growth={g_terminal:.4f}, stage_1_growth={proj_revenue_growth:.4f}, "
+                f"last_year_fcf={hist_fcf[-1]}. Likely causes: terminal_growth >= WACC; corrupted CRP/beta inputs; "
+                f"projected FCF negative across forecast horizon."
+            )
 
     return res

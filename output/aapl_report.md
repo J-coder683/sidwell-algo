@@ -6,8 +6,8 @@
 ## Executive Summary
 | Metric | Value | Source / Detail |
 | :--- | :--- | :--- |
-| **Current Price** | $311.48 | Yahoo Finance |
-| **Intrinsic Value (DCF)** | $100.21 | Sidwell DCF Engine |
+| **Current Price** | $312.51 | Yahoo Finance |
+| **Intrinsic Value (DCF)** | $100.27 | Sidwell DCF Engine |
 | **Margin of Safety** | Trading at 3.1x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
 | **Buffett Score** | **10/14** | Buffett Lens (14 checks) |
 | **Buffett Verdict** | **WAIT** ⏳ | Buffett Lens Rules |
@@ -21,7 +21,7 @@
 | **Apollo Verdict** | **SKIP** ❌ | Apollo Lens Rules |
 
 ### Verdict Summary
-> **Buffett**: **WAIT** — High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹75.16 (75% of intrinsic value).
+> **Buffett**: **WAIT** — High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹75.21 (75% of intrinsic value).
 > **Marks**: **SKIP** — Insufficient asymmetric edge under Marks framework.
 > **KKR**: **WATCH** — Mixed signals across strategic/timing checks; monitor for changes.
 > **Blackstone**: **BUY** — High-conviction Blackstone target. Good business in a good neighborhood.
@@ -37,7 +37,10 @@ Historical financial statements over the last 4 years:
 | EBIT | $119.44B | $114.30B | $123.22B | $133.05B |
 | Free Cash Flow | $111.44B | $99.58B | $108.81B | $98.77B |
 | Total Debt | $120.07B | $111.09B | $106.63B | $98.66B |
+| Interest Expense | $6.00B | $5.55B | $5.33B | $4.93B |
 | Stockholders Equity | $50.67B | $62.15B | $56.95B | $73.73B |
+
+**Data Note:** Interest Expense (FY2025): $4.93B (estimated via debt × 0.05 proxy — stockanalysis.com does not expose this field for AAPL; v0.7+ may add SEC EDGAR for direct 10-K extraction)
 
 ## 2. DCF Valuation & WACC Sourcing
 Every component of the Weighted Average Cost of Capital (WACC) is explicitly sourced and modeled below:
@@ -49,14 +52,14 @@ Every component of the Weighted Average Cost of Capital (WACC) is explicitly sou
 | **Mature Market ERP** | 4.23% | Damodaran NYU Stern (Mature Equity Risk Premium) |
 | **Country Risk Premium** | 0.00% | Damodaran NYU Stern (Country default spread adjusted) |
 | **Total Equity Risk Premium** | 4.23% | Damodaran mature ERP + country premium = 4.23% |
-| **Industry Unlevered Beta** | 1.42 | Damodaran 'Computers/Peripherals' (from Damodaran sheet) |
-| **Target Levered Beta ($\beta$)** | 1.45 | Re-levered using actual D/E = 1.45 |
+| **Industry Unlevered Beta** | 1.42 | Damodaran 'Computers/Peripherals' (hardcoded fallback (Damodaran lookup failed)) |
+| **Beta ($\beta$)** | 1.45 | Direct $\beta$ from stockanalysis.com |
 | **Cost of Equity ($K_e$)** | 10.61% | CAPM: $R_f + \beta \times ERP$ = 10.61% |
 | **Cost of Debt ($K_d$)** | 5.50% | Calculated and floored to Rf + 1% (raw: 5.00%) |
 | **Effective Tax Rate ($t$)** | 17.66% | 4-year historical average from filings |
-| **Equity Weight ($W_e$)** | 97.91% | Market Cap / (Market Cap + Total Debt) |
-| **Debt Weight ($W_d$)** | 2.09% | Total Debt / (Market Cap + Total Debt) |
-| **Computed WACC** | **10.49%** | Weighted cost of capital = **10.49%** |
+| **Equity Weight ($W_e$)** | 97.92% | Market Cap / (Market Cap + Total Debt) |
+| **Debt Weight ($W_d$)** | 2.08% | Total Debt / (Market Cap + Total Debt) |
+| **Computed WACC** | **10.48%** | Weighted cost of capital = **10.48%** |
 
 ### 5-Year High-Growth Forecast (Stage 1)
 Projections are based on historical averages relative to Revenue. Revenue growth is projected at **5.00%** (historical 4y CAGR capped between 5% and 20%).
@@ -70,8 +73,8 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 | CapEx | $12.07B | $12.67B | $13.30B | $13.97B | $14.67B |
 | NWC Change (CF) | $-7.08B | $-7.44B | $-7.81B | $-8.20B | $-8.61B |
 | Free Cash Flow | $104.65B | $109.88B | $115.38B | $121.15B | $127.20B |
-| Discount Factor | 1.1049 | 1.2207 | 1.3488 | 1.4902 | 1.6465 |
-| PV of Cash Flow | $94.72B | $90.01B | $85.54B | $81.30B | $77.26B |
+| Discount Factor | 1.1048 | 1.2206 | 1.3486 | 1.4900 | 1.6461 |
+| PV of Cash Flow | $94.72B | $90.02B | $85.55B | $81.31B | $77.27B |
 
 ### 5-Year Fade Forecast (Stage 2) — growth fading from 5.00% to 3.00%
 
@@ -84,25 +87,25 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 | CapEx | $15.34B | $15.99B | $16.59B | $17.16B | $17.67B |
 | NWC Change (CF) | $-9.01B | $-9.39B | $-9.74B | $-10.07B | $-10.38B |
 | Free Cash Flow | $133.06B | $138.64B | $143.91B | $148.81B | $153.27B |
-| Discount Factor | 1.8192 | 2.0099 | 2.2207 | 2.4536 | 2.7109 |
-| PV of Cash Flow | $73.14B | $68.98B | $64.80B | $60.65B | $56.54B |
+| Discount Factor | 1.8187 | 2.0093 | 2.2200 | 2.4527 | 2.7098 |
+| PV of Cash Flow | $73.16B | $69.00B | $64.83B | $60.67B | $56.56B |
 
 ### Terminal Value
 - Final fade year (Year 10) FCF: $153.27B
 - Terminal growth (Gordon): 3.00%
 - Sector mapping: SECTOR_TERMINAL_GROWTH lookup for (Computers/Peripherals, US)
-- Terminal Value: $2,108.54B
-- PV of Terminal Value (discounted from Year 10): $777.80B
+- Terminal Value: $2,109.87B
+- PV of Terminal Value (discounted from Year 10): $778.62B
 
 ### Valuation Bridge
-- **PV of Explicit FCFs**: $752.94B
-- **PV of Terminal Value (g = 3.00%)**: $777.80B
-- **Enterprise Value**: $1,530.74B
+- **PV of Explicit FCFs**: $753.10B
+- **PV of Terminal Value (g = 3.00%)**: $778.62B
+- **Enterprise Value**: $1,531.72B
 - **Add: Cash & Equivalents**: $54.70B
 - **Less: Total Debt**: $98.66B
-- **Equity Value**: $1,486.78B
+- **Equity Value**: $1,487.76B
 - **Shares Outstanding**: 14,837,000,000
-- **Intrinsic Value per Share**: **$100.21**
+- **Intrinsic Value per Share**: **$100.27**
 
 ## 3. Buffett Investor Lens
 All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
@@ -143,7 +146,7 @@ _Part C — Management & Capital Allocation: **4/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Margin of safety | ❌ | Trading at 3.1x intrinsic | > 25.0% | Trading at 3.1x intrinsic value (target ≤ 0.75x) (Price: 311.48, Intrinsic: 100.21) |
+| Margin of safety | ❌ | Trading at 3.1x intrinsic | > 25.0% | Trading at 3.1x intrinsic value (target ≤ 0.75x) (Price: 312.51, Intrinsic: 100.27) |
 | Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
 | Holdability (20-year test) | ✅ | N/A | LLM verdict = holdable_20y | Holdability check skipped (qualitative unavailable); defaulted PASS |
 
@@ -158,10 +161,10 @@ All 14 checks per Howard Marks's risk-first framework (frameworks/marks.md):
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Deep margin of safety | ❌ | Trading at 3.1x intrinsic | > 40% | MoS = -210.83% (< 40% threshold) — Price 311.48 vs Intrinsic 100.21 |
+| Deep margin of safety | ❌ | Trading at 3.1x intrinsic | > 40% | MoS = -211.66% (< 40% threshold) — Price 312.51 vs Intrinsic 100.27 |
 | Asymmetric upside-to-downside payoff | ❌ | 0.000 | > 3.0x | Asymmetry ratio = 0.00 (< 3.0 threshold) |
-| Downside protection (tangible book) | ❌ | 1.60% | > 30% | Equity/MCap = 1.60% (<= 30%) |
-| Multiple expansion not exhausted | ❌ | 37.664 | < 25x (v0.3 placeholder; sector comp in v0.4) | Trailing P/E = 37.7x (>= 25x) |
+| Downside protection (tangible book) | ❌ | 1.59% | > 30% | Equity/MCap = 1.59% (<= 30%) |
+| Multiple expansion not exhausted | ❌ | 37.788 | < 25x (v0.3 placeholder; sector comp in v0.4) | Trailing P/E = 37.8x (>= 25x) |
 
 _Part A — Margin of Safety & Asymmetric Payoff: **0/4 passed**_
 
@@ -240,7 +243,7 @@ _Part C — Strategic Fit: **3/3 passed**_
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Cycle Timing | ✅ | N/A | Not peak/late | Defaulted PASS (assumed mid_cycle) |
-| 7-Year IRR | ❌ | 16.08% | > 18.00% | Entry mult 32.6x -> Exit mult 27.7x. |
+| 7-Year IRR | ❌ | 16.08% | > 18.00% | Entry mult 32.7x -> Exit mult 27.8x. |
 | Dividend Recap | ✅ | 6.14% | CV < 35%, FCF > 0 | CV is 6.1%, min FCF 98767000000.0. |
 | Why Now Catalyst | ❌ | N/A | Catalyst present | Defaulted FAIL (qualitative unavailable) |
 
@@ -294,7 +297,7 @@ _Part C — Downside Protection: **3/3 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Blackstone-Scale Deal | ✅ | 4621428760000.000 | > $5B | Market cap is adequate. |
+| Blackstone-Scale Deal | ✅ | 4636710870000.000 | > $5B | Market cap is adequate. |
 | 20-Year Core Viability | ✅ | N/A | Holdable 20y | Defaulted PASS (assumed holdable) |
 | Multi-Product Engagement | ✅ | N/A | Multi-product | neutral default — qualitative unavailable; check counted as PASS |
 
@@ -317,10 +320,10 @@ All 16 checks per Apollo's credit & complexity framework (frameworks/apollo.md):
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Entry Valuation Discount | ❌ | 32.609 | < 12.0x EV/EBITDA or <0.70 P/B | EV/EBITDA is 32.6x. P/B is 61.98x. |
+| Entry Valuation Discount | ❌ | 32.715 | < 12.0x EV/EBITDA or <0.70 P/B | EV/EBITDA is 32.7x. P/B is 62.18x. |
 | Capital Structure Complexity | ❌ | 0.68 / 26.97 | Debt stress | Lev: 0.7x, IC: 27.0x. Clean. |
 | FCF Serviceability | ✅ | 19.395 | >0 FCF, >1.5x Cov | Avg FCF 104650250000.0, Hyp Cov 19.4x. |
-| Deployment Scale | ✅ | 4720085760000.000 | > $500M | EV is 4720085760000.0. |
+| Deployment Scale | ✅ | 4735367870000.000 | > $500M | EV is 4735367870000.0. |
 
 _Part A — Purchase Price & Capital Structure Entry: **2/4 passed**_
 
@@ -329,7 +332,7 @@ _Part A — Purchase Price & Capital Structure Entry: **2/4 passed**_
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Chaos/Dislocation Catalyst | ❌ | N/A | Present | Defaulted FAIL (qualitative unavailable) |
-| Fulcrum Security | ❌ | (0.6815776383784232, 26.97223714485541, 46.843394386612204) | Hard or Soft Fulcrum | Qual: None. Hard signals: A=False, B=False. |
+| Fulcrum Security | ❌ | (0.6815776383784232, 26.97223714485541, 46.99829581276544) | Hard or Soft Fulcrum | Qual: None. Hard signals: A=False, B=False. |
 | ABF/Credit Fit | ❌ | N/A | Compatible | Defaulted FAIL (qualitative unavailable) |
 | Complexity Moat | ❌ | 27.46% | >55% or High Qual | Debt/Assets 27.5%. Qual: None. |
 | Domain Knowledge | ❌ | Computers/Peripherals | In Apollo Playbook | Computers/Peripherals not in playbook. |
@@ -370,8 +373,8 @@ _Part E — Defensibility vs Phalippou Bar: **0/1 passed**_
 _Qualitative analysis unavailable: No documents found in Drive folder_
 
 ## 4. Margin-of-Safety Check
-Current Stock Price: **$311.48**
-DCF Intrinsic Value: **$100.21**
+Current Stock Price: **$312.51**
+DCF Intrinsic Value: **$100.27**
 Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)
 Computed Margin of Safety: Trading at 3.1x intrinsic value (target ≤ 0.75x)
 ### Status: [FAIL] ❌
@@ -380,9 +383,9 @@ The stock trades above the safety threshold. Trading at 3.1x intrinsic value is 
 ## 5. Investment Verdict
 **BUFFETT RECOMMENDATION: WAIT**
 
-High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹75.16 (75% of intrinsic value).
+High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹75.21 (75% of intrinsic value).
 
-**Action Item**: Set alert at buy-trigger price: **$75.16** (75% of intrinsic value).
+**Action Item**: Set alert at buy-trigger price: **$75.21** (75% of intrinsic value).
 
 **MARKS RECOMMENDATION: SKIP**
 

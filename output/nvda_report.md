@@ -6,22 +6,22 @@
 ## Executive Summary
 | Metric | Value | Source / Detail |
 | :--- | :--- | :--- |
-| **Current Price** | $214.41 | Yahoo Finance |
-| **Intrinsic Value (DCF)** | $119.72 | Sidwell DCF Engine |
-| **Margin of Safety** | Trading at 1.8x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
+| **Current Price** | $214.25 | Yahoo Finance |
+| **Intrinsic Value (DCF)** | $71.79 | Sidwell DCF Engine |
+| **Margin of Safety** | Trading at 3.0x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
 | **Buffett Score** | **11/14** | Buffett Lens (14 checks) |
 | **Buffett Verdict** | **WAIT** ⏳ | Buffett Lens Rules |
 | **Marks Score** | **7/14** | Marks Lens (14 checks) |
 | **Marks Verdict** | **SKIP** ❌ | Marks Lens Rules |
-| **KKR Score** | **11/18** | KKR Lens (18 checks) |
+| **KKR Score** | **10/18** | KKR Lens (18 checks) |
 | **KKR Verdict** | **SKIP** ❌ | KKR Lens Rules |
 | **Blackstone Score** | **10/14** | Blackstone Lens (14 checks) |
 | **Blackstone Verdict** | **SKIP** ❌ | Blackstone Lens Rules |
-| **Apollo Score** | **8/16** | Apollo Lens (16 checks) |
+| **Apollo Score** | **7/16** | Apollo Lens (16 checks) |
 | **Apollo Verdict** | **SKIP** ❌ | Apollo Lens Rules |
 
 ### Verdict Summary
-> **Buffett**: **WAIT** — High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹89.79 (75% of intrinsic value).
+> **Buffett**: **WAIT** — High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹53.84 (75% of intrinsic value).
 > **Marks**: **SKIP** — Insufficient asymmetric edge under Marks framework.
 > **KKR**: **SKIP** — Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar).
 > **Blackstone**: **SKIP** — Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar).
@@ -37,6 +37,7 @@ Historical financial statements over the last 4 years:
 | EBIT | $4.22B | $32.97B | $81.45B | $130.39B |
 | Free Cash Flow | $3.81B | $27.02B | $60.85B | $96.68B |
 | Total Debt | $11.86B | $10.83B | $9.98B | $11.04B |
+| Interest Expense | $262.00M | $257.00M | $247.00M | $259.00M |
 | Stockholders Equity | $22.10B | $42.98B | $79.33B | $157.29B |
 
 ## 2. DCF Valuation & WACC Sourcing
@@ -49,14 +50,14 @@ Every component of the Weighted Average Cost of Capital (WACC) is explicitly sou
 | **Mature Market ERP** | 4.23% | Damodaran NYU Stern (Mature Equity Risk Premium) |
 | **Country Risk Premium** | 0.00% | Damodaran NYU Stern (Country default spread adjusted) |
 | **Total Equity Risk Premium** | 4.23% | Damodaran mature ERP + country premium = 4.23% |
-| **Industry Unlevered Beta** | 0.98 | Damodaran 'Chemical (Specialty)' (hardcoded fallback (Damodaran lookup failed)) |
-| **Target Levered Beta ($\beta$)** | 0.98 | Re-levered using actual D/E = 0.98 |
-| **Cost of Equity ($K_e$)** | 8.66% | CAPM: $R_f + \beta \times ERP$ = 8.66% |
-| **Cost of Debt ($K_d$)** | 5.50% | Calculated and floored to Rf + 1% (raw: 5.00%) |
+| **Industry Unlevered Beta** | 1.82 | Damodaran 'Semiconductor' (hardcoded fallback (Damodaran lookup failed)) |
+| **Beta ($\beta$)** | 1.82 | Direct $\beta$ from stockanalysis.com |
+| **Cost of Equity ($K_e$)** | 12.21% | CAPM: $R_f + \beta \times ERP$ = 12.21% |
+| **Cost of Debt ($K_d$)** | 5.50% | Calculated and floored to Rf + 1% (raw: 2.35%) |
 | **Effective Tax Rate ($t$)** | 13.46% | 4-year historical average from filings |
 | **Equity Weight ($W_e$)** | 99.79% | Market Cap / (Market Cap + Total Debt) |
 | **Debt Weight ($W_d$)** | 0.21% | Total Debt / (Market Cap + Total Debt) |
-| **Computed WACC** | **8.65%** | Weighted cost of capital = **8.65%** |
+| **Computed WACC** | **12.19%** | Weighted cost of capital = **12.19%** |
 
 ### 5-Year High-Growth Forecast (Stage 1)
 Projections are based on historical averages relative to Revenue. Revenue growth is projected at **20.00%** (historical 4y CAGR capped between 5% and 20%).
@@ -70,8 +71,8 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 | CapEx | $8.96B | $10.75B | $12.90B | $15.48B | $18.58B |
 | NWC Change (CF) | $-27.78B | $-33.33B | $-40.00B | $-48.00B | $-57.60B |
 | Free Cash Flow | $78.32B | $93.98B | $112.78B | $135.34B | $162.40B |
-| Discount Factor | 1.0865 | 1.1805 | 1.2826 | 1.3936 | 1.5141 |
-| PV of Cash Flow | $72.08B | $79.61B | $87.93B | $97.12B | $107.26B |
+| Discount Factor | 1.1219 | 1.2587 | 1.4122 | 1.5844 | 1.7776 |
+| PV of Cash Flow | $69.81B | $74.66B | $79.86B | $85.42B | $91.36B |
 
 ### 5-Year Fade Forecast (Stage 2) — growth fading from 20.00% to 2.50%
 
@@ -84,25 +85,25 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 | CapEx | $21.64B | $24.45B | $26.78B | $28.38B | $29.09B |
 | NWC Change (CF) | $-67.10B | $-75.82B | $-83.02B | $-88.01B | $-90.21B |
 | Free Cash Flow | $189.20B | $213.80B | $234.11B | $248.15B | $254.36B |
-| Discount Factor | 1.6451 | 1.7874 | 1.9420 | 2.1100 | 2.2926 |
-| PV of Cash Flow | $115.01B | $119.61B | $120.55B | $117.61B | $110.95B |
+| Discount Factor | 1.9944 | 2.2376 | 2.5105 | 2.8166 | 3.1600 |
+| PV of Cash Flow | $94.87B | $95.55B | $93.25B | $88.11B | $80.49B |
 
 ### Terminal Value
 - Final fade year (Year 10) FCF: $254.36B
 - Terminal growth (Gordon): 2.50%
-- Sector mapping: SECTOR_TERMINAL_GROWTH lookup for (Chemical (Specialty), US)
-- Terminal Value: $4,238.83B
-- PV of Terminal Value (discounted from Year 10): $1,848.93B
+- Sector mapping: DEFAULT_TERMINAL_GROWTH_US
+- Terminal Value: $2,689.51B
+- PV of Terminal Value (discounted from Year 10): $851.11B
 
 ### Valuation Bridge
-- **PV of Explicit FCFs**: $1,027.72B
-- **PV of Terminal Value (g = 2.50%)**: $1,848.93B
-- **Enterprise Value**: $2,876.66B
+- **PV of Explicit FCFs**: $853.37B
+- **PV of Terminal Value (g = 2.50%)**: $851.11B
+- **Enterprise Value**: $1,704.48B
 - **Add: Cash & Equivalents**: $62.56B
 - **Less: Total Debt**: $11.04B
-- **Equity Value**: $2,928.18B
+- **Equity Value**: $1,755.99B
 - **Shares Outstanding**: 24,459,500,000
-- **Intrinsic Value per Share**: **$119.72**
+- **Intrinsic Value per Share**: **$71.79**
 
 ## 3. Buffett Investor Lens
 All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
@@ -122,7 +123,7 @@ _Part A — Business Quality: **2/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Conservative balance sheet | ✅ | 0.08 / 236.21 | Debt/EBITDA < 3x & Coverage > 5x | Debt/EBITDA = 0.08x, Int. Coverage = 236.21x |
+| Conservative balance sheet | ✅ | 0.08 / 503.42 | Debt/EBITDA < 3x & Coverage > 5x | Debt/EBITDA = 0.08x, Int. Coverage = 503.42x |
 | ROE without excess leverage | ✅ | 0.64 / 0.76 | ROE > 15% & Equity/Assets > 40% | 4y avg ROE = 64.30%, Equity/Assets = 76.06% |
 | Liquidity cushion (Gibraltar test) | ✅ | 62556000000 / 11040000000 | Cash / Debt > 0.5x OR debt-free | Cash / Debt = 5.67x (> 0.5) |
 
@@ -143,7 +144,7 @@ _Part C — Management & Capital Allocation: **4/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Margin of safety | ❌ | Trading at 1.8x intrinsic | > 25.0% | Trading at 1.8x intrinsic value (target ≤ 0.75x) (Price: 214.41, Intrinsic: 119.72) |
+| Margin of safety | ❌ | Trading at 3.0x intrinsic | > 25.0% | Trading at 3.0x intrinsic value (target ≤ 0.75x) (Price: 214.25, Intrinsic: 71.79) |
 | Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
 | Holdability (20-year test) | ✅ | N/A | LLM verdict = holdable_20y | Holdability check skipped (qualitative unavailable); defaulted PASS |
 
@@ -158,10 +159,10 @@ All 14 checks per Howard Marks's risk-first framework (frameworks/marks.md):
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Deep margin of safety | ❌ | Trading at 1.8x intrinsic | > 40% | MoS = -79.10% (< 40% threshold) — Price 214.41 vs Intrinsic 119.72 |
+| Deep margin of safety | ❌ | Trading at 3.0x intrinsic | > 40% | MoS = -198.43% (< 40% threshold) — Price 214.25 vs Intrinsic 71.79 |
 | Asymmetric upside-to-downside payoff | ❌ | 0.000 | > 3.0x | Asymmetry ratio = 0.00 (< 3.0 threshold) |
 | Downside protection (tangible book) | ❌ | 3.00% | > 30% | Equity/MCap = 3.00% (<= 30%) |
-| Multiple expansion not exhausted | ❌ | 32.835 | < 25x (v0.3 placeholder; sector comp in v0.4) | Trailing P/E = 32.8x (>= 25x) |
+| Multiple expansion not exhausted | ❌ | 32.810 | < 25x (v0.3 placeholder; sector comp in v0.4) | Trailing P/E = 32.8x (>= 25x) |
 
 _Part A — Margin of Safety & Asymmetric Payoff: **0/4 passed**_
 
@@ -179,7 +180,7 @@ _Part B — Cycle Position: **3/3 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Capital structure resilience | ✅ | 0.08 / 236.21 | Debt/EBITDA < 4x AND Coverage > 4x | Debt/EBITDA = 0.08x, Coverage = 236.21x |
+| Capital structure resilience | ✅ | 0.08 / 503.42 | Debt/EBITDA < 4x AND Coverage > 4x | Debt/EBITDA = 0.08x, Coverage = 503.42x |
 | FCF stability through downturn | ✅ | 3808000000 | All 4 years positive FCF | 4y FCF: [3808000000, 27021000000, 60853000000, 96676000000] |
 | Volatility / beta | ❌ | 2.240 | < 1.5 | Beta = 2.24 (>= 1.5) |
 | No single-point failure mode | ✅ | 0 | <= 1 concentration/regulatory risk flagged | Concentration/regulatory risks identified: 0 |
@@ -229,11 +230,11 @@ _Part B — Operational Upside: **3/6 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Sector Compatibility | ✅ | Chemical (Specialty) | In KKR Playbook | Chemical (Specialty) is in KKR playbook. |
+| Sector Compatibility | ❌ | Semiconductor | In KKR Playbook | Semiconductor is NOT in KKR playbook. |
 | Willing Seller | ✅ | N/A | Positive catalyst | neutral default — qualitative unavailable; check counted as PASS |
-| Regulatory Freedom | ✅ | Chemical (Specialty) | Not restricted | Clear. |
+| Regulatory Freedom | ✅ | Semiconductor | Not restricted | Clear. |
 
-_Part C — Strategic Fit: **3/3 passed**_
+_Part C — Strategic Fit: **2/3 passed**_
 
 ### Part D — Cycle Timing & Returns
 
@@ -254,7 +255,7 @@ _Part D — Cycle Timing & Returns: **1/4 passed**_
 
 _Part E — Defensibility vs Phalippou Bar: **0/1 passed**_
 
-**Total KKR Score**: **11/18**
+**Total KKR Score**: **10/18**
 
 ## 3.3 Blackstone Investor Lens
 All 14 checks per Blackstone's thematic framework (frameworks/blackstone.md):
@@ -274,7 +275,7 @@ _Part A — Good Business Filter: **2/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Theme Alignment | ❌ | Chemical (Specialty) | Favored Theme | Chemical (Specialty) not in themes. |
+| Theme Alignment | ❌ | Semiconductor | Favored Theme | Semiconductor not in themes. |
 | Cycle Position | ✅ | N/A | Not peak/late | Defaulted PASS (assumed mid_cycle) |
 | Structural Tailwind | ✅ | N/A | Tailwind/neutral | Defaulted PASS (assumed neutral) |
 
@@ -284,7 +285,7 @@ _Part B — Good Neighborhood (Thematic): **2/3 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Conservative Balance Sheet | ✅ | 0.08 / 236.21 | <3.5x, >4x | Leverage 0.1x, Interest Coverage 236.2x. |
+| Conservative Balance Sheet | ✅ | 0.08 / 503.42 | <3.5x, >4x | Leverage 0.1x, Interest Coverage 503.4x. |
 | FCF Resilience | ✅ | 3808000000 / 0.4336738570353026 | >0, >6% | Min FCF 3808000000.0, Avg FCF Margin 43.4%. |
 | Stress Survival | ✅ | 2.90 / 0.00 | Cash>1x OR Debt/MC<0.5 | Cash ratio 2.90x, Debt/Equity 0.2%. |
 
@@ -294,7 +295,7 @@ _Part C — Downside Protection: **3/3 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Blackstone-Scale Deal | ✅ | 5244361395000.000 | > $5B | Market cap is adequate. |
+| Blackstone-Scale Deal | ✅ | 5240447875000.000 | > $5B | Market cap is adequate. |
 | 20-Year Core Viability | ✅ | N/A | Holdable 20y | Defaulted PASS (assumed holdable) |
 | Multi-Product Engagement | ✅ | N/A | Multi-product | neutral default — qualitative unavailable; check counted as PASS |
 
@@ -317,10 +318,10 @@ All 16 checks per Apollo's credit & complexity framework (frameworks/apollo.md):
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Entry Valuation Discount | ❌ | 39.446 | < 10.4x EV/EBITDA or <0.70 P/B | EV/EBITDA is 39.4x. P/B is 33.27x. |
-| Capital Structure Complexity | ❌ | 0.08 / 236.21 | Debt stress | Lev: 0.1x, IC: 236.2x. Clean. |
+| Entry Valuation Discount | ❌ | 39.417 | < -0.8x EV/EBITDA or <0.70 P/B | EV/EBITDA is 39.4x. P/B is 33.24x. |
+| Capital Structure Complexity | ❌ | 0.08 / 503.42 | Debt stress | Lev: 0.1x, IC: 503.4x. Clean. |
 | FCF Serviceability | ✅ | 83.073 | >0 FCF, >1.5x Cov | Avg FCF 47089500000.0, Hyp Cov 83.1x. |
-| Deployment Scale | ✅ | 5255401395000.000 | > $500M | EV is 5255401395000.0. |
+| Deployment Scale | ✅ | 5251487875000.000 | > $500M | EV is 5251487875000.0. |
 
 _Part A — Purchase Price & Capital Structure Entry: **2/4 passed**_
 
@@ -329,18 +330,18 @@ _Part A — Purchase Price & Capital Structure Entry: **2/4 passed**_
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Chaos/Dislocation Catalyst | ❌ | N/A | Present | Defaulted FAIL (qualitative unavailable) |
-| Fulcrum Security | ❌ | (0.082864219770322, 236.20833333333334, 475.0327350543478) | Hard or Soft Fulcrum | Qual: None. Hard signals: A=False, B=False. |
+| Fulcrum Security | ❌ | (0.082864219770322, 503.42471042471044, 474.6782495471015) | Hard or Soft Fulcrum | Qual: None. Hard signals: A=False, B=False. |
 | ABF/Credit Fit | ❌ | N/A | Compatible | Defaulted FAIL (qualitative unavailable) |
 | Complexity Moat | ❌ | 5.34% | >55% or High Qual | Debt/Assets 5.3%. Qual: None. |
-| Domain Knowledge | ✅ | Chemical (Specialty) | In Apollo Playbook | Chemical (Specialty) in playbook. |
+| Domain Knowledge | ❌ | Semiconductor | In Apollo Playbook | Semiconductor not in playbook. |
 
-_Part B — Chaos, Complexity, Credit Edge: **1/5 passed**_
+_Part B — Chaos, Complexity, Credit Edge: **0/5 passed**_
 
 ### Part C — Athene Permanent Capital Fit
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| IG Credit Yield | ✅ | (0.6169826524280118, 0.082864219770322, 236.20833333333334) | Margin>12%, Lev<5x, IC>1.5x | Margin 61.7%, Lev 0.1x, IC 236.2x. |
+| IG Credit Yield | ✅ | (0.6169826524280118, 0.082864219770322, 503.42471042471044) | Margin>12%, Lev<5x, IC>1.5x | Margin 61.7%, Lev 0.1x, IC 503.4x. |
 | Long-Duration Stability | ❌ | 0.156 | < 4pp, > 0 avg | FCF Margin Stdev 15.6pp. |
 | Hold-Without-Exit | ✅ | N/A | Viable | neutral default — qualitative unavailable; check counted as PASS |
 
@@ -360,29 +361,29 @@ _Part D — Credit Downside Quality: **3/3 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Above-Average Alpha | ❌ | 2 | >= 4 | 2 of 6 levers passed. |
+| Above-Average Alpha | ❌ | 1 | >= 4 | 1 of 6 levers passed. |
 
 _Part E — Defensibility vs Phalippou Bar: **0/1 passed**_
 
-**Total Apollo Score**: **8/16**
+**Total Apollo Score**: **7/16**
 
 ## 3.5 Qualitative Analysis
 _Qualitative analysis unavailable: No documents found in Drive folder_
 
 ## 4. Margin-of-Safety Check
-Current Stock Price: **$214.41**
-DCF Intrinsic Value: **$119.72**
+Current Stock Price: **$214.25**
+DCF Intrinsic Value: **$71.79**
 Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)
-Computed Margin of Safety: Trading at 1.8x intrinsic value (target ≤ 0.75x)
+Computed Margin of Safety: Trading at 3.0x intrinsic value (target ≤ 0.75x)
 ### Status: [FAIL] ❌
-The stock trades above the safety threshold. Trading at 1.8x intrinsic value is insufficient for investment under the Buffett framework.
+The stock trades above the safety threshold. Trading at 3.0x intrinsic value is insufficient for investment under the Buffett framework.
 
 ## 5. Investment Verdict
 **BUFFETT RECOMMENDATION: WAIT**
 
-High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹89.79 (75% of intrinsic value).
+High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹53.84 (75% of intrinsic value).
 
-**Action Item**: Set alert at buy-trigger price: **$89.79** (75% of intrinsic value).
+**Action Item**: Set alert at buy-trigger price: **$53.84** (75% of intrinsic value).
 
 **MARKS RECOMMENDATION: SKIP**
 
@@ -408,6 +409,6 @@ The disagreement between lenses IS the insight.
 | :--- | :---: | :---: |
 | **Buffett** | 11/14 | **WAIT** ⏳ |
 | **Marks** | 7/14 | **SKIP** ❌ |
-| **KKR** | 11/18 | **SKIP** ❌ |
+| **KKR** | 10/18 | **SKIP** ❌ |
 | **Blackstone** | 10/14 | **SKIP** ❌ |
-| **Apollo** | 8/16 | **SKIP** ❌ |
+| **Apollo** | 7/16 | **SKIP** ❌ |

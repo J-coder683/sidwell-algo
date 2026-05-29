@@ -37,6 +37,7 @@ Historical financial statements over the last 4 years:
 | EBIT | ₹20.00 | ₹22.00 | ₹24.20 | ₹26.62 |
 | Free Cash Flow | ₹11.50 | ₹12.80 | ₹14.23 | ₹15.80 |
 | Total Debt | ₹20.00 | ₹20.00 | ₹20.00 | ₹20.00 |
+| Interest Expense | ₹2.00 | ₹2.00 | ₹2.00 | ₹2.00 |
 | Stockholders Equity | ₹60.00 | ₹66.00 | ₹72.60 | ₹79.86 |
 
 ## 2. DCF Valuation & WACC Sourcing
@@ -50,7 +51,7 @@ Every component of the Weighted Average Cost of Capital (WACC) is explicitly sou
 | **Country Risk Premium** | 2.00% | Damodaran NYU Stern (Country default spread adjusted) |
 | **Total Equity Risk Premium** | 7.00% | Damodaran mature ERP + country premium = 7.00% |
 | **Industry Unlevered Beta** | 0.90 | Damodaran 'Chemical (Specialty)' (hardcoded fallback (Damodaran lookup failed)) |
-| **Target Levered Beta ($\beta$)** | 0.93 | Re-levered using actual D/E = 0.93 |
+| **Beta ($\beta$)** | 0.93 | Direct $\beta$ from stockanalysis.com |
 | **Cost of Equity ($K_e$)** | 12.49% | CAPM: $R_f + \beta \times ERP$ = 12.49% |
 | **Cost of Debt ($K_d$)** | 10.00% | Calculated: int_expense/debt = 10.00% |
 | **Effective Tax Rate ($t$)** | 25.00% | 4-year historical average from filings |

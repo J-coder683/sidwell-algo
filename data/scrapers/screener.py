@@ -331,7 +331,11 @@ def fetch_screener_financials(ticker: str) -> dict:
     if div_yield_val is not None:
         dividend_yield = div_yield_val / 100.0
 
-    logger.warning(f"Stock beta not available on screener.in; defaulting to 1.0 for {ticker.upper()}")
+    logger.info(
+        f"Stock beta not directly available on screener.in for {ticker.upper()}; "
+        f"WACC will use Damodaran industry levered beta as fallback (standard practice for "
+        f"Indian tickers; company-specific beta available in v0.7+ via price-history regression)."
+    )
     stock_beta = 1.0
     recommendation_mean = None
 

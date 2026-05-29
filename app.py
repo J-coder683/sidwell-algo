@@ -472,7 +472,9 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
             results = _run_pipeline(ticker)
         except ValueError as e:
             err_msg = str(e)
-            if "non-positive intrinsic value" in err_msg:
+            if "appears to be cyclical" in err_msg:
+                st.info(f"**Model Limitation:**\n\n{err_msg}")
+            elif "non-positive intrinsic value" in err_msg:
                 st.error(f"DCF model failed for {ticker} — non-positive intrinsic. See logs.")
             else:
                 st.error(f"**Data error:** {err_msg}")

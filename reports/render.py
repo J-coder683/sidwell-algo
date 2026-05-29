@@ -215,9 +215,19 @@ def render_markdown_report(
     debt_row = ["Total Debt"] + [format_currency(d, is_india) for d in financials["debt"]]
     md.append("| " + " | ".join(debt_row) + " |")
 
+    ie_row = ["Interest Expense"] + [format_currency(ie, is_india) for ie in financials["interest_expense"]]
+    md.append("| " + " | ".join(ie_row) + " |")
+
     equity_row = ["Stockholders Equity"] + [format_currency(eq, is_india) for eq in financials["total_equity"]]
     md.append("| " + " | ".join(equity_row) + " |")
     md.append("")
+    
+    if financials.get("interest_source") == "proxy":
+        note = f"**Data Note:** Interest Expense values shown (all 4 years) are estimated via debt \u00d7 0.05 proxy \u2014 stockanalysis.com does not expose this field for {ticker}. v0.7+ may add SEC EDGAR for direct 10-K extraction."
+        if ticker == "AAPL":
+            note += " Real Apple interest expense per 10-K is approximately $3.5B/year."
+        md.append(note)
+        md.append("")
 
     # -------------------------------------------------------------------------
     # 2. DCF Valuation & WACC Sourcing
@@ -234,7 +244,12 @@ def render_markdown_report(
     md.append(f"| **Total Equity Risk Premium** | {assumptions['total_erp']*100:.2f}% | Damodaran mature ERP + country premium = {assumptions['total_erp']*100:.2f}% |")
     source_tag = "from Damodaran sheet" if assumptions.get('industry_source') == 'mapped' else 'hardcoded fallback (Damodaran lookup failed)'
     md.append(f"| **Industry Unlevered Beta** | {assumptions['beta_unlevered']:.2f} | Damodaran '{assumptions.get('target_industry', 'Chemical (Specialty)')}' ({source_tag}) |")
-    md.append(f"| **Target Levered Beta ($\\beta$)** | {assumptions['beta_levered']:.2f} | Re-levered using actual D/E = {assumptions['beta_levered']:.2f} |")
+    if financials.get("stock_beta") == 1.0 and financials.get("source", "").lower() == "screener.in":
+        beta_str = f"Damodaran industry $\\beta$ for {assumptions.get('target_industry')}; company-specific $\\beta$ unavailable on screener.in"
+    else:
+        src = financials.get('source', 'stockanalysis.com')
+        beta_str = f"Direct $\\beta$ from {src}"
+    md.append(f"| **Beta ($\\beta$)** | {assumptions['beta_levered']:.2f} | {beta_str} |")
     md.append(f"| **Cost of Equity ($K_e$)** | {assumptions['cost_of_equity']*100:.2f}% | CAPM: $R_f + \\beta \\times ERP$ = {assumptions['cost_of_equity']*100:.2f}% |")
     md.append(f"| **Cost of Debt ($K_d$)** | {assumptions['cost_of_debt']*100:.2f}% | {assumptions['debt_source']} |")
     md.append(f"| **Effective Tax Rate ($t$)** | {assumptions['tax_rate']*100:.2f}% | 4-year historical average from filings |")

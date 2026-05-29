@@ -209,15 +209,22 @@ def fetch_stockanalysis_financials(ticker: str) -> dict:
     fin["gross_profit"] = _slice(inc.get("grossProfit"))
     fin["ebit"] = _slice(inc.get("operatingIncome"))
     
-    # Interest expense proxy if missing
     debt_sliced = _slice(bs.get("debt"))
-    fin["interest_expense"] = []
-    for d in debt_sliced:
-        if d is not None:
-            fin["interest_expense"].append(d * 0.05)
-        else:
-            fin["interest_expense"].append(0.0)
-    logger.warning(f"interest_expense not available from stockanalysis.com; using proxy = debt × 0.05 for {ticker.upper()}")
+    raw_interest = inc.get("income_statement_interest_expense")
+    if raw_interest is not None and any(x is not None for x in raw_interest):
+        fin["interest_expense"] = [abs(x) if x is not None else 0.0 for x in _slice(raw_interest)]
+        logger.info(f"Real interest_expense extracted from stockanalysis.com for {ticker.upper()}")
+        fin["interest_source"] = "direct"
+    else:
+        # Interest expense proxy if missing
+        fin["interest_expense"] = []
+        for d in debt_sliced:
+            if d is not None:
+                fin["interest_expense"].append(d * 0.05)
+            else:
+                fin["interest_expense"].append(0.0)
+        logger.warning(f"interest_expense not available from stockanalysis.com; using proxy = debt × 0.05 for {ticker.upper()}")
+        fin["interest_source"] = "proxy"
     
     fin["tax_provision"] = _slice(inc.get("income_statement_provision_for_income_taxes"))
     fin["pretax_income"] = _slice(inc.get("pretax"))
