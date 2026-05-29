@@ -33,8 +33,10 @@ def test_no_documents_returns_unavailable():
 # ---------------------------------------------------------------------------
 # 2. No API key → unavailable
 # ---------------------------------------------------------------------------
-def test_no_api_key_returns_unavailable():
-    docs = [{"hash": "abc123", "filename": "test.pdf", "type": "transcript", "text": "hello"}]
+@patch("analysis.qualitative.requests.get")
+@patch("analysis.qualitative.pdfplumber.open")
+def test_no_api_key_returns_unavailable(mock_pdfplumber, mock_get):
+    docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "transcript"}]
     with patch("analysis.qualitative.cache.get_json", return_value=None), \
          patch("os.getenv", return_value=None):
         result = extract_qualitative("TEST.NS", docs)
@@ -45,8 +47,20 @@ def test_no_api_key_returns_unavailable():
 # ---------------------------------------------------------------------------
 # 3. Gemini raises exception → unavailable (graceful degrade)
 # ---------------------------------------------------------------------------
-def test_gemini_exception_returns_unavailable():
-    docs = [{"hash": "abc123", "filename": "test.pdf", "type": "transcript", "text": "hello"}]
+@patch("analysis.qualitative.requests.get")
+@patch("analysis.qualitative.pdfplumber.open")
+def test_gemini_exception_returns_unavailable(mock_pdfplumber, mock_get):
+    docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "transcript"}]
+
+    mock_resp = MagicMock()
+    mock_resp.content = b"fake"
+    mock_get.return_value = mock_resp
+    
+    mock_pdf = MagicMock()
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = "hello"
+    mock_pdf.pages = [mock_page]
+    mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
 
     mock_client = MagicMock()
     mock_client.models.generate_content.side_effect = RuntimeError("quota exceeded")
@@ -57,15 +71,26 @@ def test_gemini_exception_returns_unavailable():
         result = extract_qualitative("TEST.NS", docs)
 
     assert result["status"] == "unavailable"
-    assert "Gemini error" in result["reason"]
-    assert "RuntimeError" in result["reason"]
+    assert "Qualitative extraction failed" in result["reason"]
 
 
 # ---------------------------------------------------------------------------
 # 4. Gemini returns valid JSON → parsed and cached
 # ---------------------------------------------------------------------------
-def test_gemini_valid_response_is_parsed_and_cached():
-    docs = [{"hash": "abc123", "filename": "test.pdf", "type": "transcript", "text": "hello"}]
+@patch("analysis.qualitative.requests.get")
+@patch("analysis.qualitative.pdfplumber.open")
+def test_gemini_valid_response_is_parsed_and_cached(mock_pdfplumber, mock_get):
+    docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "transcript"}]
+
+    mock_resp = MagicMock()
+    mock_resp.content = b"fake"
+    mock_get.return_value = mock_resp
+    
+    mock_pdf = MagicMock()
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = "hello"
+    mock_pdf.pages = [mock_page]
+    mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
 
     gemini_payload = {
         "forward_guidance": [{"period": "FY27", "metric": "revenue",
@@ -106,7 +131,7 @@ def test_gemini_valid_response_is_parsed_and_cached():
 # 5. Cache hit → Gemini NOT called
 # ---------------------------------------------------------------------------
 def test_cache_hit_skips_gemini_call():
-    docs = [{"hash": "abc123", "filename": "test.pdf", "type": "transcript", "text": "hello"}]
+    docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "transcript"}]
 
     cached_result = {
         "status": "available",
@@ -132,12 +157,24 @@ def test_cache_hit_skips_gemini_call():
 
 
 # ---------------------------------------------------------------------------
-# 6. PROMPT_VERSION in cache key (v0.3)
+# 6. PROMPT_VERSION in cache key
 # ---------------------------------------------------------------------------
-def test_cache_key_includes_prompt_version():
+@patch("analysis.qualitative.requests.get")
+@patch("analysis.qualitative.pdfplumber.open")
+def test_cache_key_includes_prompt_version(mock_pdfplumber, mock_get):
     """Cache key must include PROMPT_VERSION so schema changes invalidate old cache."""
     from analysis.qualitative import PROMPT_VERSION
-    docs = [{"hash": "abc123", "filename": "test.pdf", "type": "transcript", "text": "x"}]
+    docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "transcript"}]
+
+    mock_resp = MagicMock()
+    mock_resp.content = b"fake"
+    mock_get.return_value = mock_resp
+    
+    mock_pdf = MagicMock()
+    mock_page = MagicMock()
+    mock_page.extract_text.return_value = "hello"
+    mock_pdf.pages = [mock_page]
+    mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
 
     recorded_keys = []
 

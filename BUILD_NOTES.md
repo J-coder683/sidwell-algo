@@ -787,3 +787,12 @@ Sector/industry extracted from already-scraped data; no extra HTTP calls.
 New maintenance pattern: WARNING log surfaces unmapped sector strings; user adds one line to SECTOR_TO_DAMODARAN_MAP; instantly works for that ticker AND every other ticker in the same sector.
 Damodaran taxonomy is finer than scraped sectors in some places - mapping uses "closest reasonable" Damodaran category; documented choices flagged with a code comment.
 Note: HDFCBANK crashing in DCF is an existing limitation for Banks which need special handling at the DCF level (remains unchanged).
+
+## §27 v0.7 — In-Memory Qualitative Extraction via Screener.in
+- **Architecture Shift**: Replaced the local Drive-synced PDF ingestion (`~/Sidwell-Drive/`) with an automated in-memory web scraper. Indian tickers now discover and fetch PDF documents directly from their screener.in profile (`section#documents`).
+- **Zero-Storage Constraint**: The qualitative pipeline strictly adheres to the zero-storage constraint. Documents are fetched using `requests.get`, loaded into `BytesIO`, processed by `pdfplumber`, passed to Gemini, and then immediately discarded. No PDFs are stored on disk.
+- **Graceful Degradation**: 
+  - US tickers (which rely on the `stockanalysis.com` scraper) continue to return an empty document list and skip the qualitative extraction. Coverage via SEC EDGAR is planned for v0.8.
+  - If a specific PDF fails to download or parse, the pipeline logs a warning and continues with the remaining documents.
+- **Slug Resolution**: Addressed the "ticker rename" problem (e.g., ZOMATO -> ETERNAL) by implementing `_resolve_screener_slug`. It resolves the correct company URL before fetching documents or financials.
+- **Cache Invalidations**: Bumped `PROMPT_VERSION` to `v0.5` in `analysis/prompts/qualitative_extraction.md` to invalidate stale cache entries and trigger the new URL-based caching logic.

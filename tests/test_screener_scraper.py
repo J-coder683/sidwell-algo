@@ -6,6 +6,10 @@ from data.scrapers.screener import fetch_screener_financials, _to_screener_ticke
 
 FIXTURE_PATH = os.path.join(os.path.dirname(__file__), "fixtures", "screener_reliance_consolidated.html")
 
+@pytest.fixture(autouse=True)
+def mock_slug_resolver(monkeypatch):
+    monkeypatch.setattr("data.scrapers.screener._resolve_screener_slug", lambda t: t.replace(".NS", "").replace(".BO", "").upper())
+
 def test_strip_ticker_suffix():
     assert _to_screener_ticker("ASIANPAINT.NS") == "ASIANPAINT"
     assert _to_screener_ticker("RELIANCE.BO") == "RELIANCE"

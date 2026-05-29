@@ -63,3 +63,6 @@ sa_data.txt
 sa_test.html
 
 aapl_financials.json
+
+# PDF files
+*.pdf

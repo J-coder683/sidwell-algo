@@ -1,4 +1,4 @@
-# Qualitative Extraction Prompt v0.4
+# Qualitative Extraction Prompt v0.5
 
 You are an investment analyst extracting structured insights from company
 documents. Read all the documents provided below. Return ONLY a JSON object

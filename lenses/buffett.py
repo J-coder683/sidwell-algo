@@ -54,7 +54,7 @@ def evaluate_buffett_lens(
 
     # 1. Durable competitive advantage (moat)
     # Test: stdev(gross_margin, ddof=1) < 0.03
-    hist_gross_margins = [gp / rev if rev > 0 else 0.0 for gp, rev in zip(hist_gross_profit, hist_revenue)]
+    hist_gross_margins = [gp / rev if gp is not None and rev is not None and rev > 0 else 0.0 for gp, rev in zip(hist_gross_profit, hist_revenue)]
     hist_gm_std = np.std(hist_gross_margins, ddof=1) if len(hist_gross_margins) > 1 else 0.0
     checks["1_moat"] = {
         "name": "Durable competitive advantage (moat)",
@@ -73,11 +73,11 @@ def evaluate_buffett_lens(
     # Test: mean(roic_4y) > 0.15; ROIC = EBIT*(1-t) / (Debt+Equity-Cash)
     hist_roic_list = []
     for i in range(len(hist_revenue)):
-        eq = hist_total_equity[i]
-        dbt = hist_debt[i]
-        csh = hist_cash[i]
+        eq = hist_total_equity[i] or 0.0
+        dbt = hist_debt[i] or 0.0
+        csh = hist_cash[i] or 0.0
         ic = eq + dbt - csh
-        eb = hist_ebit[i]
+        eb = hist_ebit[i] or 0.0
         if ic > 0.0:
             roic_val = eb * (1.0 - tax_rate) / ic
         else:
@@ -100,7 +100,7 @@ def evaluate_buffett_lens(
 
     # 3. Strong free-cash-flow generation
     # Test: mean(fcf_margin_4y) > 0.10 AND fcf_growth_4y > 0
-    hist_fcf_margins = [f / r if r > 0 else 0.0 for f, r in zip(hist_fcf, hist_revenue)]
+    hist_fcf_margins = [f / r if f is not None and r is not None and r > 0 else 0.0 for f, r in zip(hist_fcf, hist_revenue)]
     hist_fcf_margin_avg = np.mean(hist_fcf_margins) if hist_fcf_margins else 0.0
     if len(hist_fcf) >= 2 and hist_fcf[0] != 0:
         hist_fcf_growth = (hist_fcf[-1] - hist_fcf[0]) / abs(hist_fcf[0])
@@ -168,7 +168,7 @@ def evaluate_buffett_lens(
 
     # 6. ROE without excess leverage
     # Test: mean(roe_4y) > 0.15 AND latest_equity/assets > 0.4
-    hist_roe_list = [ni / eq if eq > 0 else 0.0 for ni, eq in zip(hist_net_income, hist_total_equity)]
+    hist_roe_list = [ni / eq if ni is not None and eq is not None and eq > 0 else 0.0 for ni, eq in zip(hist_net_income, hist_total_equity)]
     hist_roe_avg = np.mean(hist_roe_list) if hist_roe_list else 0.0
     latest_equity_to_assets = hist_total_equity[-1] / hist_total_assets[-1] if hist_total_assets[-1] > 0 else 0.0
     checks["6_roe_leverage"] = {

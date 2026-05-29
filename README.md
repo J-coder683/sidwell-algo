@@ -108,7 +108,7 @@ cp .env.example .env
 ```
 - `FRED_API_KEY`: **Required.** Get a free key from [Federal Reserve Economic Data](https://fred.stlouisfed.org/docs/api/api_key.html). Used for retrieving the US 10-year treasury yield (risk-free rate).
 - `GEMINI_API_KEY`: Get a free key from [Google AI Studio](https://aistudio.google.com/apikey) for qualitative analysis (v0.2+). Optional — pipeline degrades gracefully if absent.
-- `SIDWELL_DRIVE_PATH`: Path to the Drive-synced folder containing PDF documents (defaults to `~/Sidwell-Drive/`). Place PDFs for a ticker in `<SIDWELL_DRIVE_PATH>/<TICKER>/`.
+Qualitative analysis automatically fetches public documents from screener.in for Indian tickers; US ticker qualitative coverage via SEC EDGAR planned for v0.8.
 
 *Note: If no `.env` file or `FRED_API_KEY` is present, the pipeline will still run if the data is already cached.*
 

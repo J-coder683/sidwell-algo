@@ -39,7 +39,7 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
     target_industry = dcf_results["assumptions"].get("target_industry", "Unknown")
     
     # Calculate EBITDA
-    ebitda_4y = [ebit_4y[i] + financials["depreciation"][i] for i in range(4)]
+    ebitda_4y = [(ebit_4y[i] or 0.0) + (financials["depreciation"][i] or 0.0) for i in range(4)]
     latest_ebitda = ebitda_4y[-1]
     latest_revenue = rev_4y[-1]
     
@@ -50,7 +50,7 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         
     latest_ebitda_margin = latest_ebitda / latest_revenue
     latest_ebit_margin = ebit_4y[-1] / latest_revenue
-    ebit_margin_4y = [ebit_4y[i] / rev_4y[i] if rev_4y[i] > 0 else 0 for i in range(4)]
+    ebit_margin_4y = [(ebit_4y[i] or 0.0) / rev_4y[i] if rev_4y[i] and rev_4y[i] > 0 else 0 for i in range(4)]
     
     # Qualitative safe getters
     q = qualitative_results or {}
@@ -80,7 +80,7 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
     # 2. FCF conversion
     # mean(fcf_4y) / mean(ebit_after_tax_4y) > 0.60
     # Calculate effective tax rate per year
-    tax_rates_4y = [tax_4y[i] / pretax_4y[i] if pretax_4y[i] > 0 else 0.25 for i in range(4)]
+    tax_rates_4y = [(tax_4y[i] or 0.0) / pretax_4y[i] if pretax_4y[i] and pretax_4y[i] > 0 else 0.25 for i in range(4)]
     ebit_after_tax_4y = [ebit_4y[i] * (1 - tax_rates_4y[i]) for i in range(4)]
     mean_fcf = np.mean(fcf_4y)
     mean_eat = np.mean(ebit_after_tax_4y)

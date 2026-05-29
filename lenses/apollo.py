@@ -53,7 +53,7 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
     market_cap = financials["market_cap"]
     target_industry = dcf_results["assumptions"].get("target_industry", "Unknown")
     
-    ebitda_4y = [ebit_4y[i] + financials["depreciation"][i] for i in range(4)]
+    ebitda_4y = [(ebit_4y[i] or 0.0) + (financials["depreciation"][i] or 0.0) for i in range(4)]
     latest_ebitda = ebitda_4y[-1]
     latest_revenue = rev_4y[-1]
     latest_total_assets = financials.get("total_assets", [0,0,0,0])[-1]
@@ -249,7 +249,7 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
     }
     
     # 11. Long-duration cash flow stability
-    fcf_margins = [fcf_4y[i] / rev_4y[i] if rev_4y[i] > 0 else 0 for i in range(4)]
+    fcf_margins = [(fcf_4y[i] or 0.0) / rev_4y[i] if rev_4y[i] and rev_4y[i] > 0 else 0 for i in range(4)]
     fcf_margin_stdev = np.std(fcf_margins, ddof=1) if len(fcf_margins) > 1 else 0
     pass_11 = fcf_margin_stdev < 0.04 and mean_fcf > 0
     checks["11_cash_stability"] = {

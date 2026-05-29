@@ -17,6 +17,51 @@ def _to_screener_ticker(sidwell_ticker: str) -> str:
     """Strip .NS or .BO suffix from ticker for screener.in"""
     return sidwell_ticker.replace(".NS", "").replace(".BO", "").upper()
 
+def _resolve_screener_slug(ticker: str) -> str | None:
+    """Returns the working screener.in slug for a ticker, or None if not findable.
+    Tries: bare ticker → standalone variant → screener search API."""
+    base_ticker = _to_screener_ticker(ticker)
+    cache_key = f"screener_slug_{base_ticker}.json"
+    cached_slug = cache.get_json(cache_key, 90 * 24 * 60 * 60)
+    if cached_slug and cached_slug.get("slug"):
+        return cached_slug["slug"]
+    
+    session = requests.Session()
+    
+    # Tier 1: Try /company/{ticker}/consolidated/
+    url = f"https://www.screener.in/company/{base_ticker}/consolidated/"
+    resp = session.get(url, headers=HEADERS, timeout=15, allow_redirects=True)
+    if resp.status_code == 200:
+        cache.set_json(cache_key, {"slug": base_ticker})
+        return base_ticker
+    
+    # Tier 2: Try /company/{ticker}/ (no consolidated; some small caps)
+    url = f"https://www.screener.in/company/{base_ticker}/"
+    resp = session.get(url, headers=HEADERS, timeout=15, allow_redirects=True)
+    if resp.status_code == 200:
+        cache.set_json(cache_key, {"slug": base_ticker})
+        return base_ticker
+    
+    # Tier 3: Use screener's search API to find the actual slug
+    search_url = f"https://www.screener.in/api/company/search/?q={base_ticker}"
+    try:
+        resp = session.get(search_url, headers=HEADERS, timeout=10)
+        if resp.status_code == 200:
+            results = resp.json()
+            if results and len(results) > 0:
+                # Search returns list; take the top match
+                url_parts = results[0].get("url", "").strip("/").split("/")
+                resolved = url_parts[-2] if url_parts[-1] == "consolidated" else url_parts[-1]
+                if resolved and resolved != base_ticker:
+                    logger.info(f"Resolved {ticker} → screener slug '{resolved}' via search (likely ticker rename)")
+                    cache.set_json(cache_key, {"slug": resolved})
+                    return resolved
+    except Exception as e:
+        logger.warning(f"Screener slug search failed for {ticker}: {e}")
+    
+    logger.warning(f"Could not resolve screener.in slug for {ticker}")
+    return None
+
 def _parse_float(s: str) -> float | None:
     if not s or not isinstance(s, str):
         return None
@@ -111,15 +156,19 @@ def fetch_screener_financials(ticker: str) -> dict:
         
     logger.info(f"Fetching {ticker.upper()} from screener.in...")
     
-    url = f"https://www.screener.in/company/{base}/consolidated/"
+    slug = _resolve_screener_slug(ticker)
+    if not slug:
+        raise ValueError(f"Screener.in has no data for {ticker}. Verify the ticker is NSE-listed.")
+    
+    url = f"https://www.screener.in/company/{slug}/consolidated/"
     resp = requests.get(url, headers=HEADERS, timeout=15)
     
     if resp.status_code == 404:
-        url = f"https://www.screener.in/company/{base}/"
+        url = f"https://www.screener.in/company/{slug}/"
         resp = requests.get(url, headers=HEADERS, timeout=15)
         
     if resp.status_code == 404:
-        raise ValueError(f"Screener.in has no data for {ticker}. Verify the ticker is NSE-listed.")
+        raise ValueError(f"Screener.in has no data for {ticker} (slug {slug}). Verify the ticker is NSE-listed.")
     resp.raise_for_status()
     
     soup = BeautifulSoup(resp.text, 'html.parser')
@@ -388,3 +437,89 @@ def fetch_screener_financials(ticker: str) -> dict:
     cache.set_json(cache_key_price, price_dict)
 
     return fin
+
+def fetch_screener_documents(ticker: str) -> list[dict]:
+    """
+    Returns up to N most-recent documents per ticker, no PDFs downloaded.
+    Selection policy: Latest 1 annual report, 2 concalls, 1 credit rating.
+    """
+    base = _to_screener_ticker(ticker)
+    cache_key = f"docs_screener_{base}.json"
+    cached = cache.get_json(cache_key, 7 * 24 * 60 * 60)
+    if cached is not None:
+        logger.info(f"Loaded documents for {ticker} from screener cache.")
+        return cached
+
+    slug = _resolve_screener_slug(ticker)
+    if not slug:
+        logger.warning(f"Could not resolve slug for {ticker}. Returning empty docs.")
+        return []
+
+    url = f"https://www.screener.in/company/{slug}/consolidated/"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        if resp.status_code == 404:
+            url = f"https://www.screener.in/company/{slug}/"
+            resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp.raise_for_status()
+    except Exception as e:
+        logger.warning(f"Failed to fetch {ticker} document page from screener: {e}")
+        return []
+
+    soup = BeautifulSoup(resp.text, 'html.parser')
+    docs_section = soup.find('section', id='documents')
+    if not docs_section:
+        logger.warning(f"No documents section found for {ticker}")
+        return []
+
+    documents = []
+
+    # 1. Annual Reports (Max 1)
+    annual_div = docs_section.find('div', class_='annual-reports')
+    if annual_div:
+        ul = annual_div.find('ul')
+        if ul:
+            for li in ul.find_all('li')[:1]:
+                a = li.find('a')
+                if a and a.get('href'):
+                    documents.append({
+                        "url": a['href'],
+                        "type": "annual_report",
+                        "date": a.text.split("\n")[0].strip() if "\n" in a.text else a.text.strip(),
+                        "label": a.text.strip().replace('\n', ' ')
+                    })
+
+    # 2. Concalls (Max 2)
+    concall_div = docs_section.find('div', class_='concalls')
+    if concall_div:
+        ul = concall_div.find('ul')
+        if ul:
+            for li in ul.find_all('li')[:2]:
+                a = li.find('a', class_='concall-link')
+                date_div = li.find('div')
+                date_str = date_div.text.strip() if date_div else "Unknown Date"
+                if a and a.get('href'):
+                    documents.append({
+                        "url": a['href'],
+                        "type": "concall_transcript",
+                        "date": date_str,
+                        "label": f"{date_str} Concall"
+                    })
+
+    # 3. Credit Ratings (Max 1)
+    rating_div = docs_section.find('div', class_='credit-ratings')
+    if rating_div:
+        ul = rating_div.find('ul')
+        if ul:
+            for li in ul.find_all('li')[:1]:
+                a = li.find('a')
+                if a and a.get('href'):
+                    documents.append({
+                        "url": a['href'],
+                        "type": "credit_rating",
+                        "date": "Recent",
+                        "label": a.text.strip().replace('\n', ' ')
+                    })
+
+    cache.set_json(cache_key, documents)
+    return documents

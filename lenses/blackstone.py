@@ -30,7 +30,7 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
     market_cap = financials["market_cap"]
     target_industry = dcf_results["assumptions"].get("target_industry", "Unknown")
     
-    ebitda_4y = [ebit_4y[i] + financials["depreciation"][i] for i in range(4)]
+    ebitda_4y = [(ebit_4y[i] or 0.0) + (financials["depreciation"][i] or 0.0) for i in range(4)]
     latest_ebitda = ebitda_4y[-1]
     latest_revenue = rev_4y[-1]
     
@@ -64,7 +64,7 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
     }
     
     # 2. Durable moat
-    gm_4y = [gp_4y[i] / rev_4y[i] if rev_4y[i] > 0 else 0 for i in range(4)]
+    gm_4y = [(gp_4y[i] or 0.0) / rev_4y[i] if rev_4y[i] and rev_4y[i] > 0 else 0 for i in range(4)]
     gm_stdev = np.std(gm_4y, ddof=1) if len(gm_4y) > 1 else 0
     mean_gm = np.mean(gm_4y)
     sector_median_gm = 0.35 # Default
