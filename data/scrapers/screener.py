@@ -152,6 +152,18 @@ def fetch_screener_financials(ticker: str) -> dict:
     if cached_fin and cached_price:
         logger.info(f"Loaded financials and price for {ticker.upper()} from screener cache.")
         cached_fin["current_price"] = cached_price.get("current_price")
+        # Defensive: normalize None→0.0 on cached payloads too (caches written
+        # before the v0.7.4 normalization may still contain None values).
+        _HIST_NUMERIC_KEYS = (
+            "revenue", "gross_profit", "ebit", "interest_expense",
+            "tax_provision", "pretax_income", "net_income",
+            "total_assets", "total_equity", "cash", "debt",
+            "capex", "depreciation", "working_capital_change", "fcf",
+            "historical_shares",
+        )
+        for k in _HIST_NUMERIC_KEYS:
+            if k in cached_fin and isinstance(cached_fin[k], list):
+                cached_fin[k] = [(v if v is not None else 0.0) for v in cached_fin[k]]
         return cached_fin
         
     logger.info(f"Fetching {ticker.upper()} from screener.in...")
@@ -431,6 +443,23 @@ def fetch_screener_financials(ticker: str) -> dict:
     
     fin["source"] = "Screener.in"
     fin["book_value_per_share"] = (fin["total_equity"][-1] / shares_out) if shares_out and shares_out > 0 and len(fin["total_equity"]) > 0 and fin["total_equity"][-1] is not None else 0.0
+
+    # Defensive None→0.0 normalization for all historical numeric arrays.
+    # Screener.in returns None when a row label doesn't match for a particular
+    # year (e.g., NBFCs have no "Raw material cost"; some years missing for
+    # newly-listed companies). Downstream DCF and lens code does naked
+    # arithmetic and >0 comparisons which crash on None. Normalize once,
+    # here at the data layer, so every consumer is safe.
+    _HIST_NUMERIC_KEYS = (
+        "revenue", "gross_profit", "ebit", "interest_expense",
+        "tax_provision", "pretax_income", "net_income",
+        "total_assets", "total_equity", "cash", "debt",
+        "capex", "depreciation", "working_capital_change", "fcf",
+        "historical_shares",
+    )
+    for k in _HIST_NUMERIC_KEYS:
+        if k in fin and isinstance(fin[k], list):
+            fin[k] = [(v if v is not None else 0.0) for v in fin[k]]
 
     price_dict = {"current_price": current_price}
     cache.set_json(cache_key_fin, fin)

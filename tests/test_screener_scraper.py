@@ -107,7 +107,10 @@ def test_dash_returns_none(mock_get):
     with patch("data.scrapers.screener.cache.get_json", return_value=None), \
          patch("data.scrapers.screener.cache.set_json"):
         res = fetch_screener_financials("TEST.NS")
-        assert res["interest_expense"][-1] is None
+        # v0.7.4: parser still treats "-" as missing internally, but
+        # fetch_screener_financials normalizes all None values to 0.0 at
+        # output to prevent downstream DCF/lens crashes (NESTLEIND case).
+        assert res["interest_expense"][-1] == 0.0
 
 @patch("data.scrapers.screener.requests.get")
 def test_crore_to_rupee_conversion(mock_get):
