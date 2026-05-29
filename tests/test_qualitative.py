@@ -5,21 +5,18 @@ interactions are mocked via unittest.mock.
 import json
 import pytest
 from unittest.mock import patch, MagicMock
-from analysis.qualitative import extract_qualitative, _unavailable, MODEL_ID, PROMPT_VERSION
+from analysis.qualitative import extract_qualitative, _unavailable, MODEL_NAME, PROMPT_VERSION
 
 
-def _make_bedrock_body(json_text: str):
-    body_bytes = json.dumps({"content": [{"type": "text", "text": json_text}]}).encode()
-    mock_body = MagicMock()
-    mock_body.read.return_value = body_bytes
-    mock_resp = MagicMock()
-    mock_resp.__getitem__ = lambda self, key: mock_body if key == "body" else None
-    return mock_resp
+def _make_bedrock_body(json_text):
+    """v0.7.6.3: keep helper name but return Gemini response shape (mock with .text)."""
+    from unittest.mock import MagicMock
+    m = MagicMock()
+    m.text = json_text
+    return m
 
 
-# ---------------------------------------------------------------------------
-# 1. No documents → unavailable
-# ---------------------------------------------------------------------------
+
 def test_no_documents_returns_unavailable():
     result = extract_qualitative("TEST.NS", [])
     assert result["status"] == "unavailable"
@@ -43,8 +40,7 @@ def test_no_documents_returns_unavailable():
 @patch("analysis.qualitative.requests.get")
 @patch("analysis.qualitative.pdfplumber.open")
 def test_no_api_key_returns_unavailable(mock_pdfplumber, mock_get, monkeypatch):
-    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
-    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
     mock_resp = MagicMock()
     mock_resp.content = b"fake"
@@ -62,7 +58,7 @@ def test_no_api_key_returns_unavailable(mock_pdfplumber, mock_get, monkeypatch):
         result = extract_qualitative("TEST.NS", docs)
 
     assert result["status"] == "unavailable"
-    assert "AWS" in result["reason"]
+    assert "GEMINI" in result["reason"] or "Gemini" in result["reason"]
 
 
 # ---------------------------------------------------------------------------
@@ -70,9 +66,9 @@ def test_no_api_key_returns_unavailable(mock_pdfplumber, mock_get, monkeypatch):
 # ---------------------------------------------------------------------------
 @patch("analysis.qualitative.requests.get")
 @patch("analysis.qualitative.pdfplumber.open")
-def test_bedrock_exception_returns_unavailable(mock_pdfplumber, mock_get, monkeypatch):
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "fake")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fake")
+def test_gemini_exception_returns_unavailable(mock_pdfplumber, mock_get, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
+    
 
     docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "concall_transcript"}]
 
@@ -87,14 +83,14 @@ def test_bedrock_exception_returns_unavailable(mock_pdfplumber, mock_get, monkey
     mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
 
     mock_client = MagicMock()
-    mock_client.invoke_model.side_effect = RuntimeError("Bedrock quota exceeded")
+    mock_client.models.generate_content.side_effect = RuntimeError("Gemini quota exceeded")
 
     with patch("analysis.qualitative.cache.get_json", return_value=None), \
-         patch("analysis.qualitative.boto3.client", return_value=mock_client):
+         patch("analysis.qualitative.genai.Client", return_value=mock_client):
         result = extract_qualitative("TEST.NS", docs)
 
     assert result["status"] == "unavailable"
-    assert "Bedrock error" in result["reason"]
+    assert "Gemini" in result["reason"]
 
 
 # ---------------------------------------------------------------------------
@@ -102,9 +98,9 @@ def test_bedrock_exception_returns_unavailable(mock_pdfplumber, mock_get, monkey
 # ---------------------------------------------------------------------------
 @patch("analysis.qualitative.requests.get")
 @patch("analysis.qualitative.pdfplumber.open")
-def test_bedrock_valid_response_is_parsed_and_cached(mock_pdfplumber, mock_get, monkeypatch):
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "fake")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fake")
+def test_gemini_valid_response_is_parsed_and_cached(mock_pdfplumber, mock_get, monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
+    
 
     docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "concall_transcript"}]
 
@@ -128,7 +124,7 @@ def test_bedrock_valid_response_is_parsed_and_cached(mock_pdfplumber, mock_get, 
     }
 
     mock_client = MagicMock()
-    mock_client.invoke_model.return_value = _make_bedrock_body(json.dumps(bedrock_payload))
+    mock_client.models.generate_content.return_value = _make_bedrock_body(json.dumps(bedrock_payload))
 
     written_cache = {}
 
@@ -136,12 +132,12 @@ def test_bedrock_valid_response_is_parsed_and_cached(mock_pdfplumber, mock_get, 
         written_cache[key] = val
 
     with patch("analysis.qualitative.cache.get_json", return_value=None), \
-         patch("analysis.qualitative.boto3.client", return_value=mock_client), \
+         patch("analysis.qualitative.genai.Client", return_value=mock_client), \
          patch("analysis.qualitative.cache.set_json", side_effect=fake_set_json):
         result = extract_qualitative("TEST.NS", docs)
 
     assert result["status"] == "available"
-    assert result["model"] == MODEL_ID
+    assert result["model"] == MODEL_NAME
     assert result["documents_used"] == ["test.pdf"]
     assert len(result["forward_guidance"]) == 1
     assert result["coherence_assessment"]["verdict"] == "coherent"
@@ -152,12 +148,12 @@ def test_bedrock_valid_response_is_parsed_and_cached(mock_pdfplumber, mock_get, 
 # ---------------------------------------------------------------------------
 # 5. Cache hit → Bedrock NOT called
 # ---------------------------------------------------------------------------
-def test_cache_hit_skips_bedrock_call(monkeypatch):
+def test_cache_hit_skips_gemini_call(monkeypatch):
     docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "concall_transcript"}]
 
     cached_result = {
         "status": "available",
-        "model": MODEL_ID,
+        "model": MODEL_NAME,
         "documents_used": ["test.pdf"],
         "forward_guidance": [],
         "risk_callouts": [],
@@ -169,12 +165,12 @@ def test_cache_hit_skips_bedrock_call(monkeypatch):
     mock_client = MagicMock()
 
     with patch("analysis.qualitative.cache.get_json", return_value=cached_result), \
-         patch("analysis.qualitative.boto3.client", return_value=mock_client):
+         patch("analysis.qualitative.genai.Client", return_value=mock_client):
         result = extract_qualitative("TEST.NS", docs)
 
     assert result["status"] == "available"
     assert result["tone_assessment"]["current"] == "cautious"
-    mock_client.invoke_model.assert_not_called()
+    mock_client.models.generate_content.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -184,8 +180,8 @@ def test_cache_hit_skips_bedrock_call(monkeypatch):
 @patch("analysis.qualitative.pdfplumber.open")
 def test_cache_key_includes_prompt_version(mock_pdfplumber, mock_get, monkeypatch):
     """Cache key must include PROMPT_VERSION so schema changes invalidate old cache."""
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "fake")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fake")
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
+    
 
     docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "concall_transcript"}]
 
@@ -209,10 +205,10 @@ def test_cache_key_includes_prompt_version(mock_pdfplumber, mock_get, monkeypatc
                        "tone_assessment": {"current": "confident", "trajectory": "stable", "notes": "OK."},
                        "coherence_assessment": {"verdict": "coherent", "reasoning": "Fine."}}
     mock_client = MagicMock()
-    mock_client.invoke_model.return_value = _make_bedrock_body(json.dumps(bedrock_payload))
+    mock_client.models.generate_content.return_value = _make_bedrock_body(json.dumps(bedrock_payload))
 
     with patch("analysis.qualitative.cache.get_json", side_effect=fake_get_json), \
-         patch("analysis.qualitative.boto3.client", return_value=mock_client), \
+         patch("analysis.qualitative.genai.Client", return_value=mock_client), \
          patch("analysis.qualitative.cache.set_json"):
         extract_qualitative("TEST.NS", docs)
 

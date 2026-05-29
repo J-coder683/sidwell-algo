@@ -1,13 +1,17 @@
 """
-Qualitative analysis layer. Sends document text to Amazon Bedrock (Claude Haiku 3.5)
-and parses structured JSON output. Caches result keyed on document hash + prompt version.
+Qualitative analysis layer. Sends document text to Gemini 3.5 Flash and parses
+structured JSON output. Caches result keyed on document URL hash + prompt version.
 
-v0.7.6 changes:
-  - Migrated from Gemini to Amazon Bedrock / Claude Haiku 3.5
-  - Anthropic prompt caching enabled on static schema prefix (~80% cost reduction)
+v0.7.6 changes (preserved through v0.7.6.3 revert):
   - Smart annual report extraction: TOC-aware section detection with fallback
   - Concall transcripts use full-text path (no truncation)
   - extraction_metadata field added to output
+
+v0.7.6.3: Reverted from Bedrock/Claude Haiku 4.5 → Gemini.
+AWS Marketplace blocked UPI autopay as payment for Anthropic models; subscription
+couldn't complete without a credit/debit card on file. Gemini spend cap raised
+₹100 → ₹500 to absorb v0.7.6 cache-invalidation churn. All v0.7.6 architectural
+work preserved — only the LLM client layer reverts.
 """
 import os
 import json
@@ -17,7 +21,8 @@ import requests
 from io import BytesIO
 from pathlib import Path
 
-import boto3
+from google import genai
+from google.genai import types
 import pdfplumber
 
 from data import cache
@@ -25,30 +30,17 @@ from data import cache
 logger = logging.getLogger("sidwell.analysis.qualitative")
 
 QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
-# v0.7.6.1: switched to Claude Haiku 4.5 (newer Anthropic generation, similar
-# pricing tier to Haiku 3.5). If the date suffix or naming differs from what's
-# in your Bedrock console (Bedrock → Model catalog → Claude Haiku 4.5 → Model ID),
-# update this string AND the matching IAM policy resource ARN to keep them in sync.
-MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
-AWS_REGION = "us-east-1"
-PROMPT_VERSION = "v0.7"  # Bumped from v0.6; invalidates Haiku 3.5-era cache entries
+# v0.7.6.3: Reverted from Bedrock/Claude Haiku 4.5 → Gemini.
+# AWS Marketplace blocked UPI autopay as a payment method for Anthropic models;
+# couldn't complete the subscription without a credit/debit card on file. Going
+# back to Gemini (raised the GCP spend cap from ₹100 → ₹500 to absorb any
+# v0.7.6 cache invalidation churn). All v0.7.6 architectural work (TOC-aware
+# annual report extraction, in-memory PDF pipeline, 3 concalls, screener
+# auto-fetch) is preserved — only the LLM client layer reverts.
+MODEL_NAME = "gemini-3.5-flash"
+PROMPT_VERSION = "v0.8"  # Bumped from v0.7; invalidates Haiku-era cache entries
 
-# Assertion: lock the model ID to a Claude Haiku variant (3.5 or 4.5) to control
-# costs. Catches accidental swaps to Sonnet/Opus which are 4-15x more expensive.
-# Accepts both 3-5 and 4-5 generations since Anthropic's Haiku tier is the
-# stable price floor we're targeting.
-_ALLOWED_MODEL_PREFIXES = (
-    "anthropic.claude-3-5-haiku-",
-    "anthropic.claude-haiku-3-5-",
-    "anthropic.claude-4-5-haiku-",
-    "anthropic.claude-haiku-4-5-",
-)
-assert MODEL_ID.startswith(_ALLOWED_MODEL_PREFIXES), (
-    f"MODEL_ID must be Claude Haiku (3.5 or 4.5) to control costs; got {MODEL_ID}. "
-    f"Allowed prefixes: {_ALLOWED_MODEL_PREFIXES}"
-)
-
-# Maximum characters sent to Bedrock for annual reports (smart-extracted).
+# Maximum characters sent to Gemini for annual reports (smart-extracted).
 # Concalls use full-text — they are typically short (20-60 pages).
 MAX_DOC_CHARS = 200_000
 
@@ -241,94 +233,49 @@ def _extract_generic(pdf_bytes: bytes) -> tuple[str, dict]:
     return text, {"sections_found": [], "fallback_used": True, "pages_extracted": min(80, total_pages) + 30}
 
 
-# ─── Bedrock client ───────────────────────────────────────────────────────────
+# ─── Gemini client ────────────────────────────────────────────────────────────
 
-def _get_bedrock_client():
-    """Returns bedrock-runtime client using env vars for credentials."""
-    aws_key = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret = os.getenv("AWS_SECRET_ACCESS_KEY")
-    region = os.getenv("AWS_REGION") or AWS_REGION
-    if not aws_key or not aws_secret:
-        return None
-    return boto3.client(
-        "bedrock-runtime",
-        region_name=region,
-        aws_access_key_id=aws_key,
-        aws_secret_access_key=aws_secret,
-    )
-
-
-def _call_bedrock(documents_text: str, ticker: str) -> dict:
-    """Invoke Claude Haiku 3.5 on Bedrock with Anthropic prompt caching.
-    The static schema/instructions prefix is marked as ephemeral cache.
-    Only the per-ticker documents content is uncached.
+def _call_gemini(documents_text: str, ticker: str) -> dict:
+    """Invoke Gemini 3.5 Flash for structured qualitative extraction.
+    Reverted from Bedrock/Claude in v0.7.6.3 due to AWS Marketplace payment
+    restrictions; v0.7.6 architectural work (TOC-aware extraction, in-memory
+    pipeline, screener auto-fetch) is preserved unchanged.
     """
-    client = _get_bedrock_client()
-    if client is None:
-        return _unavailable("AWS credentials not configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)")
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return _unavailable("GEMINI_API_KEY not configured")
 
     prompt_path = Path(__file__).parent / "prompts" / "qualitative_extraction.md"
     prompt_template = prompt_path.read_text(encoding="utf-8")
-
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                # Cached block: schema, instructions (~3-5k tokens, identical across tickers)
-                {
-                    "type": "text",
-                    "text": prompt_template,
-                    "cache_control": {"type": "ephemeral"},
-                },
-                # Uncached block: per-ticker document content
-                {
-                    "type": "text",
-                    "text": f"\n\n## Documents for {ticker}\n\n{documents_text}",
-                },
-            ],
-        }
-    ]
-
-    body = {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 4096,
-        "messages": messages,
-    }
+    prompt = f"{prompt_template}\n\n## Documents for {ticker}\n\n{documents_text}"
 
     try:
-        resp = client.invoke_model(
-            modelId=MODEL_ID,
-            body=json.dumps(body),
-            contentType="application/json",
+        client = genai.Client(api_key=api_key)
+        resp = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+            ),
         )
-        response_body = json.loads(resp["body"].read())
-        text = response_body["content"][0]["text"].strip()
-
-        # Strip markdown code fences if model adds them
-        if text.startswith("```"):
-            parts = text.split("```")
-            text = parts[1] if len(parts) >= 2 else text
-            if text.startswith("json"):
-                text = text[4:].strip()
-
-        return json.loads(text)
+        return json.loads(resp.text)
     except json.JSONDecodeError as e:
-        return _unavailable(f"Bedrock response not valid JSON: {e}")
+        return _unavailable(f"Gemini response not valid JSON: {e}")
     except Exception as e:
-        logger.error(f"Bedrock call failed for {ticker}: {e}")
-        return _unavailable(f"Bedrock error: {type(e).__name__}: {e}")
+        logger.error(f"Gemini call failed for {ticker}: {e}")
+        return _unavailable(f"Gemini error: {type(e).__name__}: {e}")
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
 def extract_qualitative(ticker: str, documents: list) -> dict:
     """
-    Run Bedrock/Claude Haiku 3.5 extraction across the documents.
+    Run Gemini 3.5 Flash extraction across the documents.
 
     Returns a dict matching the schema in qualitative_extraction.md plus:
       - status: "available" | "unavailable"
       - reason: string (only when status == "unavailable")
-      - model: MODEL_ID
+      - model: MODEL_NAME
       - documents_used: list of labels
       - extraction_metadata: per-document extraction details
 
@@ -391,16 +338,16 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
         for d in extracted_docs
     )
 
-    result = _call_bedrock(documents_text, ticker)
+    result = _call_gemini(documents_text, ticker)
     if result.get("status") == "unavailable":
         return result
 
     result["status"] = "available"
-    result["model"] = MODEL_ID
+    result["model"] = MODEL_NAME
     result["documents_used"] = [d["filename"] for d in extracted_docs]
     result["extraction_metadata"] = {"documents": extraction_metadata_docs}
     cache.set_json(cache_key, result)
-    logger.info(f"Cached fresh qualitative analysis for {ticker} (Bedrock/{MODEL_ID})")
+    logger.info(f"Cached fresh qualitative analysis for {ticker} (Gemini/{MODEL_NAME})")
     return result
 
 

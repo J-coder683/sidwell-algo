@@ -5,7 +5,7 @@ v0.7.6: Gemini mocks replaced with Bedrock mocks; new tests for:
   - fallback fires when <2 sections found
   - section search ignores TOC pages (starts after toc_page_idx + 10)
   - concall transcripts use full-text path
-  - MODEL_ID assertion rejects non-Haiku models
+  - MODEL_NAME assertion rejects non-Haiku models
 """
 from unittest.mock import patch, MagicMock, ANY
 import json
@@ -16,7 +16,7 @@ from analysis.qualitative import (
     _extract_annual_report_sections,
     _extract_concall,
     MAX_DOC_CHARS,
-    MODEL_ID,
+    MODEL_NAME,
 )
 from data import cache
 from data.documents import discover_documents
@@ -42,34 +42,29 @@ def mock_cache(monkeypatch):
     monkeypatch.setattr(cache, "set_json", fake_set)
 
 
-def _make_mock_bedrock_response(json_text: str):
-    """Helper: build a mock Bedrock response dict."""
-    body_bytes = json.dumps({
-        "content": [{"type": "text", "text": json_text}]
-    }).encode()
-    mock_body = MagicMock()
-    mock_body.read.return_value = body_bytes
+def _make_mock_gemini_response(json_text: str = '{"forward_guidance": []}'):
+    """Helper: build a mock Gemini response object."""
     mock_resp = MagicMock()
-    mock_resp.__getitem__ = lambda self, key: mock_body if key == "body" else None
+    mock_resp.text = json_text
     return mock_resp
 
 
-def _make_mock_bedrock_client(json_text: str = '{"forward_guidance": []}'):
+def _make_mock_gemini_client(json_text: str = '{"forward_guidance": []}'):
+    """Mock genai.Client whose models.generate_content returns the JSON text."""
     mock_client = MagicMock()
-    mock_client.invoke_model.return_value = _make_mock_bedrock_response(json_text)
+    mock_client.models.generate_content.return_value = _make_mock_gemini_response(json_text)
     return mock_client
 
 
 # ─── Core pipeline tests ──────────────────────────────────────────────────────
 
-@patch("analysis.qualitative.boto3.client")
+@patch("analysis.qualitative.genai.Client")
 @patch("analysis.qualitative.pdfplumber.open")
 @patch("analysis.qualitative.requests.get")
 def test_qualitative_fetches_pdf_in_memory_only(
-    mock_get, mock_pdfplumber_open, mock_boto3_client, monkeypatch
+    mock_get, mock_pdfplumber_open, mock_genai_client, monkeypatch
 ):
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "fake")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fake")
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
 
     mock_resp = MagicMock()
     mock_resp.content = b"fake pdf bytes"
@@ -81,24 +76,23 @@ def test_qualitative_fetches_pdf_in_memory_only(
     mock_pdf.pages = [mock_page]
     mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-    mock_boto3_client.return_value = _make_mock_bedrock_client()
+    mock_genai_client.return_value = _make_mock_gemini_client()
 
     result = extract_qualitative("MOCK", MOCK_DOCUMENTS[:1])
 
     assert result["status"] == "available"
     assert result["documents_used"] == ["Doc 1"]
-    assert result["model"] == MODEL_ID
+    assert result["model"] == MODEL_NAME
     mock_get.assert_called_with("https://fake.com/doc1.pdf", timeout=30, headers=ANY)
 
 
-@patch("analysis.qualitative.boto3.client")
+@patch("analysis.qualitative.genai.Client")
 @patch("analysis.qualitative.pdfplumber.open")
 @patch("analysis.qualitative.requests.get")
 def test_qualitative_handles_individual_pdf_failure(
-    mock_get, mock_pdfplumber_open, mock_boto3_client, monkeypatch
+    mock_get, mock_pdfplumber_open, mock_genai_client, monkeypatch
 ):
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "fake")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fake")
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
 
     def side_effect_get(*args, **kwargs):
         if "doc2" in args[0]:
@@ -115,7 +109,7 @@ def test_qualitative_handles_individual_pdf_failure(
     mock_pdf.pages = [mock_page]
     mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-    mock_boto3_client.return_value = _make_mock_bedrock_client()
+    mock_genai_client.return_value = _make_mock_gemini_client()
 
     result = extract_qualitative("MOCK", MOCK_DOCUMENTS)
 
@@ -126,8 +120,7 @@ def test_qualitative_handles_individual_pdf_failure(
 
 @patch("analysis.qualitative.requests.get")
 def test_qualitative_all_pdfs_fail_returns_unavailable(mock_get, monkeypatch):
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "fake")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fake")
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
     mock_get.side_effect = Exception("All fail")
 
     result = extract_qualitative("MOCK", MOCK_DOCUMENTS)
@@ -137,14 +130,13 @@ def test_qualitative_all_pdfs_fail_returns_unavailable(mock_get, monkeypatch):
     assert result.get("forward_guidance") == []
 
 
-@patch("analysis.qualitative.boto3.client")
+@patch("analysis.qualitative.genai.Client")
 @patch("analysis.qualitative.pdfplumber.open")
 @patch("analysis.qualitative.requests.get")
 def test_qualitative_url_hash_cache_key_stable_under_url_reorder(
-    mock_get, mock_pdfplumber_open, mock_boto3_client, monkeypatch
+    mock_get, mock_pdfplumber_open, mock_genai_client, monkeypatch
 ):
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "fake")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fake")
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
 
     mock_resp = MagicMock()
     mock_resp.content = b"fake bytes"
@@ -156,22 +148,21 @@ def test_qualitative_url_hash_cache_key_stable_under_url_reorder(
     mock_pdf.pages = [mock_page]
     mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-    mock_client = _make_mock_bedrock_client()
-    mock_boto3_client.return_value = mock_client
+    mock_client = _make_mock_gemini_client()
+    mock_genai_client.return_value = mock_client
 
     extract_qualitative("MOCK", [MOCK_DOCUMENTS[0], MOCK_DOCUMENTS[1]])
     extract_qualitative("MOCK", [MOCK_DOCUMENTS[1], MOCK_DOCUMENTS[0]])
 
-    # Should only invoke Bedrock once; second call hits the cache
-    assert mock_client.invoke_model.call_count == 1
+    # Should only invoke Gemini once; second call hits the cache
+    assert mock_client.models.generate_content.call_count == 1
 
 
-def test_missing_aws_credentials_returns_unavailable(monkeypatch):
-    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
-    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
+def test_missing_gemini_key_returns_unavailable(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
 
     result = extract_qualitative("MOCK", MOCK_DOCUMENTS[:1])
-    # Will fail at PDF fetch stage before Bedrock since requests.get isn't mocked,
+    # Will fail at PDF fetch stage before Gemini since requests.get isn't mocked,
     # but the credentials check fires if we mock requests out too
     assert result["status"] == "unavailable"
 
@@ -275,34 +266,25 @@ def test_concall_uses_full_text_path(mock_pdfplumber_open):
     assert meta["pages_extracted"] == 15
 
 
-# ─── MODEL_ID assertion test ──────────────────────────────────────────────────
+# ─── MODEL_NAME constraint ──────────────────────────────────────────────────
 
-def test_model_id_assertion_rejects_non_haiku():
-    """The assertion at module top should prevent non-Haiku MODEL_IDs.
-    v0.7.6.1: accepts both Haiku 3.5 and Haiku 4.5 prefixes."""
-    # The assertion already ran when qualitative was imported — if it passed,
-    # MODEL_ID is Haiku. Verify the string constraint directly.
-    allowed_prefixes = (
-        "anthropic.claude-3-5-haiku-",
-        "anthropic.claude-haiku-3-5-",
-        "anthropic.claude-4-5-haiku-",
-        "anthropic.claude-haiku-4-5-",
-    )
-    assert MODEL_ID.startswith(allowed_prefixes), (
-        f"MODEL_ID must be Claude Haiku (3.5 or 4.5); got {MODEL_ID}"
+def test_model_name_is_gemini_flash():
+    """v0.7.6.3: reverted from Bedrock/Haiku to Gemini Flash.
+    Verify MODEL_NAME is a Gemini Flash variant (cheapest tier; not Pro)."""
+    assert MODEL_NAME.startswith("gemini-") and "flash" in MODEL_NAME.lower(), (
+        f"MODEL_NAME should be a Gemini Flash variant for cost control; got {MODEL_NAME}"
     )
 
 
 # ─── extraction_metadata in output ───────────────────────────────────────────
 
-@patch("analysis.qualitative.boto3.client")
+@patch("analysis.qualitative.genai.Client")
 @patch("analysis.qualitative.pdfplumber.open")
 @patch("analysis.qualitative.requests.get")
 def test_extraction_metadata_present_in_result(
-    mock_get, mock_pdfplumber_open, mock_boto3_client, monkeypatch
+    mock_get, mock_pdfplumber_open, mock_genai_client, monkeypatch
 ):
-    monkeypatch.setenv("AWS_ACCESS_KEY_ID", "fake")
-    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fake")
+    monkeypatch.setenv("GEMINI_API_KEY", "fake")
 
     mock_resp = MagicMock()
     mock_resp.content = b"fake bytes"
@@ -314,7 +296,7 @@ def test_extraction_metadata_present_in_result(
     mock_pdf.pages = [mock_page]
     mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-    mock_boto3_client.return_value = _make_mock_bedrock_client()
+    mock_genai_client.return_value = _make_mock_gemini_client()
 
     result = extract_qualitative("MOCK", MOCK_DOCUMENTS[1:2])  # concall only
 
