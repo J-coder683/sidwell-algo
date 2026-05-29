@@ -491,12 +491,18 @@ st.title("Sidwell — Investment Analysis")
 
 if not ticker_input:
     st.info(
-        "Enter a ticker in the sidebar and press **Enter** (or click **Analyze**) to run the full pipeline.\n\n"
-        "Example tickers: `ASIANPAINT.NS`, `AAPL`, `RELIANCE.NS`"
+        "Enter a **ticker or company name** in the sidebar and press **Enter** (or click **Analyze**) to run the full pipeline.\n\n"
+        "Examples — names: `Reliance`, `Apple`, `Nestle India`. Tickers: `AAPL`, `ASIANPAINT.NS`, `RELIANCE.NS`."
     )
     st.stop()
 
-ticker = ticker_input.strip().upper()
+# v0.7.5: resolve company name → ticker if user typed a name rather than a ticker
+from data.ticker_resolver import resolve_ticker_from_input
+ticker, _resolve_source = resolve_ticker_from_input(ticker_input)
+if _resolve_source != "ticker" and _resolve_source != "unresolved":
+    st.caption(f"Resolved **'{ticker_input.strip()}'** → `{ticker}`")
+elif _resolve_source == "unresolved":
+    st.warning(f"Could not auto-resolve '{ticker_input.strip()}' to a ticker. Trying anyway as `{ticker}` — analysis may fail.")
 
 if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_last_ticker"] == ticker):
     st.session_state["_last_ticker"] = ticker
