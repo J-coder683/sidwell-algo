@@ -92,17 +92,25 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
     if hist_years_count != 4:
         raise ValueError(f"Expected exactly 4 years of historical data, got {hist_years_count}")
         
-    hist_revenue = financials["revenue"]
-    hist_gross_profit = financials["gross_profit"]
-    hist_ebit = financials["ebit"]
-    hist_interest_expense = financials["interest_expense"]
-    hist_tax_provision = financials["tax_provision"]
-    hist_pretax_income = financials["pretax_income"]
-    hist_net_income = financials["net_income"]
-    
-    latest_cash = financials["cash"][-1]
-    latest_debt = financials["debt"][-1]
-    latest_assets = financials["total_assets"][-1]
+    # Defensive None→0.0 normalization for historical arrays. Some Indian tickers
+    # (NBFCs, banks, recent IPOs) come back from screener.in with None values where
+    # a row label didn't match (e.g., NBFCs have no "Raw material cost"). The
+    # downstream DCF math does naked numeric comparisons (`> 0`) which TypeError
+    # on None. Normalize once, here, so the rest of the function is safe.
+    def _none_to_zero(values: list) -> list:
+        return [(v if v is not None else 0.0) for v in (values or [])]
+
+    hist_revenue = _none_to_zero(financials["revenue"])
+    hist_gross_profit = _none_to_zero(financials["gross_profit"])
+    hist_ebit = _none_to_zero(financials["ebit"])
+    hist_interest_expense = _none_to_zero(financials["interest_expense"])
+    hist_tax_provision = _none_to_zero(financials["tax_provision"])
+    hist_pretax_income = _none_to_zero(financials["pretax_income"])
+    hist_net_income = _none_to_zero(financials["net_income"])
+
+    latest_cash = financials["cash"][-1] if financials["cash"] and financials["cash"][-1] is not None else 0.0
+    latest_debt = financials["debt"][-1] if financials["debt"] and financials["debt"][-1] is not None else 0.0
+    latest_assets = financials["total_assets"][-1] if financials["total_assets"] and financials["total_assets"][-1] is not None else 0.0
     
     # Calculate historical ratios
     if hist_years_count >= 2 and hist_revenue[0] > 0 and hist_revenue[-1] > 0:
@@ -349,7 +357,10 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
     if intrinsic_value_per_share <= 0:
         # Heuristic cyclical detection
         import numpy as np
-        fcf_4y = financials["fcf"]
+        # Normalize None → 0.0 here too (in case financials["fcf"] has missing years)
+        fcf_4y = [(v if v is not None else 0.0) for v in (financials["fcf"] or [])]
+        if not fcf_4y:
+            fcf_4y = [0.0, 0.0, 0.0, 0.0]
         fcf_abs_mean = abs(np.mean(fcf_4y)) if abs(np.mean(fcf_4y)) > 1e6 else 1e6  # avoid div-by-zero
         fcf_cv = np.std(fcf_4y, ddof=1) / fcf_abs_mean
         fcf_sign_flips = sum(1 for i in range(1, len(fcf_4y)) if fcf_4y[i] * fcf_4y[i-1] < 0)
