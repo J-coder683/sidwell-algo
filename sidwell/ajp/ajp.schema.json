@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Assumption Justification Pack (AJP)",
+  "type": "object",
+  "required": ["meta", "assumptions"],
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": [
+        "ticker", "as_of", "currency", "sources_ingested",
+        "fiscal_year_end_month", "last_actual_fy", "is_holdco", "scenario_active"
+      ],
+      "properties": {
+        "ticker": { "type": "string" },
+        "as_of": { "type": "string", "format": "date" },
+        "gemini_run_id": { "type": ["string", "null"] },
+        "currency": { "type": "string" },
+        "sources_ingested": { "type": "array", "items": { "type": "string" } },
+        "fiscal_year_end_month": { "type": "integer", "minimum": 1, "maximum": 12 },
+        "last_actual_fy": { "type": "string", "pattern": "^FY\\d{4}$" },
+        "is_holdco": { "type": "boolean" },
+        "scenario_active": { "type": "string", "enum": ["BEAR", "BASE", "BULL"] }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "driver_id", "value", "unit", "source_type",
+          "confidence", "rationale", "interrogation_refs"
+        ],
+        "properties": {
+          "driver_id": { "type": "string" },
+          "value": { "type": ["number", "null", "boolean", "string"] },
+          "unit": { "type": "string" },
+          "scenario": {
+            "type": "object",
+            "required": ["BEAR", "BASE", "BULL"],
+            "properties": {
+              "BEAR": { "type": ["number", "null"] },
+              "BASE": { "type": ["number", "null"] },
+              "BULL": { "type": ["number", "null"] }
+            }
+          },
+          "split": {
+            "type": "object",
+            "additionalProperties": { "type": "number" }
+          },
+          "source_type": {
+            "type": "string",
+            "enum": [
+              "FILING", "EARNINGS_CALL", "MGMT_GUIDANCE",
+              "SELL_SIDE_ER", "NEWS", "MACRO_FRED",
+              "DAMODARAN", "PEER_COMPS", "MARKET_CONVENTION",
+              "ENGINE_COMPUTED", "ASSUMED"
+            ]
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["HIGH", "MEDIUM", "LOW", "UNVERIFIED"]
+          },
+          "verify_flag": {
+            "type": ["string", "null"],
+            "enum": ["ER", "NEWS", "EST", "ENGINE-EST", null]
+          },
+          "rationale": { "type": "string", "minLength": 1 },
+          "interrogation_refs": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "options_outstanding": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["shares", "strike_price"],
+              "properties": {
+                "shares": { "type": "number" },
+                "strike_price": { "type": "number" }
+              }
+            }
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "valuation_method", "stake_pct", "value_mm"],
+              "properties": {
+                "name": { "type": "string" },
+                "valuation_method": { "type": "string" },
+                "stake_pct": { "type": "number" },
+                "value_mm": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

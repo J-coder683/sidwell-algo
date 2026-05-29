@@ -48,6 +48,9 @@ def test_regression_snapshot(mock_qualitative):
         write_calls = mock_file().write.call_args_list
         report_content = "".join(call[0][0] for call in write_calls)
 
+    # IMPORTANT: Do NOT auto-write expected_path here.
+    # Methodology rule #6: no --snapshot-update / auto-regen.
+    # If the report changes, hand-edit tests/expected_report.md with verified values.
     with open(expected_path, "r", encoding="utf-8") as f:
         expected_content = f.read()
 

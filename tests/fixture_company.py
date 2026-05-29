@@ -41,6 +41,42 @@ FIXTURE_INPUTS = {
     "total_intangibles": [5.0, 5.0, 5.0, 5.0],
     "goodwill": [2.0, 2.0, 2.0, 2.0],
     "book_value_per_share": 7.986,
+    "statements": {
+        "years_annual": ["2022", "2023", "2024", "2025"],
+        "annual": {
+            "profit_loss": {
+                "sales": [10.0, 11.0, 12.1, 13.31],
+                "operating profit": [2.0, 2.2, 2.42, 2.662],
+                "depreciation": [0.3, 0.33, 0.363, 0.3993],
+                "interest": [0.2, 0.2, 0.2, 0.2],
+                "profit before tax": [1.8, 2.0, 2.22, 2.462],
+                "tax": [0.45, 0.5, 0.555, 0.6155],
+                "net profit": [1.35, 1.5, 1.665, 1.8465]
+            },
+            "balance_sheet": {
+                "equity capital": [6.0, 6.6, 7.26, 7.986],
+                "reserves": [0.0, 0.0, 0.0, 0.0],
+                "borrowings": [2.0, 2.0, 2.0, 2.0],
+                "fixed assets": [5.0, 5.5, 6.05, 6.655],
+                "investments": [0.0, 0.0, 0.0, 0.0],
+                "inventories": [1.0, 1.1, 1.21, 1.331],
+                "trade receivables": [1.0, 1.1, 1.21, 1.331],
+                "trade payables": [1.0, 1.1, 1.21, 1.331],
+                "cash equivalents": [1.0, 1.1, 1.21, 1.331]
+            },
+            "cash_flow": {
+                "cash from operating activity": [1.65, 1.83, 2.028, 2.2458],
+                "working capital changes": [0.0, 0.0, 0.0, 0.0],
+                "cash from investing activity": [-0.5, -0.55, -0.605, -0.6655],
+                "fixed assets purchased": [-0.5, -0.55, -0.605, -0.6655]
+            }
+        },
+        "ratios": {
+            "debtor days": [36.5, 36.5, 36.5, 36.5],
+            "inventory days": [36.5, 36.5, 36.5, 36.5],
+            "days payable": [36.5, 36.5, 36.5, 36.5]
+        }
+    }
 }
 
 def _make_unavailable_qualitative():

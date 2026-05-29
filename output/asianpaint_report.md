@@ -6,7 +6,7 @@
 > [!WARNING]
 > **DCF COVERAGE GAP WARNING**: The computed DCF intrinsic value
 > deviates significantly from the current market price (intrinsic
-> at 19% of price).
+> at 24% of price).
 >
 > Even this v0.4 2-stage DCF (Stage 1 high-growth + Stage 2 fade +
 > sector-aware terminal) may understate premium businesses because:
@@ -24,25 +24,25 @@
 ## Executive Summary
 | Metric | Value | Source / Detail |
 | :--- | :--- | :--- |
-| **Current Price** | ₹2,672.00 | Yahoo Finance |
-| **Intrinsic Value (DCF)** | ₹506.38 | Sidwell DCF Engine |
-| **Margin of Safety** | Trading at 5.3x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
-| **Buffett Score** | **10/14** | Buffett Lens (14 checks) |
-| **Buffett Verdict** | **WAIT** ⏳ | Buffett Lens Rules |
-| **Marks Score** | **7/14** | Marks Lens (14 checks) |
+| **Current Price** | ₹2,683.00 | Yahoo Finance |
+| **Intrinsic Value (DCF)** | ₹636.27 | Sidwell DCF Engine |
+| **Margin of Safety** | Trading at 4.2x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
+| **Buffett Score** | **9/14** | Buffett Lens (14 checks) |
+| **Buffett Verdict** | **SKIP** ❌ | Buffett Lens Rules |
+| **Marks Score** | **8/14** | Marks Lens (14 checks) |
 | **Marks Verdict** | **SKIP** ❌ | Marks Lens Rules |
-| **KKR Score** | **13/18** | KKR Lens (18 checks) |
+| **KKR Score** | **14/18** | KKR Lens (18 checks) |
 | **KKR Verdict** | **SKIP** ❌ | KKR Lens Rules |
-| **Blackstone Score** | **12/14** | Blackstone Lens (14 checks) |
-| **Blackstone Verdict** | **BUY** ✅ | Blackstone Lens Rules |
-| **Apollo Score** | **7/16** | Apollo Lens (16 checks) |
+| **Blackstone Score** | **9/14** | Blackstone Lens (14 checks) |
+| **Blackstone Verdict** | **SKIP** ❌ | Blackstone Lens Rules |
+| **Apollo Score** | **8/16** | Apollo Lens (16 checks) |
 | **Apollo Verdict** | **SKIP** ❌ | Apollo Lens Rules |
 
 ### Verdict Summary
-> **Buffett**: **WAIT** — High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹379.78 (75% of intrinsic value).
+> **Buffett**: **SKIP** — Does not meet enough Buffett criteria across business quality, management, and price.
 > **Marks**: **SKIP** — Insufficient asymmetric edge under Marks framework.
 > **KKR**: **SKIP** — Failed Part A pre-condition: not LBO-viable.
-> **Blackstone**: **BUY** — High-conviction Blackstone target. Good business in a good neighborhood.
+> **Blackstone**: **SKIP** — Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar).
 > **Apollo**: **SKIP** — Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar).
 
 ## 1. Company Snapshot
@@ -51,10 +51,11 @@ Historical financial statements over the last 4 years:
 | Metric | 2022 | 2023 | 2024 | 2025 |
 | :--- | :--- | :--- | :--- | :--- |
 | Revenue | ₹291.01B | ₹344.89B | ₹354.95B | ₹339.06B |
-| Gross Margin (%) | 16.50% | 18.15% | 21.37% | 17.72% |
+| Gross Margin (%) | 0.00% | 54.19% | 47.38% | 47.58% |
 | EBIT | ₹48.04B | ₹62.60B | ₹75.85B | ₹60.06B |
 | Free Cash Flow | ₹34.22B | ₹4.75B | ₹27.74B | ₹36.13B |
 | Total Debt | ₹15.87B | ₹19.33B | ₹24.74B | ₹22.90B |
+| Interest Expense | ₹950.00M | ₹1.44B | ₹2.05B | ₹2.27B |
 | Stockholders Equity | ₹138.12B | ₹159.92B | ₹187.28B | ₹194.00B |
 
 ## 2. DCF Valuation & WACC Sourcing
@@ -65,16 +66,16 @@ Every component of the Weighted Average Cost of Capital (WACC) is explicitly sou
 | :--- | :--- | :--- |
 | **Risk-Free Rate ($R_f$)** | 7.12% | FRED Series: `INDIRLTLT01STM` (India 10Y G-Sec) |
 | **Mature Market ERP** | 4.23% | Damodaran NYU Stern (Mature Equity Risk Premium) |
-| **Country Risk Premium** | 2.18% | Damodaran NYU Stern (Country default spread adjusted) |
-| **Total Equity Risk Premium** | 6.41% | Damodaran mature ERP + country premium = 6.41% |
-| **Industry Unlevered Beta** | 0.74 | Damodaran 'Household Products' (from Damodaran sheet) |
-| **Target Levered Beta ($\beta$)** | 0.75 | Re-levered using actual D/E = 0.75 |
-| **Cost of Equity ($K_e$)** | 11.92% | CAPM: $R_f + \beta \times ERP$ = 11.92% |
+| **Country Risk Premium** | 2.85% | Damodaran NYU Stern (Country default spread adjusted) |
+| **Total Equity Risk Premium** | 7.08% | Damodaran mature ERP + country premium = 7.08% |
+| **Industry Unlevered Beta** | 0.74 | Damodaran 'Household Products' (hardcoded fallback (Damodaran lookup failed)) |
+| **Beta ($\beta$)** | 0.75 | Damodaran industry $\beta$ for Household Products; company-specific $\beta$ unavailable on screener.in |
+| **Cost of Equity ($K_e$)** | 12.41% | CAPM: $R_f + \beta \times ERP$ = 12.41% |
 | **Cost of Debt ($K_d$)** | 9.91% | Calculated: int_expense/debt = 9.91% |
 | **Effective Tax Rate ($t$)** | 25.75% | 4-year historical average from filings |
-| **Equity Weight ($W_e$)** | 99.11% | Market Cap / (Market Cap + Total Debt) |
-| **Debt Weight ($W_d$)** | 0.89% | Total Debt / (Market Cap + Total Debt) |
-| **Computed WACC** | **11.87%** | Weighted cost of capital = **11.87%** |
+| **Equity Weight ($W_e$)** | 99.12% | Market Cap / (Market Cap + Total Debt) |
+| **Debt Weight ($W_d$)** | 0.88% | Total Debt / (Market Cap + Total Debt) |
+| **Computed WACC** | **12.37%** | Weighted cost of capital = **12.37%** |
 
 ### 5-Year High-Growth Forecast (Stage 1)
 Projections are based on historical averages relative to Revenue. Revenue growth is projected at **5.23%** (historical 4y CAGR capped between 5% and 20%).
@@ -85,11 +86,11 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 | EBIT | ₹65.77B | ₹69.21B | ₹72.83B | ₹76.63B | ₹80.64B |
 | Taxes | ₹16.94B | ₹17.82B | ₹18.75B | ₹19.73B | ₹20.76B |
 | D&A | ₹9.56B | ₹10.06B | ₹10.59B | ₹11.14B | ₹11.72B |
-| CapEx | ₹12.40B | ₹13.05B | ₹13.73B | ₹14.45B | ₹15.21B |
-| NWC Change (CF) | ₹-13.16B | ₹-13.85B | ₹-14.57B | ₹-15.33B | ₹-16.14B |
-| Free Cash Flow | ₹32.84B | ₹34.55B | ₹36.36B | ₹38.26B | ₹40.26B |
-| Discount Factor | 1.1187 | 1.2516 | 1.4002 | 1.5665 | 1.7525 |
-| PV of Cash Flow | ₹29.35B | ₹27.61B | ₹25.97B | ₹24.42B | ₹22.97B |
+| CapEx | ₹11.44B | ₹12.04B | ₹12.67B | ₹13.33B | ₹14.03B |
+| NWC Change (CF) | ₹-3.47B | ₹-3.65B | ₹-3.84B | ₹-4.04B | ₹-4.26B |
+| Free Cash Flow | ₹43.49B | ₹45.76B | ₹48.15B | ₹50.67B | ₹53.31B |
+| Discount Factor | 1.1237 | 1.2627 | 1.4188 | 1.5943 | 1.7915 |
+| PV of Cash Flow | ₹38.70B | ₹36.24B | ₹33.94B | ₹31.78B | ₹29.76B |
 
 ### 5-Year Fade Forecast (Stage 2) — growth fading from 5.23% to 5.50%
 
@@ -99,28 +100,28 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 | EBIT | ₹84.90B | ₹89.43B | ₹94.25B | ₹99.38B | ₹104.85B |
 | Taxes | ₹21.86B | ₹23.03B | ₹24.27B | ₹25.59B | ₹27.00B |
 | D&A | ₹12.34B | ₹13.00B | ₹13.70B | ₹14.45B | ₹15.24B |
-| CapEx | ₹16.01B | ₹16.86B | ₹17.77B | ₹18.74B | ₹19.77B |
-| NWC Change (CF) | ₹-16.99B | ₹-17.89B | ₹-18.86B | ₹-19.89B | ₹-20.98B |
-| Free Cash Flow | ₹42.38B | ₹44.64B | ₹47.05B | ₹49.61B | ₹52.34B |
-| Discount Factor | 1.9606 | 2.1935 | 2.4539 | 2.7453 | 3.0714 |
-| PV of Cash Flow | ₹21.62B | ₹20.35B | ₹19.17B | ₹18.07B | ₹17.04B |
+| CapEx | ₹14.77B | ₹15.56B | ₹16.40B | ₹17.29B | ₹18.24B |
+| NWC Change (CF) | ₹-4.48B | ₹-4.72B | ₹-4.97B | ₹-5.24B | ₹-5.53B |
+| Free Cash Flow | ₹56.13B | ₹59.12B | ₹62.31B | ₹65.70B | ₹69.32B |
+| Discount Factor | 2.0131 | 2.2621 | 2.5419 | 2.8563 | 3.2095 |
+| PV of Cash Flow | ₹27.88B | ₹26.14B | ₹24.51B | ₹23.00B | ₹21.60B |
 
 ### Terminal Value
-- Final fade year (Year 10) FCF: ₹52.34B
+- Final fade year (Year 10) FCF: ₹69.32B
 - Terminal growth (Gordon): 5.50%
 - Sector mapping: SECTOR_TERMINAL_GROWTH lookup for (Household Products, India)
-- Terminal Value: ₹866.20B
-- PV of Terminal Value (discounted from Year 10): ₹282.03B
+- Terminal Value: ₹1,064.73B
+- PV of Terminal Value (discounted from Year 10): ₹331.74B
 
 ### Valuation Bridge
-- **PV of Explicit FCFs**: ₹226.57B
-- **PV of Terminal Value (g = 5.50%)**: ₹282.03B
-- **Enterprise Value**: ₹508.60B
-- **Add: Cash & Equivalents**: ₹0.00
+- **PV of Explicit FCFs**: ₹293.55B
+- **PV of Terminal Value (g = 5.50%)**: ₹331.74B
+- **Enterprise Value**: ₹625.29B
+- **Add: Cash & Equivalents**: ₹7.82B
 - **Less: Total Debt**: ₹22.90B
-- **Equity Value**: ₹485.70B
-- **Shares Outstanding**: 959,161,677
-- **Intrinsic Value per Share**: **₹506.38**
+- **Equity Value**: ₹610.21B
+- **Shares Outstanding**: 959,038,390
+- **Intrinsic Value per Share**: **₹636.27**
 
 ## 3. Buffett Investor Lens
 All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
@@ -129,12 +130,12 @@ All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Durable competitive advantage (moat) | ✅ | 2.08% | < 3.0% | stdev = 2.08% < 3% |
-| High return on invested capital | ✅ | 24.05% | > 15.0% | 4y avg = 24.05% > 15% |
+| Durable competitive advantage (moat) | ❌ | 25.06% | < 3.0% | stdev = 25.06% >= 3% |
+| High return on invested capital | ✅ | 24.92% | > 15.0% | 4y avg = 24.92% > 15% |
 | Strong free-cash-flow generation | ❌ | 0.08 / 0.06 | Margin > 10% & Growth > 0% | avg margin = 7.90%, FCF growth = 5.58% |
 | Earnings predictability | ❌ | 0.05 / 0.12 | 5% < CAGR < 30% & YoY Growth StDev < 10.0% | Revenue CAGR = 5.23%, YoY Growth StDev = 11.74% |
 
-_Part A — Business Quality: **2/4 passed**_
+_Part A — Business Quality: **1/4 passed**_
 
 ### Part B — Financial Health
 
@@ -142,7 +143,7 @@ _Part A — Business Quality: **2/4 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Conservative balance sheet | ✅ | 0.33 / 26.46 | Debt/EBITDA < 3x & Coverage > 5x | Debt/EBITDA = 0.33x, Int. Coverage = 26.46x |
 | ROE without excess leverage | ✅ | 0.24 / 0.64 | ROE > 15% & Equity/Assets > 40% | 4y avg ROE = 24.34%, Equity/Assets = 63.91% |
-| Liquidity cushion (Gibraltar test) | ❌ | 0.00 / 22900000000.00 | Cash / Debt > 0.5x OR debt-free | Cash / Debt = 0.00x (<= 0.5) |
+| Liquidity cushion (Gibraltar test) | ❌ | 7820000000.00 / 22900000000.00 | Cash / Debt > 0.5x OR debt-free | Cash / Debt = 0.34x (<= 0.5) |
 
 _Part B — Financial Health: **2/3 passed**_
 
@@ -151,9 +152,9 @@ _Part B — Financial Health: **2/3 passed**_
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Anti-dilution discipline | ✅ | [4 values] | <= 2% growth over 4y | Share count growth (4y): +0.00% (threshold: <= +2%) |
-| Capital allocation track record | ✅ | -0.009856745991651678 / True | ROIC not declining > 3pp AND capital returned | ROIC trend (latter-2y vs earlier-2y): -0.99pp; capital returned to shareholders: yes |
-| Owner orientation | ✅ | 0.5263 / None | Insiders > 5% OR LLM = owner_oriented | Insider ownership: 52.63% (PASS at >5%). LLM owner-orientation: unavailable |
-| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: SKIPPED (qualitative unavailable); defaulted PASS |
+| Capital allocation track record | ✅ | -0.005261865894782031 / True | ROIC not declining > 3pp AND capital returned | ROIC trend (latter-2y vs earlier-2y): -0.53pp; capital returned to shareholders: yes |
+| Owner orientation | ✅ | 0.5263 / owner_oriented | Insiders > 5% OR LLM = owner_oriented | Insider ownership: 52.63% (PASS at >5%). LLM owner-orientation: owner_oriented |
+| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: PASS (LLM coherence: coherent). The corporate narrative across the annual report and the successive earnings transcripts is cohesive and tightly aligned. Management consistently references their primary objectives of backward integration, premiumization, and service-led expansion as logi |
 
 _Part C — Management & Capital Allocation: **4/4 passed**_
 
@@ -161,13 +162,13 @@ _Part C — Management & Capital Allocation: **4/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Margin of safety | ❌ | Trading at 5.3x intrinsic | > 25.0% | Trading at 5.3x intrinsic value (target ≤ 0.75x) (Price: 2672.00, Intrinsic: 506.38) |
+| Margin of safety | ❌ | Trading at 4.2x intrinsic | > 25.0% | Trading at 4.2x intrinsic value (target ≤ 0.75x) (Price: 2683.00, Intrinsic: 636.27) |
 | Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
-| Holdability (20-year test) | ✅ | N/A | LLM verdict = holdable_20y | Holdability check skipped (qualitative unavailable); defaulted PASS |
+| Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. Asian Paints dominates the Indian coatings market with an irreplaceable distribution moat of over 1.6 lakh retail touchpoints. Painting represents a highly durable consumer need that is resilient to sudden technological disintermediation. The company's heavy in |
 
 _Part D — Margin of Safety & Holdability: **2/3 passed**_
 
-**Total Buffett Score**: **10/14**
+**Total Buffett Score**: **9/14**
 
 ## 3.1 Marks Investor Lens
 All 14 checks per Howard Marks's risk-first framework (frameworks/marks.md):
@@ -176,10 +177,10 @@ All 14 checks per Howard Marks's risk-first framework (frameworks/marks.md):
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Deep margin of safety | ❌ | Trading at 5.3x intrinsic | > 40% | MoS = -427.67% (< 40% threshold) — Price 2672.00 vs Intrinsic 506.38 |
+| Deep margin of safety | ❌ | Trading at 4.2x intrinsic | > 40% | MoS = -321.68% (< 40% threshold) — Price 2683.00 vs Intrinsic 636.27 |
 | Asymmetric upside-to-downside payoff | ❌ | 0.000 | > 3.0x | Asymmetry ratio = 0.00 (< 3.0 threshold) |
-| Downside protection (tangible book) | ❌ | 7.57% | > 30% | Equity/MCap = 7.57% (<= 30%) |
-| Multiple expansion not exhausted | ❌ | 62.800 | < 25x (v0.3 placeholder; sector comp in v0.4) | Trailing P/E = 62.8x (>= 25x) |
+| Downside protection (tangible book) | ❌ | 7.54% | > 30% | Equity/MCap = 7.54% (<= 30%) |
+| Multiple expansion not exhausted | ❌ | 63.100 | < 25x (v0.3 placeholder; sector comp in v0.4) | Trailing P/E = 63.1x (>= 25x) |
 
 _Part A — Margin of Safety & Asymmetric Payoff: **0/4 passed**_
 
@@ -187,7 +188,7 @@ _Part A — Margin of Safety & Asymmetric Payoff: **0/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Sector cycle position | ✅ | N/A | trough | early_recovery | mid_cycle | Cycle position unavailable; defaulted PASS (mid_cycle assumed) |
+| Sector cycle position | ✅ | trough | trough | early_recovery | mid_cycle | LLM sector cycle: trough. The Indian paint sector is navigating a relative demand trough, with low single-digit industry value growth and deflationary raw material pressures leading to intense competitive promotions. However, the company itself is in a mature mid-cycle phase, continuously leveraging |
 | Company earnings vs cyclical peak | ❌ | 66.75% | > 70% of peak | Latest NI / Peak NI = 66.8% |
 | Sentiment — going against the crowd | ✅ | N/A | Mean rating 2.5-4.0 (mixed/cautious consensus) | Consensus rating unavailable; defaulted PASS |
 
@@ -200,7 +201,7 @@ _Part B — Cycle Position: **2/3 passed**_
 | Capital structure resilience | ✅ | 0.33 / 26.46 | Debt/EBITDA < 4x AND Coverage > 4x | Debt/EBITDA = 0.33x, Coverage = 26.46x |
 | FCF stability through downturn | ✅ | 4750000000.000 | All 4 years positive FCF | 4y FCF: [34220000000.0, 4750000000.0, 27740000000.0, 36130000000.0] |
 | Volatility / beta | ✅ | 1.000 | < 1.5 | Beta = 1.00 (< 1.5) |
-| No single-point failure mode | ✅ | 0 | <= 1 concentration/regulatory risk flagged | Concentration/regulatory risks identified: 0 |
+| No single-point failure mode | ✅ | 1 | <= 1 concentration/regulatory risk flagged | Concentration/regulatory risks identified: 1 |
 
 _Part C — Risk Architecture: **4/4 passed**_
 
@@ -208,13 +209,13 @@ _Part C — Risk Architecture: **4/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Variant perception | ❌ | False | variant_present=true AND specificity=high | Variant perception unavailable; defaulted FAIL |
-| Management humility (knowing what you don't know) | ✅ | N/A | verdict = humble | Management humility check skipped; defaulted PASS |
-| Patient opportunism (why now) | ❌ | N/A | verdict = dislocation_present | Why-now signal unavailable; defaulted FAIL |
+| Variant perception | ✅ | True | variant_present=true AND specificity=high | Variant: True, Specificity: high. Consensus: 'The market believes Asian Paints will face massive margin erosion and market share loss due to aggressive pricing from new, heavily capitalized entrants.' | Company view: 'Management believes they can sustain premium margins and grow market share through |
+| Management humility (knowing what you don't know) | ✅ | humble | verdict = humble | LLM humility verdict: humble. Management demonstrates notable humility by openly acknowledging weakness in home decor, bath, and kitchen segments, labeling them as 'areas of work.' They also refuse to make defensive macroeconomic forecasts, admitting they cannot predict crude oil or TiO2 pricing dir |
+| Patient opportunism (why now) | ❌ | catalyst_present | verdict = dislocation_present | Why-now: catalyst_present. Event: The upcoming commissioning of the Rs. 3,250 crore Dahej VAM VAE backward integration plant in Q1 FY2026-27.. The imminent commissioning of the VAM VAE chemical plant acts as a major catalyst. It allows the company to transition to next-generation eco-friendly paint  |
 
-_Part D — Second-Level Thinking & Contrarianism: **1/3 passed**_
+_Part D — Second-Level Thinking & Contrarianism: **2/3 passed**_
 
-**Total Marks Score**: **7/14**
+**Total Marks Score**: **8/14**
 
 ## 3.2 KKR Investor Lens
 All 18 checks per KKR's operating playbook framework (frameworks/kkr.md):
@@ -235,11 +236,11 @@ _Part A — LBO Viability: **3/4 passed**_
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Margin Improvement Room | ✅ | 0.18 / 0.21 | Current < 95% of Peak | Margin compression exists. |
-| Capex Optimization | ✅ | 0.08 / 0.60 | Optimization profile | Capex/Sales 7.5%, Growth share 59.7%. Optimization possible. |
-| WC Optimization | ✅ | -15.44% | < -5% or qualitative | Quantitative pass. Qualitative: None. |
-| M&A Platform Potential | ✅ | N/A | Qualitative high | Defaulted PASS (qualitative unavailable) |
-| Mgmt / Ops Upgrade | ❌ | 0.00% | > 20% cost share | Opex share 0.0%. Qualitative: None. |
-| Stavros Workforce Fit | ✅ | N/A | Frontline or mixed | Defaulted PASS (qualitative unavailable, assumed mixed) |
+| Capex Optimization | ✅ | 0.07 / 0.59 | Optimization profile | Capex/Sales 7.3%, Growth share 58.8%. Optimization possible. |
+| WC Optimization | ✅ | -4.01% | < -5% or qualitative | Quantitative fail. Qualitative: high. |
+| M&A Platform Potential | ✅ | high | Qualitative high | Qualitative signal: high |
+| Mgmt / Ops Upgrade | ✅ | 29.86% | > 20% cost share | Opex share 29.9%. Qualitative: low. |
+| Stavros Workforce Fit | ❌ | low_labor_intensity | Frontline or mixed | Qualitative signal: low_labor_intensity |
 
 _Part B — Operational Upside: **5/6 passed**_
 
@@ -248,7 +249,7 @@ _Part B — Operational Upside: **5/6 passed**_
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Sector Compatibility | ✅ | Household Products | In KKR Playbook | Household Products is in KKR playbook. |
-| Willing Seller | ✅ | N/A | Positive catalyst | neutral default — qualitative unavailable; check counted as PASS |
+| Willing Seller | ✅ | unclear | Positive catalyst | neutral default — qualitative unavailable; check counted as PASS |
 | Regulatory Freedom | ✅ | Household Products | Not restricted | Clear. |
 
 _Part C — Strategic Fit: **3/3 passed**_
@@ -257,12 +258,12 @@ _Part C — Strategic Fit: **3/3 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Cycle Timing | ✅ | N/A | Not peak/late | Defaulted PASS (assumed mid_cycle) |
-| 7-Year IRR | ❌ | 16.06% | > 18.00% | Entry mult 36.8x -> Exit mult 31.3x. |
+| Cycle Timing | ✅ | trough | Not peak/late | Cycle: trough |
+| 7-Year IRR | ❌ | 16.06% | > 18.00% | Entry mult 36.9x -> Exit mult 31.4x. |
 | Dividend Recap | ❌ | 56.12% | CV < 35%, FCF > 0 | CV is 56.1%, min FCF 4750000000.0. |
-| Why Now Catalyst | ❌ | N/A | Catalyst present | Defaulted FAIL (qualitative unavailable) |
+| Why Now Catalyst | ✅ | catalyst_present | Catalyst present | Signal: catalyst_present |
 
-_Part D — Cycle Timing & Returns: **1/4 passed**_
+_Part D — Cycle Timing & Returns: **2/4 passed**_
 
 ### Part E — Defensibility vs Phalippou Bar
 
@@ -272,7 +273,7 @@ _Part D — Cycle Timing & Returns: **1/4 passed**_
 
 _Part E — Defensibility vs Phalippou Bar: **1/1 passed**_
 
-**Total KKR Score**: **13/18**
+**Total KKR Score**: **14/18**
 
 ## 3.3 Blackstone Investor Lens
 All 14 checks per Blackstone's thematic framework (frameworks/blackstone.md):
@@ -282,7 +283,7 @@ All 14 checks per Blackstone's thematic framework (frameworks/blackstone.md):
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Growing Market | ✅ | 5.23% | > 5% & upward | CAGR is 5.2%. |
-| Durable Moat | ❌ | 0.02 / 0.18 | Stdev < 4pp & > 35% | Stdev 2.1pp, Mean 18.4%. |
+| Durable Moat | ❌ | 0.25 / 0.37 | Stdev < 4pp & > 35% | Stdev 25.1pp, Mean 37.3%. |
 | Recurring Revenue | ❌ | 0.117 | < 8pp | YoY growth stdev is 11.7pp. |
 | No Concentration | ✅ | diversified | Diversified | Assumed diversified (public company baseline). |
 
@@ -293,10 +294,10 @@ _Part A — Good Business Filter: **2/4 passed**_
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Theme Alignment | ✅ | Household Products | Favored Theme | Household Products in themes. |
-| Cycle Position | ✅ | N/A | Not peak/late | Defaulted PASS (assumed mid_cycle) |
-| Structural Tailwind | ✅ | N/A | Tailwind/neutral | Defaulted PASS (assumed neutral) |
+| Cycle Position | ✅ | trough | Not peak/late | Cycle: trough |
+| Structural Tailwind | ❌ | present | Tailwind/neutral | Tailwind: present |
 
-_Part B — Good Neighborhood (Thematic): **3/3 passed**_
+_Part B — Good Neighborhood (Thematic): **2/3 passed**_
 
 ### Part C — Downside Protection
 
@@ -304,7 +305,7 @@ _Part B — Good Neighborhood (Thematic): **3/3 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Conservative Balance Sheet | ✅ | 0.33 / 26.46 | <3.5x, >4x | Leverage 0.3x, Interest Coverage 26.5x. |
 | FCF Resilience | ✅ | 4750000000.00 / 0.08 | >0, >6% | Min FCF 4750000000.0, Avg FCF Margin 7.7%. |
-| Stress Survival | ✅ | 0.00 / 0.01 | Cash>1x OR Debt/MC<0.5 | Cash ratio 0.00x, Debt/Equity 0.9%. |
+| Stress Survival | ✅ | 0.23 / 0.01 | Cash>1x OR Debt/MC<0.5 | Cash ratio 0.23x, Debt/Equity 0.9%. |
 
 _Part C — Downside Protection: **3/3 passed**_
 
@@ -312,21 +313,21 @@ _Part C — Downside Protection: **3/3 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Blackstone-Scale Deal | ✅ | 2562880000000.000 | > ₹150B | Market cap is adequate. |
-| 20-Year Core Viability | ✅ | N/A | Holdable 20y | Defaulted PASS (assumed holdable) |
-| Multi-Product Engagement | ✅ | N/A | Multi-product | neutral default — qualitative unavailable; check counted as PASS |
+| Blackstone-Scale Deal | ✅ | 2573100000000.000 | > ₹150B | Market cap is adequate. |
+| 20-Year Core Viability | ✅ | holdable_20y | Holdable 20y | Signal: holdable_20y |
+| Multi-Product Engagement | ❌ | high | Multi-product | Signal: high |
 
-_Part D — Scale Fit & Hold Economics: **3/3 passed**_
+_Part D — Scale Fit & Hold Economics: **2/3 passed**_
 
 ### Part E — Defensibility vs Phalippou Bar
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Above-Average Alpha | ✅ | 4 | >= 4 | 4 of 6 levers passed. |
+| Above-Average Alpha | ❌ | 2 | >= 4 | 2 of 6 levers passed. |
 
-_Part E — Defensibility vs Phalippou Bar: **1/1 passed**_
+_Part E — Defensibility vs Phalippou Bar: **0/1 passed**_
 
-**Total Blackstone Score**: **12/14**
+**Total Blackstone Score**: **9/14**
 
 ## 3.4 Apollo Investor Lens
 All 16 checks per Apollo's credit & complexity framework (frameworks/apollo.md):
@@ -335,10 +336,10 @@ All 16 checks per Apollo's credit & complexity framework (frameworks/apollo.md):
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Entry Valuation Discount | ❌ | 36.772 | < 12.8x EV/EBITDA or <0.70 P/B | EV/EBITDA is 36.8x. P/B is 13.21x. |
+| Entry Valuation Discount | ❌ | 36.917 | < 12.8x EV/EBITDA or <0.70 P/B | EV/EBITDA is 36.9x. P/B is 13.26x. |
 | Capital Structure Complexity | ❌ | 0.33 / 26.46 | Debt stress | Lev: 0.3x, IC: 26.5x. Clean. |
 | FCF Serviceability | ✅ | 31.066 | >0 FCF, >1.5x Cov | Avg FCF 25710000000.0, Hyp Cov 31.1x. |
-| Deployment Scale | ✅ | 2585780000000.000 | > ₹20B | EV is 2585780000000.0. |
+| Deployment Scale | ✅ | 2596000000000.000 | > ₹20B | EV is 2596000000000.0. |
 
 _Part A — Purchase Price & Capital Structure Entry: **2/4 passed**_
 
@@ -346,13 +347,13 @@ _Part A — Purchase Price & Capital Structure Entry: **2/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Chaos/Dislocation Catalyst | ❌ | N/A | Present | Defaulted FAIL (qualitative unavailable) |
-| Fulcrum Security | ❌ | (0.3256541524459613, 26.45814977973568, 111.91615720524017) | Hard or Soft Fulcrum | Qual: None. Hard signals: A=False, B=False. |
-| ABF/Credit Fit | ❌ | N/A | Compatible | Defaulted FAIL (qualitative unavailable) |
-| Complexity Moat | ❌ | 7.54% | >55% or High Qual | Debt/Assets 7.5%. Qual: None. |
+| Chaos/Dislocation Catalyst | ✅ | present | Present | Signal: present |
+| Fulcrum Security | ❌ | (0.3256541524459613, 26.45814977973568, 112.36244541484716) | Hard or Soft Fulcrum | Qual: absent. Hard signals: A=False, B=False. |
+| ABF/Credit Fit | ❌ | unclear | Compatible | Signal: unclear |
+| Complexity Moat | ✅ | 7.54% | >55% or High Qual | Debt/Assets 7.5%. Qual: high. |
 | Domain Knowledge | ❌ | Household Products | In Apollo Playbook | Household Products not in playbook. |
 
-_Part B — Chaos, Complexity, Credit Edge: **0/5 passed**_
+_Part B — Chaos, Complexity, Credit Edge: **2/5 passed**_
 
 ### Part C — Athene Permanent Capital Fit
 
@@ -360,7 +361,7 @@ _Part B — Chaos, Complexity, Credit Edge: **0/5 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | IG Credit Yield | ✅ | (0.20739692089895595, 0.3256541524459613, 26.45814977973568) | Margin>12%, Lev<5x, IC>1.5x | Margin 20.7%, Lev 0.3x, IC 26.5x. |
 | Long-Duration Stability | ❌ | 0.047 | < 4pp, > 0 avg | FCF Margin Stdev 4.7pp. |
-| Hold-Without-Exit | ✅ | N/A | Viable | neutral default — qualitative unavailable; check counted as PASS |
+| Hold-Without-Exit | ✅ | yes | Viable | Signal: yes |
 
 _Part C — Athene Permanent Capital Fit: **2/3 passed**_
 
@@ -370,37 +371,68 @@ _Part C — Athene Permanent Capital Fit: **2/3 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Through-Cycle Credit Floor | ✅ | 48040000000.00 / 27.15 | Min EBIT>0, Cov>1.5x | Min EBIT 48040000000.0, Avg Cov 27.2x. |
 | Tangible Collateral | ✅ | 100.00% | > 40% | Ratio 100.0%. |
-| Covenant Control | ✅ | N/A | High/Mixed | Defaulted PASS (assumed mixed) |
+| Covenant Control | ❌ | low | High/Mixed | Signal: low |
 
-_Part D — Credit Downside Quality: **3/3 passed**_
+_Part D — Credit Downside Quality: **2/3 passed**_
 
 ### Part E — Defensibility vs Phalippou Bar
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Above-Average Alpha | ❌ | 1 | >= 4 | 1 of 6 levers passed. |
+| Above-Average Alpha | ❌ | 3 | >= 4 | 3 of 6 levers passed. |
 
 _Part E — Defensibility vs Phalippou Bar: **0/1 passed**_
 
-**Total Apollo Score**: **7/16**
+**Total Apollo Score**: **8/16**
 
 ## 3.5 Qualitative Analysis
-_Qualitative analysis unavailable: No documents found in Drive folder_
+Based on 3 document(s): Financial Year 2025                from bse, Feb 2026 Concall, Nov 2025 Concall. Model: `gemini-3.5-flash`.
+
+### Forward Guidance
+- **Q4 FY2025-26** (volume): Management expects volume growth in the high single-digit to double-digit range, specifically targeting a band of 8% to 10%. _[Feb 2026 Concall (type: concall_transcript)]_
+- **Q4 FY2025-26** (margin): Management intends to maintain its PBDIT margin guidance within the 18% to 20% band despite competitive intensity. _[Feb 2026 Concall (type: concall_transcript)]_
+- **FY 2025-26** (revenue): Management is targeting mid-single-digit value growth for the full financial year. _[Nov 2025 Concall (type: concall_transcript)]_
+- **Q1 FY2026-27** (capex): A portion of the Rs. 3,250 crore VAM VAE project is nearing completion and is expected to unfold in the first quarter of next fiscal year. _[Nov 2025 Concall (type: concall_transcript)]_
+
+### Risk Callouts
+- **Geopolitical Volatility**: The ongoing US protectionist policies and geopolitical conflicts create trade market uncertainty and financial volatility. _[bse (type: annual_report)]_
+- **Currency Devaluation**: Currency devaluation in Ethiopia has disrupted initial operations and caused foreign exchange fluctuation losses. _[bse (type: annual_report)]_
+- **Regulatory and Import Tariffs**: Muted demand and operational uncertainty were observed in components due to Anti-Dumping Duty and BIS certification announcements. _[bse (type: annual_report)]_
+
+### Strategic Themes
+- **Backward Integration**: Developing VAM, VAE, and clinker production capacities locally to replace import dependence and drive sustainable cost efficiencies. _[bse (type: annual_report)]_
+- **Regionalization**: Adopting micro-marketing strategies and regional packaging tailored to local culture to deepen customer engagement. _[Nov 2025 Concall (type: concall_transcript)]_
+- **Space Decor Transformation**: Expanding from surface decor to space decor through the retail footprint of Beautiful Homes Stores and home decor offerings. _[Feb 2026 Concall (type: concall_transcript)]_
+
+### Tone & Coherence
+- **Tone (current)**: confident
+- **Tone (trajectory)**: stable
+- **Coherence verdict**: coherent
+
+_Management remains highly confident in their internal execution capabilities, cost models, and brand equity to navigate the slowing consumer market. While cautious about short-term external demand and geopolitical crude pricing, they consistently highlight volume gains and stable margins as proof of operational strength. Their outlook on industrial JVs and the long-term backward integration strategy is notably positive._
+
+_The corporate narrative across the annual report and the successive earnings transcripts is cohesive and tightly aligned. Management consistently references their primary objectives of backward integration, premiumization, and service-led expansion as logical steps to offset industry-wide slowing demand. Their financial outcomes, specifically gross margin improvements despite pricing pressures, validate the strategic cost-containment goals discussed in their plans._
+
+### Marks-Relevant Signals
+- **Owner orientation**: owner_oriented — Management demonstrates clear owner orientation by rejecting short-term metric games like artificial channel filling, stating that it is counterproductive for succeeding quarters. They show deep candor regarding underperforming segments, such as home decor, and prioritize long-term capital allocatio
+- **Holdability (20y)**: holdable_20y — Asian Paints dominates the Indian coatings market with an irreplaceable distribution moat of over 1.6 lakh retail touchpoints. Painting represents a highly durable consumer need that is resilient to sudden technological disintermediation. The company's heavy investments in backward integration and a
+- **Sector cycle**: trough / Company cycle: mid — The Indian paint sector is navigating a relative demand trough, with low single-digit industry value growth and deflationary raw material pressures leading to intense competitive promotions. However, the company itself is in a mature mid-cycle phase, continuously leveraging its cost-efficiency frame
+- **Variant perception**: present=True, specificity=high. Consensus: 'The market believes Asian Paints will face massive margin erosion and market share loss due to aggressive pricing from new, heavily capitalized entran'
+- **Management humility**: humble — Management demonstrates notable humility by openly acknowledging weakness in home decor, bath, and kitchen segments, labeling them as 'areas of work.' They also refuse to make defensive macroeconomic forecasts, admitting they cannot predict crude oil or TiO2 pricing directions due to high global vol
+- **Why now**: catalyst_present — The upcoming commissioning of the Rs. 3,250 crore Dahej VAM VAE backward integration plant in Q1 FY2026-27.
 
 ## 4. Margin-of-Safety Check
-Current Stock Price: **₹2,672.00**
-DCF Intrinsic Value: **₹506.38**
+Current Stock Price: **₹2,683.00**
+DCF Intrinsic Value: **₹636.27**
 Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)
-Computed Margin of Safety: Trading at 5.3x intrinsic value (target ≤ 0.75x)
+Computed Margin of Safety: Trading at 4.2x intrinsic value (target ≤ 0.75x)
 ### Status: [FAIL] ❌
-The stock trades above the safety threshold. Trading at 5.3x intrinsic value is insufficient for investment under the Buffett framework.
+The stock trades above the safety threshold. Trading at 4.2x intrinsic value is insufficient for investment under the Buffett framework.
 
 ## 5. Investment Verdict
-**BUFFETT RECOMMENDATION: WAIT**
+**BUFFETT RECOMMENDATION: SKIP**
 
-High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹379.78 (75% of intrinsic value).
-
-**Action Item**: Set alert at buy-trigger price: **₹379.78** (75% of intrinsic value).
+Does not meet enough Buffett criteria across business quality, management, and price.
 
 **MARKS RECOMMENDATION: SKIP**
 
@@ -410,9 +442,9 @@ Insufficient asymmetric edge under Marks framework.
 
 Failed Part A pre-condition: not LBO-viable.
 
-**BLACKSTONE RECOMMENDATION: BUY**
+**BLACKSTONE RECOMMENDATION: SKIP**
 
-High-conviction Blackstone target. Good business in a good neighborhood.
+Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar).
 
 **APOLLO RECOMMENDATION: SKIP**
 
@@ -424,8 +456,8 @@ The disagreement between lenses IS the insight.
 
 | Lens | Score | Verdict |
 | :--- | :---: | :---: |
-| **Buffett** | 10/14 | **WAIT** ⏳ |
-| **Marks** | 7/14 | **SKIP** ❌ |
-| **KKR** | 13/18 | **SKIP** ❌ |
-| **Blackstone** | 12/14 | **BUY** ✅ |
-| **Apollo** | 7/16 | **SKIP** ❌ |
+| **Buffett** | 9/14 | **SKIP** ❌ |
+| **Marks** | 8/14 | **SKIP** ❌ |
+| **KKR** | 14/18 | **SKIP** ❌ |
+| **Blackstone** | 9/14 | **SKIP** ❌ |
+| **Apollo** | 8/16 | **SKIP** ❌ |

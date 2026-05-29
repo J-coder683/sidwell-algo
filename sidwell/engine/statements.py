@@ -1,0 +1,332 @@
+from typing import Dict, Any, List, Optional
+from sidwell.ajp.schema import AJP, AJPAssumption
+from sidwell.ajp.loader import AJPLoader
+
+class StatementsEngine:
+    """Handles mapping historical data from fin['statements'] and projecting the 3-statement model."""
+    
+    @staticmethod
+    def map_historical(fin_statements: Dict[str, Any]) -> Dict[str, Any]:
+        """Maps scraped fin['statements'] (crore) to model historicals (mm)."""
+        # Ensure we have data
+        if not fin_statements or "years_annual" not in fin_statements:
+            return {"years_annual": [], "is": {}, "bs": {}, "cf": {}, "ratios": {}}
+            
+        # Strip TTM if present (screener scraper already does this, but double check)
+        years_annual = fin_statements.get("years_annual", [])
+        
+        annual = fin_statements.get("annual", {})
+        pl = annual.get("profit_loss", {})
+        bs = annual.get("balance_sheet", {})
+        cf = annual.get("cash_flow", {})
+        ratios = fin_statements.get("ratios", {})
+
+        def convert_row(row: List[Optional[float]], multiplier: float = 10.0) -> List[float]:
+            # Convert crore to mm (x 10). If None, 0.0
+            return [(val * multiplier) if val is not None else 0.0 for val in row]
+            
+        def convert_ratio_row(row: List[Optional[float]]) -> List[float]:
+            # Ratios are not in crore, just keep as is
+            return [val if val is not None else 0.0 for val in row]
+
+        # Income Statement
+        mapped_is = {
+            "sales": convert_row(pl.get("sales", [])),
+            "expenses": convert_row(pl.get("expenses", [])),
+            "operating_profit": convert_row(pl.get("operating profit", [])),
+            "other_income": convert_row(pl.get("other income", [])),
+            "depreciation": convert_row(pl.get("depreciation", [])),
+            "interest": convert_row(pl.get("interest", [])),
+            "profit_before_tax": convert_row(pl.get("profit before tax", [])),
+            "tax": convert_row(pl.get("tax", [])),
+            "net_profit": convert_row(pl.get("net profit", [])),
+            # Bank specific
+            "revenue": convert_row(pl.get("revenue", [])),
+            "financing_profit": convert_row(pl.get("financing profit", []))
+        }
+        
+        # Balance Sheet
+        mapped_bs = {
+            "equity_capital": convert_row(bs.get("equity capital", [])),
+            "reserves": convert_row(bs.get("reserves", [])),
+            "borrowings": convert_row(bs.get("borrowings", [])),
+            "lease_liabilities": convert_row(bs.get("lease liabilities", [])),
+            "non_controlling_int": convert_row(bs.get("non controlling int", [])),
+            "trade_payables": convert_row(bs.get("trade payables", [])),
+            "other_liability_items": convert_row(bs.get("other liability items", [])),
+            "total_liabilities": convert_row(bs.get("total liabilities", [])),
+            
+            "fixed_assets": convert_row(bs.get("fixed assets", [])),
+            "gross_block": convert_row(bs.get("gross block", [])),
+            "accumulated_depreciation": convert_row(bs.get("accumulated depreciation", [])),
+            "cwip": convert_row(bs.get("cwip", [])),
+            "investments": convert_row(bs.get("investments", [])),
+            "inventories": convert_row(bs.get("inventories", [])),
+            "trade_receivables": convert_row(bs.get("trade receivables", [])),
+            "cash_equivalents": convert_row(bs.get("cash equivalents", [])),
+            "loans_n_advances": convert_row(bs.get("loans n advances", [])),
+            "other_asset_items": convert_row(bs.get("other asset items", [])),
+            "total_assets": convert_row(bs.get("total assets", []))
+        }
+        
+        # Cash Flow
+        mapped_cf = {
+            "cfo": convert_row(cf.get("cash from operating activity", [])),
+            "receivables": convert_row(cf.get("receivables", [])),
+            "inventory": convert_row(cf.get("inventory", [])),
+            "payables": convert_row(cf.get("payables", [])),
+            "working_capital_changes": convert_row(cf.get("working capital changes", [])),
+            
+            "cfi": convert_row(cf.get("cash from investing activity", [])),
+            "fixed_assets_purchased": convert_row(cf.get("fixed assets purchased", [])),
+            
+            "cff": convert_row(cf.get("cash from financing activity", [])),
+            "proceeds_from_borrowings": convert_row(cf.get("proceeds from borrowings", [])),
+            "repayment_of_borrowings": convert_row(cf.get("repayment of borrowings", []))
+        }
+
+        # Ratios (days, %)
+        mapped_ratios = {
+            "debtor_days": convert_ratio_row(ratios.get("debtor days", [])),
+            "inventory_days": convert_ratio_row(ratios.get("inventory days", [])),
+            "days_payable": convert_ratio_row(ratios.get("days payable", []))
+        }
+        
+        return {
+            "years_annual": years_annual,
+            "is": mapped_is,
+            "bs": mapped_bs,
+            "cf": mapped_cf,
+            "ratios": mapped_ratios
+        }
+
+    @staticmethod
+    def run_projections(hist: Dict[str, Any], ajp: AJP, explicit_years: int = 10) -> Dict[str, Any]:
+        """
+        Runs the 3-statement projection for explicit_years (usually 10).
+        Uses fade/convergence for margins and growth.
+        """
+        years_hist = hist["years_annual"]
+        if not years_hist:
+            return {}
+            
+        proj = {
+            "years": [f"FY{int(years_hist[-1][-4:]) + i + 1}E" for i in range(explicit_years)],
+            "revenue": [],
+            "ebit": [],
+            "nopat": [],
+            "da": [],
+            "capex": [],
+            "nwc_change": [],
+            "ufcf": []
+        }
+        
+        scenario = ajp.meta.scenario_active
+        
+        # Get AJP assumptions with fallbacks
+        def get_val(driver_id: str, default: float) -> float:
+            a = AJPLoader.get_assumption_or_fallback(ajp, driver_id, default, "Engine fallback")
+            if a.scenario:
+                if scenario == "BEAR" and a.scenario.BEAR is not None: return a.scenario.BEAR
+                if scenario == "BULL" and a.scenario.BULL is not None: return a.scenario.BULL
+                if a.scenario.BASE is not None: return a.scenario.BASE
+            return float(a.value) if a.value is not None else default
+
+        rev_g_s1 = get_val("stage1_revenue_growth", 0.05)
+        term_g = get_val("terminal_growth", 0.02)
+        target_margin = get_val("ebit_margin_target", 0.10)
+        target_capex_sales = get_val("capex_pct_sales_target", 0.05)
+        target_da_sales = get_val("da_pct_sales_target", 0.05)
+        tax_rate = get_val("tax_rate", 0.25)
+        
+        # Working capital fallbacks
+        dso_days = get_val("dso_days", 45.0)
+        dio_days = get_val("dio_days", 30.0)
+        dpo_days = get_val("dpo_days", 45.0)
+        
+        # Initial values from hist
+        last_sales = hist["is"]["sales"][-1] if hist["is"]["sales"] else 0.0
+        
+        if last_sales == 0.0:
+            last_sales = hist["is"]["revenue"][-1] if hist["is"]["revenue"] else 0.0
+
+        last_ebit = hist["is"]["operating_profit"][-1] if hist["is"]["operating_profit"] else 0.0
+        last_margin = last_ebit / last_sales if last_sales > 0 else target_margin
+        
+        last_capex = abs(hist["cf"]["fixed_assets_purchased"][-1]) if hist["cf"]["fixed_assets_purchased"] else 0.0
+        last_capex_sales = last_capex / last_sales if last_sales > 0 else target_capex_sales
+        
+        last_da = hist["is"]["depreciation"][-1] if hist["is"]["depreciation"] else 0.0
+        last_da_sales = last_da / last_sales if last_sales > 0 else target_da_sales
+        
+        # Project 10 years (5 years stage 1, 5 years fade)
+        stage1_years = 5
+        fade_years = explicit_years - stage1_years
+        
+        prev_sales = last_sales
+        prev_ar = (hist["bs"]["trade_receivables"][-1] if hist["bs"]["trade_receivables"] else (prev_sales * dso_days / 365.0))
+        prev_inv = (hist["bs"]["inventories"][-1] if hist["bs"]["inventories"] else (prev_sales * dio_days / 365.0))
+        prev_ap = (hist["bs"]["trade_payables"][-1] if hist["bs"]["trade_payables"] else (prev_sales * dpo_days / 365.0))
+        
+        # To avoid circularity in debt schedule, we will build standard UFCF first.
+        # The full 3-statement will be built deterministically here.
+        # For simplicity in this core engine logic, we compute the UFCF components explicitly.
+        
+        proj["ar"] = []
+        proj["inv"] = []
+        proj["ap"] = []
+        proj["nwc"] = []
+
+        for i in range(explicit_years):
+            # Growth fade
+            if i < stage1_years:
+                g = rev_g_s1
+            else:
+                # Linear decay to term_g
+                step = (rev_g_s1 - term_g) / (fade_years + 1)
+                g = rev_g_s1 - step * (i - stage1_years + 1)
+                
+            sales = prev_sales * (1 + g)
+            proj["revenue"].append(sales)
+            
+            # Margin fade
+            margin_step = (target_margin - last_margin) / explicit_years
+            margin = last_margin + margin_step * (i + 1)
+            ebit = sales * margin
+            proj["ebit"].append(ebit)
+            
+            # Taxes -> NOPAT
+            nopat = ebit * (1 - tax_rate)
+            proj["nopat"].append(nopat)
+            
+            # CapEx & D&A fade
+            capex_step = (target_capex_sales - last_capex_sales) / explicit_years
+            capex_pct = last_capex_sales + capex_step * (i + 1)
+            capex = sales * capex_pct
+            proj["capex"].append(capex)
+            
+            da_step = (target_da_sales - last_da_sales) / explicit_years
+            da_pct = last_da_sales + da_step * (i + 1)
+            da = sales * da_pct
+            proj["da"].append(da)
+            
+            # NWC projection via Days
+            ar = sales * (dso_days / 365.0)
+            inv = sales * (dio_days / 365.0)
+            ap = sales * (dpo_days / 365.0)
+            
+            proj["ar"].append(ar)
+            proj["inv"].append(inv)
+            proj["ap"].append(ap)
+            
+            # NWC = AR + Inv - AP
+            nwc = ar + inv - ap
+            proj["nwc"].append(nwc)
+            
+            nwc_change = nwc - (prev_ar + prev_inv - prev_ap)
+            proj["nwc_change"].append(nwc_change)
+            
+            # UFCF
+            ufcf = nopat + da - capex - nwc_change
+            proj["ufcf"].append(ufcf)
+            
+            # Update prev
+            prev_sales = sales
+            prev_ar = ar
+            prev_inv = inv
+            prev_ap = ap
+            
+        # Complete the 3-statement balance and debt schedule
+        # Start with historical ending balances
+        cash_balance = hist["bs"]["cash_equivalents"][-1] if hist["bs"]["cash_equivalents"] else 0.0
+        debt_balance = (hist["bs"]["borrowings"][-1] if hist["bs"]["borrowings"] else 0.0) + \
+                       (hist["bs"]["lease_liabilities"][-1] if hist["bs"]["lease_liabilities"] else 0.0)
+        equity_balance = (hist["bs"]["equity_capital"][-1] if hist["bs"]["equity_capital"] else 0.0) + \
+                         (hist["bs"]["reserves"][-1] if hist["bs"]["reserves"] else 0.0)
+        net_fixed_assets = hist["bs"]["fixed_assets"][-1] if hist["bs"]["fixed_assets"] else 0.0
+        
+        # We must balance the starting historical balance sheet exactly, 
+        # so we calculate a 'net_other_assets' plug representing un-modeled items 
+        # (like investments, deferred taxes, other liabilities, etc).
+        hist_ar = hist["bs"]["trade_receivables"][-1] if hist["bs"]["trade_receivables"] else 0.0
+        hist_inv = hist["bs"]["inventories"][-1] if hist["bs"]["inventories"] else 0.0
+        hist_ap = hist["bs"]["trade_payables"][-1] if hist["bs"]["trade_payables"] else 0.0
+        
+        hist_assets = cash_balance + hist_ar + hist_inv + net_fixed_assets
+        hist_liab_eq = hist_ap + debt_balance + equity_balance
+        
+        net_other_assets = hist_liab_eq - hist_assets
+        
+        proj["cash"] = []
+        proj["debt"] = []
+        proj["equity"] = []
+        proj["net_fixed_assets"] = []
+        proj["balance_check"] = []
+        proj["taxes"] = []
+        proj["net_income"] = []
+        
+        # Simple interest rate assumed for schedule
+        interest_rate = get_val("pretax_cost_of_debt_override", 0.08)
+        
+        for i in range(explicit_years):
+            # Interest based on beginning debt
+            interest_exp = debt_balance * interest_rate
+            
+            # Recalculate Net Income (levered)
+            ebit = proj["ebit"][i]
+            pbt = ebit - interest_exp
+            tax = pbt * tax_rate if pbt > 0 else 0
+            net_income = pbt - tax
+            
+            proj["taxes"].append(tax)
+            proj["net_income"].append(net_income)
+            
+            # Update Fixed Assets
+            net_fixed_assets = net_fixed_assets + proj["capex"][i] - proj["da"][i]
+            proj["net_fixed_assets"].append(net_fixed_assets)
+            
+            # Update Equity
+            equity_balance += net_income
+            proj["equity"].append(equity_balance)
+            
+            # Levered Free Cash Flow (for debt sweep)
+            cfo = net_income + proj["da"][i] - proj["nwc_change"][i]
+            cfi = -proj["capex"][i]
+            free_cash_flow = cfo + cfi
+            
+            # Minimum cash balance constraint (e.g. 5% of sales)
+            min_cash = proj["revenue"][i] * 0.05
+            
+            cash_available_for_debt = cash_balance + free_cash_flow - min_cash
+            
+            if cash_available_for_debt > 0:
+                # Pay down debt
+                debt_paydown = min(debt_balance, cash_available_for_debt)
+                debt_balance -= debt_paydown
+                cash_balance = cash_balance + free_cash_flow - debt_paydown
+            else:
+                # Borrow from revolver
+                revolver_draw = -cash_available_for_debt
+                debt_balance += revolver_draw
+                cash_balance = min_cash
+                
+            proj["cash"].append(cash_balance)
+            proj["debt"].append(debt_balance)
+            
+            # Balance Check: Assets - Liabilities - Equity
+            total_assets = cash_balance + proj["ar"][i] + proj["inv"][i] + net_fixed_assets + net_other_assets
+            total_liab = proj["ap"][i] + debt_balance
+            total_equity = equity_balance
+            
+            balance_check = total_assets - total_liab - total_equity
+            proj["balance_check"].append(balance_check)
+            
+            # Raise ValueError on balance sheet mismatch (NOT assert — assert is stripped in -O mode)
+            if abs(balance_check) >= 1.0:
+                raise ValueError(
+                    f"Balance check failed in year {proj['years'][i]}: "
+                    f"assets - liabilities - equity = {balance_check:.4f}mm"
+                )
+            
+        return proj
+

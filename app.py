@@ -113,76 +113,11 @@ def _extract_qualitative(ticker: str, doc_tuples: tuple):
 @st.cache_data(ttl=86_400, show_spinner=False)   # 24h
 def _run_pipeline(ticker: str) -> dict:
     """
-    Full pipeline: financials → rf_rate → damodaran → DCF → qualitative → all 5 lenses.
-    Returns the same dict as value.analyze().
+    Full pipeline — delegates to value.analyze() so app.py and value.py
+    always call the SAME code path.  Parity is structural, not a convention.
     """
-    from data import documents as doc_module
-    from valuation import dcf
-    from lenses import buffett, marks, kkr, blackstone, apollo
-    from reports import render
-
-    financials = _fetch_financials(ticker)
-    rf_rate = _fetch_rf_rate(ticker)
-    damodaran_data = _fetch_damodaran(
-        ticker,
-        financials.get("scraped_industry"),
-        financials.get("scraped_broad_industry"),
-        financials.get("scraped_sector"),
-    )
-    dcf_results = dcf.run_dcf_valuation(financials, damodaran_data, rf_rate)
-
-    docs = doc_module.discover_documents(ticker)
-    # Convert list-of-dicts to tuple-of-tuples (hashable for @st.cache_data).
-    # Sorted by URL so cache key is stable regardless of doc-discovery order.
-    doc_tuples = tuple(sorted(
-        (d.get("url", ""), d.get("type", ""), d.get("label", ""), d.get("date") or "")
-        for d in docs
-    ))
-    qualitative_results = _extract_qualitative(ticker, doc_tuples)
-
-    buffett_results = buffett.evaluate_buffett_lens(
-        financials, dcf_results, qualitative_results=qualitative_results
-    )
-    marks_results = marks.evaluate_marks_lens(
-        financials, dcf_results, qualitative_results=qualitative_results
-    )
-    kkr_results = kkr.evaluate_kkr_lens(
-        financials, dcf_results, qualitative_results=qualitative_results
-    )
-    blackstone_results = blackstone.evaluate_blackstone_lens(
-        financials, dcf_results, qualitative_results=qualitative_results
-    )
-    apollo_results = apollo.evaluate_apollo_lens(
-        financials, dcf_results, qualitative_results=qualitative_results
-    )
-
-    # Also write markdown report (side-effect, no cache impact)
-    try:
-        render.render_markdown_report(
-            dcf_results, buffett_results, financials,
-            qualitative_results=qualitative_results,
-            marks_results=marks_results,
-            kkr_results=kkr_results,
-            blackstone_results=blackstone_results,
-            apollo_results=apollo_results,
-        )
-    except Exception as e:
-        logger.warning(f"Markdown report write failed (non-fatal): {e}")
-
-    return {
-        "ticker": ticker,
-        "financials": financials,
-        "rf_rate": rf_rate,
-        "damodaran_data": damodaran_data,
-        "dcf_results": dcf_results,
-        "qualitative_results": qualitative_results,
-        "docs": docs,
-        "buffett_results": buffett_results,
-        "marks_results": marks_results,
-        "kkr_results": kkr_results,
-        "blackstone_results": blackstone_results,
-        "apollo_results": apollo_results,
-    }
+    from value import analyze
+    return analyze(ticker)
 
 
 # ---------------------------------------------------------------------------

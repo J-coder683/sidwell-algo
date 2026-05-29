@@ -1,0 +1,70 @@
+{
+  "meta": {
+    "ticker": "BBTC.NS",
+    "as_of": "2026-05-29",
+    "currency": "INR_MM",
+    "sources_ingested": ["AR_FY25"],
+    "fiscal_year_end_month": 3,
+    "last_actual_fy": "FY2025",
+    "is_holdco": true,
+    "scenario_active": "BASE"
+  },
+  "assumptions": [
+    {
+      "driver_id": "stage1_revenue_growth",
+      "value": 0.085,
+      "unit": "ratio",
+      "scenario": {
+        "BEAR": 0.05,
+        "BASE": 0.085,
+        "BULL": 0.11
+      },
+      "source_type": "MGMT_GUIDANCE",
+      "confidence": "HIGH",
+      "rationale": "Mgmt guided 8-9%.",
+      "interrogation_refs": ["1.1"]
+    },
+    {
+      "driver_id": "unverified_metric",
+      "value": 0.15,
+      "unit": "ratio",
+      "source_type": "ASSUMED",
+      "confidence": "UNVERIFIED",
+      "rationale": "Made up assumption.",
+      "interrogation_refs": []
+    },
+    {
+      "driver_id": "flagged_metric",
+      "value": 0.10,
+      "unit": "ratio",
+      "source_type": "SELL_SIDE_ER",
+      "confidence": "MEDIUM",
+      "verify_flag": "ER",
+      "rationale": "ER estimate.",
+      "interrogation_refs": []
+    },
+    {
+      "driver_id": "segments",
+      "value": null,
+      "unit": "SOTP",
+      "source_type": "FILING",
+      "confidence": "HIGH",
+      "rationale": "Holdco segments",
+      "interrogation_refs": ["8.1"],
+      "segments": [
+        {
+          "name": "Britannia Stake",
+          "valuation_method": "Market Value",
+          "stake_pct": 0.505,
+          "value_mm": 600000.0
+        },
+        {
+          "name": "Bombay Burmah Standalone",
+          "valuation_method": "DCF",
+          "stake_pct": 1.0,
+          "value_mm": 50000.0
+        }
+      ]
+    }
+  ]
+}

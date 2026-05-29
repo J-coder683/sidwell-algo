@@ -3,47 +3,29 @@
 **Valuation Engine**: Discounted Cash Flow (DCF)
 **Investor Lenses**: Warren Buffett + Howard Marks + KKR + Blackstone + Apollo (v0.6)
 
-> [!WARNING]
-> **DCF COVERAGE GAP WARNING**: The computed DCF intrinsic value
-> deviates significantly from the current market price (intrinsic
-> at 34101736% of price).
->
-> Even this v0.4 2-stage DCF (Stage 1 high-growth + Stage 2 fade +
-> sector-aware terminal) may understate premium businesses because:
-> - Historical CapEx ratios may include expansionary capex that won't
->   recur indefinitely (a future v0.5+ refinement could fade capex
->   toward maintenance level in Stage 2)
-> - DCF cannot capture brand premium, distribution moat, optionality
->   on adjacent categories, or India consumption-story re-rating
-> - Market is willing to pay for sustained 15-20% earnings growth that
->   exceeds Damodaran's published sector terminal rates
->
-> Treat this intrinsic value as a conservative floor anchor, not a
-> fair-value estimate.
-
 ## Executive Summary
 | Metric | Value | Source / Detail |
 | :--- | :--- | :--- |
 | **Current Price** | ₹50.00 | Yahoo Finance |
-| **Intrinsic Value (DCF)** | ₹17.05M | Sidwell DCF Engine |
-| **Margin of Safety** | 100.00% margin of safety | Current Discount to Intrinsic |
-| **Buffett Score** | **14/14** | Buffett Lens (14 checks) |
-| **Buffett Verdict** | **BUY** ✅ | Buffett Lens Rules |
-| **Marks Score** | **13/14** | Marks Lens (14 checks) |
-| **Marks Verdict** | **BUY** ✅ | Marks Lens Rules |
+| **Intrinsic Value (DCF)** | ₹17.05 | Sidwell DCF Engine |
+| **Margin of Safety** | Trading at 2.9x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
+| **Buffett Score** | **13/14** | Buffett Lens (14 checks) |
+| **Buffett Verdict** | **WAIT** ⏳ | Buffett Lens Rules |
+| **Marks Score** | **10/14** | Marks Lens (14 checks) |
+| **Marks Verdict** | **WAIT** ⏳ | Marks Lens Rules |
 | **KKR Score** | **9/18** | KKR Lens (18 checks) |
 | **KKR Verdict** | **SKIP** ❌ | KKR Lens Rules |
-| **Blackstone Score** | **12/14** | Blackstone Lens (14 checks) |
-| **Blackstone Verdict** | **BUY** ✅ | Blackstone Lens Rules |
-| **Apollo Score** | **12/16** | Apollo Lens (16 checks) |
-| **Apollo Verdict** | **BUY** ✅ | Apollo Lens Rules |
+| **Blackstone Score** | **9/14** | Blackstone Lens (14 checks) |
+| **Blackstone Verdict** | **SKIP** ❌ | Blackstone Lens Rules |
+| **Apollo Score** | **11/16** | Apollo Lens (16 checks) |
+| **Apollo Verdict** | **WATCH** 👀 | Apollo Lens Rules |
 
 ### Verdict Summary
-> **Buffett**: **BUY** — Excellent business meeting Buffett quality, management, and price criteria.
-> **Marks**: **BUY** — Risk architecture clean, deep MoS, asymmetric payoff, contrarian setup present.
+> **Buffett**: **WAIT** — High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹12.79 (75% of intrinsic value).
+> **Marks**: **WAIT** — Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 10.23 (60% of intrinsic = 40% MoS).
 > **KKR**: **SKIP** — Failed Part A pre-condition: not LBO-viable.
-> **Blackstone**: **BUY** — High-conviction Blackstone target. Good business in a good neighborhood.
-> **Apollo**: **BUY** — High-conviction Apollo deployment with structural edge and entry discount.
+> **Blackstone**: **SKIP** — Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar).
+> **Apollo**: **WATCH** — Mixed signals across edge checks; monitor.
 
 ## 1. Company Snapshot
 Historical financial statements over the last 4 years:
@@ -82,46 +64,46 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 
 | Metric | FY2026E | FY2027E | FY2028E | FY2029E | FY2030E |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| Revenue | ₹139.75M | ₹146.74M | ₹154.08M | ₹161.78M | ₹169.87M |
-| EBIT | ₹26.55M | ₹26.41M | ₹26.19M | ₹25.89M | ₹25.48M |
-| Taxes | ₹6.24M | ₹6.60M | ₹6.55M | ₹6.47M | ₹6.37M |
-| D&A | ₹4.47M | ₹4.99M | ₹5.55M | ₹6.15M | ₹6.79M |
-| CapEx | ₹6.99M | ₹7.34M | ₹7.70M | ₹8.09M | ₹8.49M |
-| NWC Change (CF) | ₹-1.82M | ₹574,335.62 | ₹603,052.40 | ₹633,205.02 | ₹664,865.27 |
-| Free Cash Flow | ₹19.22M | ₹16.89M | ₹16.89M | ₹16.84M | ₹16.75M |
+| Revenue | ₹139.75 | ₹146.74 | ₹154.08 | ₹161.78 | ₹169.87 |
+| EBIT | ₹26.55 | ₹26.41 | ₹26.19 | ₹25.89 | ₹25.48 |
+| Taxes | ₹6.24 | ₹6.60 | ₹6.55 | ₹6.47 | ₹6.37 |
+| D&A | ₹4.47 | ₹4.99 | ₹5.55 | ₹6.15 | ₹6.79 |
+| CapEx | ₹6.99 | ₹7.34 | ₹7.70 | ₹8.09 | ₹8.49 |
+| NWC Change (CF) | ₹-1.82 | ₹0.57 | ₹0.60 | ₹0.63 | ₹0.66 |
+| Free Cash Flow | ₹19.22 | ₹16.89 | ₹16.89 | ₹16.84 | ₹16.75 |
 | Discount Factor | 0.8950 | 0.8010 | 0.7169 | 0.6416 | 0.5743 |
-| PV of Cash Flow | ₹18.19M | ₹14.30M | ₹12.80M | ₹11.42M | ₹10.17M |
+| PV of Cash Flow | ₹18.19 | ₹14.30 | ₹12.80 | ₹11.42 | ₹10.17 |
 
 ### 5-Year Fade Forecast (Stage 2) — growth fading from 5.00% to 2.00%
 
 | Metric | FY2031E | FY2032E | FY2033E | FY2034E | FY2035E |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| Revenue | ₹177.52M | ₹184.62M | ₹191.08M | ₹196.81M | ₹201.73M |
-| EBIT | ₹24.85M | ₹24.00M | ₹22.93M | ₹21.65M | ₹20.17M |
-| Taxes | ₹6.21M | ₹6.00M | ₹5.73M | ₹5.41M | ₹5.04M |
-| D&A | ₹7.46M | ₹8.12M | ₹8.79M | ₹9.45M | ₹10.09M |
-| CapEx | ₹8.88M | ₹9.23M | ₹9.55M | ₹9.84M | ₹10.09M |
-| NWC Change (CF) | ₹628,297.68 | ₹583,618.73 | ₹531,093.05 | ₹471,155.40 | ₹404,408.39 |
-| Free Cash Flow | ₹16.59M | ₹16.31M | ₹15.90M | ₹15.37M | ₹14.73M |
+| Revenue | ₹177.52 | ₹184.62 | ₹191.08 | ₹196.81 | ₹201.73 |
+| EBIT | ₹24.85 | ₹24.00 | ₹22.93 | ₹21.65 | ₹20.17 |
+| Taxes | ₹6.21 | ₹6.00 | ₹5.73 | ₹5.41 | ₹5.04 |
+| D&A | ₹7.46 | ₹8.12 | ₹8.79 | ₹9.45 | ₹10.09 |
+| CapEx | ₹8.88 | ₹9.23 | ₹9.55 | ₹9.84 | ₹10.09 |
+| NWC Change (CF) | ₹0.63 | ₹0.58 | ₹0.53 | ₹0.47 | ₹0.40 |
+| Free Cash Flow | ₹16.59 | ₹16.31 | ₹15.90 | ₹15.37 | ₹14.73 |
 | Discount Factor | 0.5140 | 0.4600 | 0.4117 | 0.3685 | 0.3298 |
-| PV of Cash Flow | ₹9.01M | ₹7.93M | ₹6.92M | ₹5.99M | ₹5.13M |
+| PV of Cash Flow | ₹9.01 | ₹7.93 | ₹6.92 | ₹5.99 | ₹5.13 |
 
 ### Terminal Value
-- Final fade year (Year 10) FCF: ₹14.73M
+- Final fade year (Year 10) FCF: ₹14.73
 - Terminal growth (Gordon): 2.00%
 - Sector mapping: AJP Engine Fallback
-- Terminal Value: ₹228.47M
-- PV of Terminal Value (discounted from Year 10): ₹75.35M
+- Terminal Value: ₹228.47
+- PV of Terminal Value (discounted from Year 10): ₹75.35
 
 ### Valuation Bridge
-- **PV of Explicit FCFs**: ₹101.85M
-- **PV of Terminal Value (g = 2.00%)**: ₹75.35M
-- **Enterprise Value**: ₹177.20M
-- **Add: Cash & Equivalents**: ₹13.31M
-- **Less: Total Debt**: ₹20.00M
-- **Equity Value**: ₹170.51M
+- **PV of Explicit FCFs**: ₹101.85
+- **PV of Terminal Value (g = 2.00%)**: ₹75.35
+- **Enterprise Value**: ₹177.20
+- **Add: Cash & Equivalents**: ₹13.31
+- **Less: Total Debt**: ₹20.00
+- **Equity Value**: ₹170.51
 - **Shares Outstanding**: 10
-- **Intrinsic Value per Share**: **₹17.05M**
+- **Intrinsic Value per Share**: **₹17.05**
 
 ## 3. Buffett Investor Lens
 All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
@@ -154,7 +136,7 @@ _Part B — Financial Health: **3/3 passed**_
 | Anti-dilution discipline | ✅ | [4 values] | <= 2% growth over 4y | Share count growth (4y): +0.00% (threshold: <= +2%) |
 | Capital allocation track record | ✅ | 0.010928017051142658 / True | ROIC not declining > 3pp AND capital returned | ROIC trend (latter-2y vs earlier-2y): +1.09pp; capital returned to shareholders: yes |
 | Owner orientation | ✅ | 0.1 / owner_oriented | Insiders > 5% OR LLM = owner_oriented | Insider ownership: 10.00% (PASS at >5%). LLM owner-orientation: owner_oriented |
-| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: PASS (LLM coherence: coherent). Numeric claims tie out across documents and strategy is consistent. |
+| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: PASS (LLM coherence: coherent). The narrative across documents and strategy is consistent. |
 
 _Part C — Management & Capital Allocation: **4/4 passed**_
 
@@ -162,13 +144,13 @@ _Part C — Management & Capital Allocation: **4/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Margin of safety | ✅ | 100.00% | > 25.0% | mos = 100.00% (Price: 50.00, Intrinsic: 17050867.79) |
+| Margin of safety | ❌ | Trading at 2.9x intrinsic | > 25.0% | Trading at 2.9x intrinsic value (target ≤ 0.75x) (Price: 50.00, Intrinsic: 17.05) |
 | Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
-| Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. Demand category structurally enduring; no single-technology dependence identified in documents. |
+| Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. Strong consumer monopoly with pricing power. |
 
-_Part D — Margin of Safety & Holdability: **3/3 passed**_
+_Part D — Margin of Safety & Holdability: **2/3 passed**_
 
-**Total Buffett Score**: **14/14**
+**Total Buffett Score**: **13/14**
 
 ## 3.1 Marks Investor Lens
 All 14 checks per Howard Marks's risk-first framework (frameworks/marks.md):
@@ -177,18 +159,18 @@ All 14 checks per Howard Marks's risk-first framework (frameworks/marks.md):
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Deep margin of safety | ✅ | +100.00% | > 40% | MoS = +100.00% > 40% |
-| Asymmetric upside-to-downside payoff | ✅ | inf | > 3.0x | Asymmetry ratio = inf > 3.0 |
+| Deep margin of safety | ❌ | Trading at 2.9x intrinsic | > 40% | MoS = -193.24% (< 40% threshold) — Price 50.00 vs Intrinsic 17.05 |
+| Asymmetric upside-to-downside payoff | ❌ | 0.000 | > 3.0x | Asymmetry ratio = 0.00 (< 3.0 threshold) |
 | Downside protection (tangible book) | ❌ | 15.97% | > 30% | Equity/MCap = 15.97% (<= 30%) |
 | Multiple expansion not exhausted | ✅ | 18.000 | < 25x (v0.3 placeholder; sector comp in v0.4) | Trailing P/E = 18.0x (< 25x) |
 
-_Part A — Margin of Safety & Asymmetric Payoff: **3/4 passed**_
+_Part A — Margin of Safety & Asymmetric Payoff: **1/4 passed**_
 
 ### Part B — Cycle Position
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Sector cycle position | ✅ | mid_cycle | trough | early_recovery | mid_cycle | LLM sector cycle: mid_cycle. Capacity utilization mid-band; pricing actions modest; no signs of peak-cycle euphoria. |
+| Sector cycle position | ✅ | mid_cycle | trough | early_recovery | mid_cycle | LLM sector cycle: mid_cycle. Capacity utilization is rising steadily toward peak. |
 | Company earnings vs cyclical peak | ✅ | 100.00% | > 70% of peak | Latest NI / Peak NI = 100.0% |
 | Sentiment — going against the crowd | ✅ | 3.200 | Mean rating 2.5-4.0 (mixed/cautious consensus) | Consensus rating mean: 3.20 (PASS — Marks prefers 2.5-4.0 mixed/cautious; strong buy consensus is a contrarian caution signal) |
 
@@ -209,13 +191,13 @@ _Part C — Risk Architecture: **4/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Variant perception | ✅ | True | variant_present=true AND specificity=high | Variant: True, Specificity: high. Consensus: 'Market expects continued strong growth driven by premiumisation.' | Company view: 'Management guides modest growth, citing cyclical headwinds and competitive intensity.' |
-| Management humility (knowing what you don't know) | ✅ | humble | verdict = humble | LLM humility verdict: humble. Management declines multi-year forecast; acknowledges raw material visibility limited to 2 quarters; references two past allocation errors by name. |
-| Patient opportunism (why now) | ✅ | dislocation_present | verdict = dislocation_present | Why-now: dislocation_present. Event: Post-Q3 FY26 commodity-cost shock has compressed multiples temporarily.. Sector has de-rated 25% in trailing 12 months; entry timing favorable due to forced selling from FII redemptions, not fundamental deterioration. |
+| Variant perception | ✅ | True | variant_present=true AND specificity=high | Variant: True, Specificity: high. Consensus: 'Market sees this as a legacy hardware business.' | Company view: 'We are a technology platform.' |
+| Management humility (knowing what you don't know) | ✅ | humble | verdict = humble | LLM humility verdict: humble. CEO admitted the recent product launch failed. |
+| Patient opportunism (why now) | ❌ | catalyst_present | verdict = dislocation_present | Why-now: catalyst_present. Event: post-spin-off. Recent spin-off created artificial selling pressure. |
 
-_Part D — Second-Level Thinking & Contrarianism: **3/3 passed**_
+_Part D — Second-Level Thinking & Contrarianism: **2/3 passed**_
 
-**Total Marks Score**: **13/14**
+**Total Marks Score**: **10/14**
 
 ## 3.2 KKR Investor Lens
 All 18 checks per KKR's operating playbook framework (frameworks/kkr.md):
@@ -237,10 +219,10 @@ _Part A — LBO Viability: **3/4 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Margin Improvement Room | ❌ | 0.20 / 0.20 | Current < 95% of Peak | Already at/near peak margin. |
 | Capex Optimization | ✅ | 0.05 / 0.40 | Optimization profile | Capex/Sales 5.0%, Growth share 40.0%. Optimization possible. |
-| WC Optimization | ❌ | 0.00% | < -5% or qualitative | Quantitative fail. Qualitative: unclear. |
-| M&A Platform Potential | ❌ | unclear | Qualitative high | Qualitative signal: unclear |
-| Mgmt / Ops Upgrade | ❌ | 20.00% | > 20% cost share | Opex share 20.0%. Qualitative: unclear. |
-| Stavros Workforce Fit | ✅ | unclear | Frontline or mixed | Qualitative signal: unclear |
+| WC Optimization | ✅ | 0.00% | < -5% or qualitative | Quantitative fail. Qualitative: high. |
+| M&A Platform Potential | ❌ | low | Qualitative high | Qualitative signal: low |
+| Mgmt / Ops Upgrade | ❌ | 20.00% | > 20% cost share | Opex share 20.0%. Qualitative: low. |
+| Stavros Workforce Fit | ❌ | low_labor_intensity | Frontline or mixed | Qualitative signal: low_labor_intensity |
 
 _Part B — Operational Upside: **2/6 passed**_
 
@@ -261,7 +243,7 @@ _Part C — Strategic Fit: **2/3 passed**_
 | Cycle Timing | ✅ | mid_cycle | Not peak/late | Cycle: mid_cycle |
 | 7-Year IRR | ❌ | 16.12% | > 18.00% | Entry mult 17.0x -> Exit mult 14.4x. |
 | Dividend Recap | ❌ | 13.64% | CV < 35%, FCF > 0 | CV is 13.6%, min FCF 11.5. |
-| Why Now Catalyst | ✅ | dislocation_present | Catalyst present | Signal: dislocation_present |
+| Why Now Catalyst | ✅ | catalyst_present | Catalyst present | Signal: catalyst_present |
 
 _Part D — Cycle Timing & Returns: **2/4 passed**_
 
@@ -295,9 +277,9 @@ _Part A — Good Business Filter: **4/4 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Theme Alignment | ❌ | AJP Detected | Favored Theme | AJP Detected not in themes. |
 | Cycle Position | ✅ | mid_cycle | Not peak/late | Cycle: mid_cycle |
-| Structural Tailwind | ✅ | tailwind | Tailwind/neutral | Tailwind: tailwind |
+| Structural Tailwind | ❌ | present | Tailwind/neutral | Tailwind: present |
 
-_Part B — Good Neighborhood (Thematic): **2/3 passed**_
+_Part B — Good Neighborhood (Thematic): **1/3 passed**_
 
 ### Part C — Downside Protection
 
@@ -315,19 +297,19 @@ _Part C — Downside Protection: **3/3 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Blackstone-Scale Deal | ❌ | 500.000 | > ₹150B | Market cap is too small. |
 | 20-Year Core Viability | ✅ | holdable_20y | Holdable 20y | Signal: holdable_20y |
-| Multi-Product Engagement | ✅ | multi_product_potential | Multi-product | Signal: multi_product_potential |
+| Multi-Product Engagement | ❌ | high | Multi-product | Signal: high |
 
-_Part D — Scale Fit & Hold Economics: **2/3 passed**_
+_Part D — Scale Fit & Hold Economics: **1/3 passed**_
 
 ### Part E — Defensibility vs Phalippou Bar
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Above-Average Alpha | ✅ | 5 | >= 4 | 5 of 6 levers passed. |
+| Above-Average Alpha | ❌ | 3 | >= 4 | 3 of 6 levers passed. |
 
-_Part E — Defensibility vs Phalippou Bar: **1/1 passed**_
+_Part E — Defensibility vs Phalippou Bar: **0/1 passed**_
 
-**Total Blackstone Score**: **12/14**
+**Total Blackstone Score**: **9/14**
 
 ## 3.4 Apollo Investor Lens
 All 16 checks per Apollo's credit & complexity framework (frameworks/apollo.md):
@@ -348,12 +330,12 @@ _Part A — Purchase Price & Capital Structure Entry: **1/4 passed**_
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Chaos/Dislocation Catalyst | ✅ | chaos_present | Present | Signal: chaos_present |
-| Fulcrum Security | ✅ | (0.653317218175285, 13.31, 25.0) | Hard or Soft Fulcrum | Qual: fulcrum_identified. Hard signals: A=False, B=False. |
+| Fulcrum Security | ❌ | (0.653317218175285, 13.31, 25.0) | Hard or Soft Fulcrum | Qual: absent. Hard signals: A=False, B=False. |
 | ABF/Credit Fit | ✅ | abf_primary_opportunity | Compatible | Signal: abf_primary_opportunity |
 | Complexity Moat | ✅ | 15.03% | >55% or High Qual | Debt/Assets 15.0%. Qual: high. |
 | Domain Knowledge | ❌ | AJP Detected | In Apollo Playbook | AJP Detected not in playbook. |
 
-_Part B — Chaos, Complexity, Credit Edge: **4/5 passed**_
+_Part B — Chaos, Complexity, Credit Edge: **3/5 passed**_
 
 ### Part C — Athene Permanent Capital Fit
 
@@ -361,7 +343,7 @@ _Part B — Chaos, Complexity, Credit Edge: **4/5 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | IG Credit Yield | ✅ | (0.23, 0.653317218175285, 13.31) | Margin>12%, Lev<5x, IC>1.5x | Margin 23.0%, Lev 0.7x, IC 13.3x. |
 | Long-Duration Stability | ✅ | 0.002 | < 4pp, > 0 avg | FCF Margin Stdev 0.2pp. |
-| Hold-Without-Exit | ✅ | unclear | Viable | neutral default — qualitative unavailable; check counted as PASS |
+| Hold-Without-Exit | ✅ | yes | Viable | Signal: yes |
 
 _Part C — Athene Permanent Capital Fit: **3/3 passed**_
 
@@ -371,7 +353,7 @@ _Part C — Athene Permanent Capital Fit: **3/3 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Through-Cycle Credit Floor | ✅ | 20.00 / 11.60 | Min EBIT>0, Cov>1.5x | Min EBIT 20.0, Avg Cov 11.6x. |
 | Tangible Collateral | ✅ | 94.74% | > 40% | Ratio 94.7%. |
-| Covenant Control | ✅ | covenant_rich_opportunity | High/Mixed | Signal: covenant_rich_opportunity |
+| Covenant Control | ✅ | high | High/Mixed | Signal: high |
 
 _Part D — Credit Downside Quality: **3/3 passed**_
 
@@ -379,69 +361,73 @@ _Part D — Credit Downside Quality: **3/3 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Above-Average Alpha | ✅ | 5 | >= 4 | 5 of 6 levers passed. |
+| Above-Average Alpha | ✅ | 4 | >= 4 | 4 of 6 levers passed. |
 
 _Part E — Defensibility vs Phalippou Bar: **1/1 passed**_
 
-**Total Apollo Score**: **12/16**
+**Total Apollo Score**: **11/16**
 
 ## 3.5 Qualitative Analysis
-Based on 1 document(s): fixture_concall.pdf. Model: `gemini-3.5-flash`.
+Based on 0 document(s): . Model: `None`.
 
 ### Forward Guidance
-- **FY27** (revenue): Management expects 10% revenue growth driven by capacity expansion. _[fixture_concall.pdf]_
+- **FY25** (revenue): We expect 12% growth. _[FY24_Annual_Report.pdf]_
 
 ### Risk Callouts
-- **input cost volatility**: Raw material prices remain a watchpoint. _[fixture_concall.pdf]_
+- **commodity_inflation**: Raw material prices remain volatile. _[FY24_Annual_Report.pdf]_
 
 ### Strategic Themes
-- **premium product mix**: Mix shift toward premium SKUs continues. _[fixture_concall.pdf]_
+- **Premiumization**: Continued push into premium segment. _[FY24_Annual_Report.pdf]_
 
 ### Tone & Coherence
 - **Tone (current)**: confident
-- **Tone (trajectory)**: stable
+- **Tone (trajectory)**: improving
 - **Coherence verdict**: coherent
 
-_Management remained confident across the period, with a stable narrative._
+_Overall tone is upbeat but grounded._
 
-_Numeric claims tie out across documents and strategy is consistent._
+_The narrative across documents and strategy is consistent._
 
 ### Marks-Relevant Signals
-- **Owner orientation**: owner_oriented — Letter uses 'shareholders as partners' framing; admits two FY24 mis-allocations by name.
-- **Holdability (20y)**: holdable_20y — Demand category structurally enduring; no single-technology dependence identified in documents.
-- **Sector cycle**: mid_cycle / Company cycle: mid — Capacity utilization mid-band; pricing actions modest; no signs of peak-cycle euphoria.
-- **Variant perception**: present=True, specificity=high. Consensus: 'Market expects continued strong growth driven by premiumisation.'
-- **Management humility**: humble — Management declines multi-year forecast; acknowledges raw material visibility limited to 2 quarters; references two past allocation errors by name.
-- **Why now**: dislocation_present — Post-Q3 FY26 commodity-cost shock has compressed multiples temporarily.
+- **Owner orientation**: owner_oriented — Mgmt focuses on 10y FCF/share rather than quarterly EPS.
+- **Holdability (20y)**: holdable_20y — Strong consumer monopoly with pricing power.
+- **Sector cycle**: mid_cycle / Company cycle: mid — Capacity utilization is rising steadily toward peak.
+- **Variant perception**: present=True, specificity=high. Consensus: 'Market sees this as a legacy hardware business.'
+- **Management humility**: humble — CEO admitted the recent product launch failed.
+- **Why now**: catalyst_present — post-spin-off
 
 ## 4. Margin-of-Safety Check
 Current Stock Price: **₹50.00**
-DCF Intrinsic Value: **₹17.05M**
+DCF Intrinsic Value: **₹17.05**
 Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)
-Computed Margin of Safety: 100.00% margin of safety
-### Status: [PASS] ✅
-The current stock price trades at a discount of more than 25% to its intrinsic value, offering an attractive entry point.
+Computed Margin of Safety: Trading at 2.9x intrinsic value (target ≤ 0.75x)
+### Status: [FAIL] ❌
+The stock trades above the safety threshold. Trading at 2.9x intrinsic value is insufficient for investment under the Buffett framework.
 
 ## 5. Investment Verdict
-**BUFFETT RECOMMENDATION: BUY**
+**BUFFETT RECOMMENDATION: WAIT**
 
-Excellent business meeting Buffett quality, management, and price criteria.
+High-quality business that satisfies most Buffett criteria but lacks margin of safety. Set alert at buy-trigger price: ₹12.79 (75% of intrinsic value).
 
-**MARKS RECOMMENDATION: BUY**
+**Action Item**: Set alert at buy-trigger price: **₹12.79** (75% of intrinsic value).
 
-Risk architecture clean, deep MoS, asymmetric payoff, contrarian setup present.
+**MARKS RECOMMENDATION: WAIT**
+
+Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 10.23 (60% of intrinsic = 40% MoS).
+
+**Marks Action Item**: Set re-rating alert at **₹10.23** (60% of intrinsic = 40% MoS).
 
 **KKR RECOMMENDATION: SKIP**
 
 Failed Part A pre-condition: not LBO-viable.
 
-**BLACKSTONE RECOMMENDATION: BUY**
+**BLACKSTONE RECOMMENDATION: SKIP**
 
-High-conviction Blackstone target. Good business in a good neighborhood.
+Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar).
 
-**APOLLO RECOMMENDATION: BUY**
+**APOLLO RECOMMENDATION: WATCH**
 
-High-conviction Apollo deployment with structural edge and entry discount.
+Mixed signals across edge checks; monitor.
 
 ## 6. Quintuple-Lens Synthesis
 Sidwell preserves all lens verdicts without collapsing them to a single recommendation.
@@ -449,8 +435,8 @@ The disagreement between lenses IS the insight.
 
 | Lens | Score | Verdict |
 | :--- | :---: | :---: |
-| **Buffett** | 14/14 | **BUY** ✅ |
-| **Marks** | 13/14 | **BUY** ✅ |
+| **Buffett** | 13/14 | **WAIT** ⏳ |
+| **Marks** | 10/14 | **WAIT** ⏳ |
 | **KKR** | 9/18 | **SKIP** ❌ |
-| **Blackstone** | 12/14 | **BUY** ✅ |
-| **Apollo** | 12/16 | **BUY** ✅ |
+| **Blackstone** | 9/14 | **SKIP** ❌ |
+| **Apollo** | 11/16 | **WATCH** 👀 |

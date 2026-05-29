@@ -83,12 +83,13 @@ def analyze(ticker: str, lenses_to_run: list | None = None) -> dict:
     # Step 3: Fetch Damodaran ERP and Sector Betas
     damodaran_data = public.fetch_damodaran_data(ticker, financials)
 
-    # Step 4: Run DCF Valuation Engine
-    dcf_results = dcf.run_dcf_valuation(financials, damodaran_data, rf_rate)
-
-    # Step 5: Discover documents and run qualitative analysis (graceful degrade)
+    # Step 4: Discover documents and run qualitative analysis (graceful degrade)
+    # DCF Engine now requires the Assumption Justification Pack (AJP) built from docs
     docs = doc_module.discover_documents(ticker)
     qualitative_results = qualitative.extract_qualitative(ticker, docs)
+
+    # Step 5: Run DCF Valuation Engine
+    dcf_results = dcf.run_dcf_valuation(financials, damodaran_data, rf_rate, qualitative_results)
 
     # Step 6-10: Evaluate requested lenses
     buffett_results = None

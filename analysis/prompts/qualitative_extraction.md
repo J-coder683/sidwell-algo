@@ -109,6 +109,31 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
   "covenant_control_potential": {
     "verdict": "high | low | unclear",
     "notes": "one sentence"
+  },
+  "ajp": {
+    "meta": {
+      "ticker": "BBTC.NS",
+      "as_of": "2026-05-29",
+      "currency": "INR_MM",
+      "sources_ingested": ["list of filenames"],
+      "fiscal_year_end_month": 3,
+      "last_actual_fy": "FY2025",
+      "is_holdco": true,
+      "scenario_active": "BASE"
+    },
+    "assumptions": [
+      {
+        "driver_id": "stage1_revenue_growth",
+        "value": 0.085,
+        "unit": "ratio",
+        "scenario": { "BEAR": 0.05, "BASE": 0.085, "BULL": 0.11 },
+        "source_type": "MGMT_GUIDANCE",
+        "confidence": "HIGH",
+        "rationale": "Why you chose this number based on docs.",
+        "interrogation_refs": ["1.1"]
+      }
+      // Include all required DCF drivers here: ebit_margin_target, capex_pct_sales_target, etc.
+    ]
   }
 }
 
