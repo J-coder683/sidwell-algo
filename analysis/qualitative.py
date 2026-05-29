@@ -25,14 +25,27 @@ from data import cache
 logger = logging.getLogger("sidwell.analysis.qualitative")
 
 QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
-MODEL_ID = "anthropic.claude-3-5-haiku-20241022-v1:0"
+# v0.7.6.1: switched to Claude Haiku 4.5 (newer Anthropic generation, similar
+# pricing tier to Haiku 3.5). If the date suffix or naming differs from what's
+# in your Bedrock console (Bedrock → Model catalog → Claude Haiku 4.5 → Model ID),
+# update this string AND the matching IAM policy resource ARN to keep them in sync.
+MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
 AWS_REGION = "us-east-1"
-PROMPT_VERSION = "v0.6"  # Bumped from v0.5; invalidates all Gemini-era cache entries
+PROMPT_VERSION = "v0.7"  # Bumped from v0.6; invalidates Haiku 3.5-era cache entries
 
-# Assertion: lock the model ID to Claude Haiku 3.5 to control costs.
-# If anyone changes MODEL_ID to Sonnet/Opus, this will fail loudly.
-assert MODEL_ID.startswith("anthropic.claude-3-5-haiku-"), (
-    f"MODEL_ID must be Claude Haiku 3.5 to control costs; got {MODEL_ID}"
+# Assertion: lock the model ID to a Claude Haiku variant (3.5 or 4.5) to control
+# costs. Catches accidental swaps to Sonnet/Opus which are 4-15x more expensive.
+# Accepts both 3-5 and 4-5 generations since Anthropic's Haiku tier is the
+# stable price floor we're targeting.
+_ALLOWED_MODEL_PREFIXES = (
+    "anthropic.claude-3-5-haiku-",
+    "anthropic.claude-haiku-3-5-",
+    "anthropic.claude-4-5-haiku-",
+    "anthropic.claude-haiku-4-5-",
+)
+assert MODEL_ID.startswith(_ALLOWED_MODEL_PREFIXES), (
+    f"MODEL_ID must be Claude Haiku (3.5 or 4.5) to control costs; got {MODEL_ID}. "
+    f"Allowed prefixes: {_ALLOWED_MODEL_PREFIXES}"
 )
 
 # Maximum characters sent to Bedrock for annual reports (smart-extracted).

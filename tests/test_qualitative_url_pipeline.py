@@ -278,11 +278,18 @@ def test_concall_uses_full_text_path(mock_pdfplumber_open):
 # ─── MODEL_ID assertion test ──────────────────────────────────────────────────
 
 def test_model_id_assertion_rejects_non_haiku():
-    """The assertion at module top should prevent non-Haiku MODEL_IDs."""
+    """The assertion at module top should prevent non-Haiku MODEL_IDs.
+    v0.7.6.1: accepts both Haiku 3.5 and Haiku 4.5 prefixes."""
     # The assertion already ran when qualitative was imported — if it passed,
     # MODEL_ID is Haiku. Verify the string constraint directly.
-    assert MODEL_ID.startswith("anthropic.claude-3-5-haiku-"), (
-        f"MODEL_ID must be Claude Haiku 3.5; got {MODEL_ID}"
+    allowed_prefixes = (
+        "anthropic.claude-3-5-haiku-",
+        "anthropic.claude-haiku-3-5-",
+        "anthropic.claude-4-5-haiku-",
+        "anthropic.claude-haiku-4-5-",
+    )
+    assert MODEL_ID.startswith(allowed_prefixes), (
+        f"MODEL_ID must be Claude Haiku (3.5 or 4.5); got {MODEL_ID}"
     )
 
 
