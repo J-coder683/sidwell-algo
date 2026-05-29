@@ -69,8 +69,8 @@ def test_discover_documents_returns_url_list(mock_get, mock_resolve):
     assert docs[1]['date'] == 'Apr 2025'
     
     assert docs[2]['url'] == 'https://bseindia.com/q3.pdf'
-    assert docs[3]['url'] == 'https://crisil.com/r1.pdf'
-    assert docs[3]['type'] == 'credit_rating'
+    assert docs[3]['url'] == 'https://bseindia.com/q2.pdf'
+    assert docs[3]['type'] == 'concall_transcript'
 
 @patch('data.scrapers.screener._resolve_screener_slug')
 @patch('requests.get')
@@ -113,9 +113,9 @@ def test_document_selection_policy(mock_get, mock_resolve):
     mock_get.return_value = mock_resp
 
     docs = fetch_screener_documents('MOCKTICKER')
-    # Policy: 1 annual, 2 concalls, 1 rating = 4 total
+    # Policy: 1 annual + 3 concalls = 4 total; credit ratings excluded
     assert len(docs) == 4
     types = [d['type'] for d in docs]
     assert types.count('annual_report') == 1
-    assert types.count('concall_transcript') == 2
-    assert types.count('credit_rating') == 1
+    assert types.count('concall_transcript') == 3
+    assert types.count('credit_rating') == 0

@@ -796,3 +796,77 @@ Note: HDFCBANK crashing in DCF is an existing limitation for Banks which need sp
   - If a specific PDF fails to download or parse, the pipeline logs a warning and continues with the remaining documents.
 - **Slug Resolution**: Addressed the "ticker rename" problem (e.g., ZOMATO -> ETERNAL) by implementing `_resolve_screener_slug`. It resolves the correct company URL before fetching documents or financials.
 - **Cache Invalidations**: Bumped `PROMPT_VERSION` to `v0.5` in `analysis/prompts/qualitative_extraction.md` to invalidate stale cache entries and trigger the new URL-based caching logic.
+
+## §28 v0.7.6 — TOC-Aware Annual Report Extraction + Bedrock Migration
+
+### Part A — Smart Annual Report Extraction
+
+**Discovery finding**: Reliance's annual report is a 187-page PDF with a 40-page AGM Notice preamble before the actual report content. The Table of Contents appears on PDF page 41. This completely invalidated the original 20-page TOC search range. TOC_SEARCH_RANGE expanded to 60 pages.
+
+**Two-page spread validation**: Reliance uses a landscape two-page-spread format (one PDF page = two document pages). The document-page → PDF-page offset is not constant (shifts from ~37-38 at the front to ~27 near the back). This proves that computing mathematical offsets from the TOC is fragile. Body text-search is the only robust approach.
+
+**Algorithm**:
+1. Search first 60 PDF pages for a TOC marker (`"table of contents"`, `"contents"`, `"inside this report"`) that also references ≥2 of our target section keywords.
+2. Set `search_start = toc_page_idx + 10` (was +5; bumped to handle multi-page TOC content and two-page spreads).
+3. Direct text-search in first 300 chars of each page for section keywords (header zone only).
+4. If ≥2 sections found: extract each section through to the next one, or +30 pages for the last. Apply 200k char truncation.
+5. If <2 sections found: fallback to pages 1-80 + last 30 (captures most chairman letters + start of MD&A + risk factors which tend to appear in the tail).
+
+**Section priority order**: MD&A > Risk Factors > Chairman's Letter > Business Overview. MD&A is the most important — never skip when found.
+
+**RISK_KEYWORDS expanded** to include Reliance's variant `"risk and governance"` and other common Indian patterns: `"risk review"`, `"risks and mitigation"`, `"risks and governance"`.
+
+**Extraction routing**:
+- `annual_report` → `_extract_annual_report_sections()` (TOC-aware, 200k cap)
+- `concall_transcript` → `_extract_concall()` (full text, no truncation — transcripts are 20-60 pages)
+- other → `_extract_generic()` (fallback: pages 1-80 + last 30)
+
+**extraction_metadata**: Added top-level field to qualitative output:
+```json
+"extraction_metadata": {
+  "documents": [
+    {
+      "url": "...", "type": "annual_report",
+      "sections_found": ["MD&A", "Risk Factors", "Chairman's Letter"],
+      "fallback_used": false, "chars_extracted": 145000
+    }
+  ]
+}
+```
+
+**Live coverage baseline** (4-ticker verification run):
+
+| Ticker | Format | Sections Found | Fallback? | PDF Pages |
+|---|---|---|---|---|
+| RELIANCE.NS | Two-page spread, Integrated Report | MD&A, Risk Factors, Chairman's Letter | No | 187 |
+| TCS.NS | Single-page modern | TBD | TBD | TBD |
+| HDFCBANK.NS | Bank format | TBD | TBD | TBD |
+| TATAMOTORS.NS | Traditional layout | TBD | TBD | TBD |
+
+*(Table to be filled with actual run results post-deployment.)*
+
+### Part B — Bedrock / Claude Haiku 3.5 Migration
+
+- Replaced `google.genai` client with `boto3.client("bedrock-runtime")`.
+- **Model locked**: `MODEL_ID = "anthropic.claude-3-5-haiku-20241022-v1:0"`. An assertion at module top prevents accidental drift to Sonnet/Opus.
+- **Anthropic prompt caching**: The static schema/instructions block (qualitative_extraction.md, ~3-5k tokens) is marked `cache_control: {type: ephemeral}`. The per-ticker document content is uncached. Estimated ~80% reduction on cached input tokens for repeat calls within 5 minutes.
+- **Token budget estimate**: ~25-40k input per ticker (down from 60-100k with full-text); ~$0.005-0.02 per call with caching.
+- **Graceful degradation**: Missing AWS credentials → `_unavailable("AWS credentials not configured")`. Bedrock JSON parse error → `_unavailable(...)`. Never raises.
+- `google-genai` removed from `requirements.txt`; `boto3>=1.34.0` added.
+
+### Part C — Document Selection Policy Change
+
+- Concall count: 2 → 3 (better time-series tone tracking across 3 quarters).
+- Credit ratings removed from selection (low signal-to-noise for lens signals).
+- Investor presentations were never selected; kept excluded.
+- Policy: 1 annual report + 3 concalls = 4 docs max per ticker.
+
+### Part D — Secrets
+
+- `.streamlit/secrets.toml.example` updated: `GEMINI_API_KEY` replaced with `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`.
+- Bedrock model access must be enabled in AWS console for "Claude 3.5 Haiku" before use.
+
+### PROMPT_VERSION
+
+Bumped `v0.5 → v0.6`. This invalidates all Gemini-era cached qualitative results. All subsequent runs will re-extract using the new Bedrock pipeline.
+

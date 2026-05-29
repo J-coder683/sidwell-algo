@@ -469,8 +469,9 @@ def fetch_screener_financials(ticker: str) -> dict:
 
 def fetch_screener_documents(ticker: str) -> list[dict]:
     """
-    Returns up to N most-recent documents per ticker, no PDFs downloaded.
-    Selection policy: Latest 1 annual report, 2 concalls, 1 credit rating.
+    Returns up to 4 most-recent documents per ticker, no PDFs downloaded.
+    Selection policy: Latest 1 annual report + 3 concall transcripts.
+    Credit ratings and investor presentations are excluded (low signal-to-noise).
     """
     base = _to_screener_ticker(ticker)
     cache_key = f"docs_screener_{base}.json"
@@ -518,12 +519,12 @@ def fetch_screener_documents(ticker: str) -> list[dict]:
                         "label": a.text.strip().replace('\n', ' ')
                     })
 
-    # 2. Concalls (Max 2)
+    # 2. Concalls (Max 3 — increased from 2 for better time-series tone tracking)
     concall_div = docs_section.find('div', class_='concalls')
     if concall_div:
         ul = concall_div.find('ul')
         if ul:
-            for li in ul.find_all('li')[:2]:
+            for li in ul.find_all('li')[:3]:
                 a = li.find('a', class_='concall-link')
                 date_div = li.find('div')
                 date_str = date_div.text.strip() if date_div else "Unknown Date"
@@ -535,20 +536,8 @@ def fetch_screener_documents(ticker: str) -> list[dict]:
                         "label": f"{date_str} Concall"
                     })
 
-    # 3. Credit Ratings (Max 1)
-    rating_div = docs_section.find('div', class_='credit-ratings')
-    if rating_div:
-        ul = rating_div.find('ul')
-        if ul:
-            for li in ul.find_all('li')[:1]:
-                a = li.find('a')
-                if a and a.get('href'):
-                    documents.append({
-                        "url": a['href'],
-                        "type": "credit_rating",
-                        "date": "Recent",
-                        "label": a.text.strip().replace('\n', ' ')
-                    })
+    # Credit ratings and investor presentations intentionally excluded:
+    # low signal-to-noise for qualitative lens signals.
 
     cache.set_json(cache_key, documents)
     return documents

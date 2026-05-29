@@ -1,6 +1,13 @@
 """
-Qualitative analysis layer. Sends document text to Gemini and parses
-structured JSON output. Caches result keyed on document hash + prompt version.
+Qualitative analysis layer. Sends document text to Amazon Bedrock (Claude Haiku 3.5)
+and parses structured JSON output. Caches result keyed on document hash + prompt version.
+
+v0.7.6 changes:
+  - Migrated from Gemini to Amazon Bedrock / Claude Haiku 3.5
+  - Anthropic prompt caching enabled on static schema prefix (~80% cost reduction)
+  - Smart annual report extraction: TOC-aware section detection with fallback
+  - Concall transcripts use full-text path (no truncation)
+  - extraction_metadata field added to output
 """
 import os
 import json
@@ -10,45 +17,313 @@ import requests
 from io import BytesIO
 from pathlib import Path
 
+import boto3
 import pdfplumber
-from google import genai
-from google.genai import types
 
 from data import cache
 
 logger = logging.getLogger("sidwell.analysis.qualitative")
 
 QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
-MODEL_NAME = "gemini-3.5-flash"  # Free tier, sufficient for structured extraction
-PROMPT_VERSION = "v0.5"  # Bump when prompt schema changes; invalidates old cache entries
+MODEL_ID = "anthropic.claude-3-5-haiku-20241022-v1:0"
+AWS_REGION = "us-east-1"
+PROMPT_VERSION = "v0.6"  # Bumped from v0.5; invalidates all Gemini-era cache entries
 
-# Maximum characters of PDF text per document sent to Gemini.
-# Gemini Flash supports 1M token context; 200k chars is safely within limits.
+# Assertion: lock the model ID to Claude Haiku 3.5 to control costs.
+# If anyone changes MODEL_ID to Sonnet/Opus, this will fail loudly.
+assert MODEL_ID.startswith("anthropic.claude-3-5-haiku-"), (
+    f"MODEL_ID must be Claude Haiku 3.5 to control costs; got {MODEL_ID}"
+)
+
+# Maximum characters sent to Bedrock for annual reports (smart-extracted).
+# Concalls use full-text — they are typically short (20-60 pages).
 MAX_DOC_CHARS = 200_000
 
 BROWSER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
     "Accept": "application/pdf,*/*",
     "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.screener.in/",  # some BSE/NSE PDFs check referer
+    "Referer": "https://www.screener.in/",
 }
 
+# ─── Section detection keyword lists ─────────────────────────────────────────
+
+MDA_KEYWORDS = [
+    "management discussion",
+    "management's discussion",
+    "md&a",
+    "management discussion and analysis",
+    "management discussion & analysis",
+]
+RISK_KEYWORDS = [
+    "risk factors",
+    "risk management",
+    "key risks",
+    "principal risks",
+    "risks and concerns",
+    "risks & concerns",
+    "risk and governance",       # Reliance pattern
+    "risks and governance",      # variant
+    "risk review",
+    "risks and mitigation",
+]
+CHAIRMAN_KEYWORDS = [
+    "chairman's letter",
+    "chairman's message",
+    "managing director's letter",
+    "letter to shareholders",
+    "letter to members",
+    "letter from the chairman",
+    "letter from the md",
+    "chairman's communication",
+    "chairman and managing director's statement",  # Reliance pattern
+    "chairman and managing director",
+]
+BUSINESS_KEYWORDS = [
+    "business overview",
+    "our business",
+    "about us",
+    "about the company",
+    "company overview",
+]
+
+TOC_SEARCH_RANGE_MAX = 60  # pages; handles large Indian co preambles (AGM notices etc.)
+
+
+# ─── Annual report section extraction ────────────────────────────────────────
+
+def _extract_annual_report_sections(pdf_bytes: bytes) -> tuple[str, dict]:
+    """Returns (combined_text, metadata_dict).
+    Performs TOC-aware section detection via body text-search. Falls back to
+    pages 1-80 + last 30 when fewer than 2 sections can be located.
+    """
+    with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+        total_pages = len(pdf.pages)
+        if total_pages == 0:
+            return "", {"sections_found": [], "fallback_used": False, "pages_extracted": 0}
+
+        # Step 1: Locate TOC (search first 60 pages for table-of-contents markers).
+        toc_page_idx = None
+        toc_range = min(TOC_SEARCH_RANGE_MAX, total_pages)
+        for i in range(toc_range):
+            page_text = (pdf.pages[i].extract_text() or "").lower()
+            if any(marker in page_text for marker in
+                   ["table of contents", "contents", "inside this report", "in this report"]):
+                # Heuristic: real TOC pages reference at least 2 of our target sections
+                if sum(1 for kw_set in [MDA_KEYWORDS, RISK_KEYWORDS, CHAIRMAN_KEYWORDS]
+                       if any(kw in page_text for kw in kw_set)) >= 2:
+                    toc_page_idx = i
+                    break
+
+        # Step 2: Find section starts via direct text-search in the body.
+        # Start AFTER toc_page_idx + 10 to skip any multi-page TOC content.
+        # (Two-page spread PDFs and multi-page TOCs require +10, not +5.)
+        search_start = (toc_page_idx if toc_page_idx is not None else 0) + 10
+
+        def _find_section_start(keywords: list, search_from: int = 0) -> int | None:
+            for i in range(search_from, total_pages):
+                txt = (pdf.pages[i].extract_text() or "").lower().strip()
+                if not txt:
+                    continue
+                # Only match keyword in first 300 chars of page (section header zone)
+                head = txt[:300]
+                for kw in keywords:
+                    if kw in head:
+                        return i
+            return None
+
+        sections_found: dict[str, int] = {}
+        for name, kw_list in [
+            ("MD&A", MDA_KEYWORDS),
+            ("Risk Factors", RISK_KEYWORDS),
+            ("Chairman's Letter", CHAIRMAN_KEYWORDS),
+            ("Business Overview", BUSINESS_KEYWORDS),
+        ]:
+            start_page = _find_section_start(kw_list, search_from=search_start)
+            if start_page is not None:
+                sections_found[name] = start_page
+
+        n_found = len(sections_found)
+
+        # Step 3: Fallback if fewer than 2 sections detected
+        if n_found <= 1:
+            text = _extract_fallback(pdf, total_pages)
+            fallback_pages = min(80, total_pages) + max(0, total_pages - max(min(80, total_pages), total_pages - 30))
+            meta = {
+                "sections_found": list(sections_found.keys()),
+                "fallback_used": True,
+                "fallback_reason": f"Only {n_found} of 4 sections detected",
+                "pages_extracted": fallback_pages,
+            }
+            logger.info(
+                f"Annual report extracted (fallback): {n_found} of 4 sections found "
+                f"({list(sections_found.keys())}); {fallback_pages} PDF pages; "
+                f"~{fallback_pages * 2000} chars"
+            )
+            return text, meta
+
+        # Step 4: Extract each section through to the next one, or +30 pages if last
+        sorted_sections = sorted(sections_found.items(), key=lambda x: x[1])
+        chunks = []
+        total_pages_extracted = 0
+        for idx, (name, start) in enumerate(sorted_sections):
+            if idx + 1 < len(sorted_sections):
+                end = sorted_sections[idx + 1][1]
+            else:
+                end = min(total_pages, start + 30)
+            section_text = "\n".join(
+                pdf.pages[p].extract_text() or "" for p in range(start, end)
+            )
+            pages_this = end - start
+            total_pages_extracted += pages_this
+            chunks.append(f"\n\n### {name} (PDF pages {start + 1}-{end})\n\n{section_text}")
+
+        combined = "\n".join(chunks)
+
+        # Apply MAX_DOC_CHARS truncation to annual reports only
+        if len(combined) > MAX_DOC_CHARS:
+            combined = (combined[:MAX_DOC_CHARS // 2]
+                        + "\n\n...[TRUNCATED MIDDLE]...\n\n"
+                        + combined[-(MAX_DOC_CHARS // 2):])
+
+        meta = {
+            "sections_found": list(sections_found.keys()),
+            "fallback_used": False,
+            "total_sections_targeted": 4,
+            "pages_extracted": total_pages_extracted,
+        }
+        logger.info(
+            f"Annual report extracted: {n_found} of 4 sections found "
+            f"({list(sections_found.keys())}); {total_pages_extracted} PDF pages; "
+            f"~{total_pages_extracted * 2000} chars"
+        )
+        return combined, meta
+
+
+def _extract_fallback(pdf, total_pages: int) -> str:
+    """Fallback when section-detection finds <2 sections:
+    pages 1-80 + last 30. Captures most chairman letters + start of MD&A
+    + risk factors typically appearing toward end."""
+    head_end = min(80, total_pages)
+    tail_start = max(head_end, total_pages - 30)
+    head_text = "\n".join(pdf.pages[p].extract_text() or "" for p in range(0, head_end))
+    tail_text = "\n".join(pdf.pages[p].extract_text() or "" for p in range(tail_start, total_pages))
+    return (f"\n\n### Pages 1-{head_end} (fallback)\n\n{head_text}"
+            f"\n\n### Last {total_pages - tail_start} pages (fallback)\n\n{tail_text}")
+
+
+def _extract_concall(pdf_bytes: bytes) -> tuple[str, dict]:
+    """Concall transcripts: full text, no truncation."""
+    with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+        total_pages = len(pdf.pages)
+        text = "\n\n".join(pdf.pages[p].extract_text() or "" for p in range(total_pages))
+    return text, {"sections_found": ["full_text"], "fallback_used": False, "pages_extracted": total_pages}
+
+
+def _extract_generic(pdf_bytes: bytes) -> tuple[str, dict]:
+    """Generic fallback for unknown doc types: pages 1-80 + last 30."""
+    with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+        total_pages = len(pdf.pages)
+        text = _extract_fallback(pdf, total_pages)
+    return text, {"sections_found": [], "fallback_used": True, "pages_extracted": min(80, total_pages) + 30}
+
+
+# ─── Bedrock client ───────────────────────────────────────────────────────────
+
+def _get_bedrock_client():
+    """Returns bedrock-runtime client using env vars for credentials."""
+    aws_key = os.getenv("AWS_ACCESS_KEY_ID")
+    aws_secret = os.getenv("AWS_SECRET_ACCESS_KEY")
+    region = os.getenv("AWS_REGION") or AWS_REGION
+    if not aws_key or not aws_secret:
+        return None
+    return boto3.client(
+        "bedrock-runtime",
+        region_name=region,
+        aws_access_key_id=aws_key,
+        aws_secret_access_key=aws_secret,
+    )
+
+
+def _call_bedrock(documents_text: str, ticker: str) -> dict:
+    """Invoke Claude Haiku 3.5 on Bedrock with Anthropic prompt caching.
+    The static schema/instructions prefix is marked as ephemeral cache.
+    Only the per-ticker documents content is uncached.
+    """
+    client = _get_bedrock_client()
+    if client is None:
+        return _unavailable("AWS credentials not configured (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)")
+
+    prompt_path = Path(__file__).parent / "prompts" / "qualitative_extraction.md"
+    prompt_template = prompt_path.read_text(encoding="utf-8")
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                # Cached block: schema, instructions (~3-5k tokens, identical across tickers)
+                {
+                    "type": "text",
+                    "text": prompt_template,
+                    "cache_control": {"type": "ephemeral"},
+                },
+                # Uncached block: per-ticker document content
+                {
+                    "type": "text",
+                    "text": f"\n\n## Documents for {ticker}\n\n{documents_text}",
+                },
+            ],
+        }
+    ]
+
+    body = {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 4096,
+        "messages": messages,
+    }
+
+    try:
+        resp = client.invoke_model(
+            modelId=MODEL_ID,
+            body=json.dumps(body),
+            contentType="application/json",
+        )
+        response_body = json.loads(resp["body"].read())
+        text = response_body["content"][0]["text"].strip()
+
+        # Strip markdown code fences if model adds them
+        if text.startswith("```"):
+            parts = text.split("```")
+            text = parts[1] if len(parts) >= 2 else text
+            if text.startswith("json"):
+                text = text[4:].strip()
+
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        return _unavailable(f"Bedrock response not valid JSON: {e}")
+    except Exception as e:
+        logger.error(f"Bedrock call failed for {ticker}: {e}")
+        return _unavailable(f"Bedrock error: {type(e).__name__}: {e}")
+
+
+# ─── Public API ───────────────────────────────────────────────────────────────
 
 def extract_qualitative(ticker: str, documents: list) -> dict:
     """
-    Run Gemini extraction across the documents.
+    Run Bedrock/Claude Haiku 3.5 extraction across the documents.
 
     Returns a dict matching the schema in qualitative_extraction.md plus:
       - status: "available" | "unavailable"
       - reason: string (only when status == "unavailable")
-      - model: model name used
-      - documents_used: list of filenames
+      - model: MODEL_ID
+      - documents_used: list of labels
+      - extraction_metadata: per-document extraction details
 
-    Cached by combined document url hash + prompt version.
+    Cached by combined document URL hash + prompt version.
     Never raises — all failure modes return an "unavailable" dict.
     """
     if not documents:
-        return _unavailable(f"No documents found for {ticker} on screener.in (annual report + concall transcripts not posted)")
+        return _unavailable(f"No documents found for {ticker} on screener.in")
 
     urls = sorted(d["url"] for d in documents)
     combined_url_hash = hashlib.sha256("".join(urls).encode()).hexdigest()[:16]
@@ -59,26 +334,37 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
         logger.info(f"Loaded qualitative analysis for {ticker} from cache")
         return cached
 
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        return _unavailable("GEMINI_API_KEY not configured")
-
     extracted_docs = []
+    extraction_metadata_docs = []
+
     for d in documents:
         url = d["url"]
+        doc_type = d.get("type", "unknown")
+        label = d.get("label", url)
         try:
             resp = requests.get(url, timeout=30, headers=BROWSER_HEADERS)
             resp.raise_for_status()
-            with pdfplumber.open(BytesIO(resp.content)) as pdf:
-                text = "\n\n".join(page.extract_text() or "" for page in pdf.pages)
-            
-            if len(text) > MAX_DOC_CHARS:
-                text = text[:MAX_DOC_CHARS // 2] + "\n\n...[TRUNCATED MIDDLE]...\n\n" + text[-(MAX_DOC_CHARS // 2):]
-                
+            pdf_bytes = resp.content
+
+            if doc_type == "annual_report":
+                text, meta = _extract_annual_report_sections(pdf_bytes)
+            elif doc_type == "concall_transcript":
+                text, meta = _extract_concall(pdf_bytes)
+            else:
+                text, meta = _extract_generic(pdf_bytes)
+
+            chars_extracted = len(text)
+            extraction_metadata_docs.append({
+                "url": url,
+                "type": doc_type,
+                "sections_found": meta.get("sections_found", []),
+                "fallback_used": meta.get("fallback_used", False),
+                "chars_extracted": chars_extracted,
+            })
             extracted_docs.append({
-                "filename": d.get("label", url),
-                "type": d.get("type", "unknown"),
-                "text": text
+                "filename": label,
+                "type": doc_type,
+                "text": text,
             })
         except Exception as e:
             logger.warning(f"Failed to fetch or parse {url}: {type(e).__name__}: {e}")
@@ -87,38 +373,22 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
     if not extracted_docs:
         return _unavailable(f"All {len(documents)} documents for {ticker} failed to fetch or parse")
 
-    try:
-        client = genai.Client(api_key=api_key)
-        prompt = _build_prompt(extracted_docs)
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            ),
-        )
-        result = json.loads(response.text)
-        result["status"] = "available"
-        result["model"] = MODEL_NAME
-        result["documents_used"] = [d["filename"] for d in extracted_docs]
-        cache.set_json(cache_key, result)
-        logger.info(f"Cached fresh qualitative analysis for {ticker}")
-        return result
-    except json.JSONDecodeError as e:
-        return _unavailable(f"Qualitative extraction failed: {type(e).__name__}")
-    except Exception as e:
-        logger.error(f"Gemini call failed for {ticker}: {e}")
-        return _unavailable(f"Qualitative extraction failed: {type(e).__name__}")
-
-
-def _build_prompt(extracted_docs: list) -> str:
-    prompt_path = Path(__file__).parent / "prompts" / "qualitative_extraction.md"
-    template = prompt_path.read_text(encoding="utf-8")
-    docs_text = "\n\n---\n\n".join(
+    documents_text = "\n\n---\n\n".join(
         f"### {d['filename']} (type: {d['type']})\n\n{d['text']}"
         for d in extracted_docs
     )
-    return template.replace("{documents_text}", docs_text)
+
+    result = _call_bedrock(documents_text, ticker)
+    if result.get("status") == "unavailable":
+        return result
+
+    result["status"] = "available"
+    result["model"] = MODEL_ID
+    result["documents_used"] = [d["filename"] for d in extracted_docs]
+    result["extraction_metadata"] = {"documents": extraction_metadata_docs}
+    cache.set_json(cache_key, result)
+    logger.info(f"Cached fresh qualitative analysis for {ticker} (Bedrock/{MODEL_ID})")
+    return result
 
 
 def _unavailable(reason: str) -> dict:
@@ -159,5 +429,6 @@ def _unavailable(reason: str) -> dict:
         "permanent_hold_viable": {"verdict": None, "notes": None},
         "covenant_control_potential": {"verdict": None, "notes": None},
         "documents_used": [],
+        "extraction_metadata": {"documents": []},
         "model": None,
     }
