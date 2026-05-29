@@ -460,15 +460,20 @@ with st.sidebar:
     st.markdown("Personal investment decision engine")
     st.divider()
 
-    ticker_input = st.text_input(
-        "Ticker",
-        value="",
-        placeholder="e.g. ASIANPAINT.NS or AAPL",
-        help="Yahoo Finance ticker. Append .NS for NSE India, .BO for BSE.",
-        key="ticker_input",
-    )
+    # Wrap ticker input + Analyze button in a form so pressing Enter
+    # in the text field submits (same effect as clicking Analyze).
+    with st.form(key="ticker_form", clear_on_submit=False, border=False):
+        ticker_input = st.text_input(
+            "Ticker",
+            value="",
+            placeholder="e.g. ASIANPAINT.NS or AAPL",
+            help="Press Enter or click Analyze. Append .NS for NSE India, .BO for BSE.",
+            key="ticker_input",
+        )
 
-    analyze_btn = st.button("Analyze", type="primary", width="stretch")
+        analyze_btn = st.form_submit_button(
+            "Analyze", type="primary", width="stretch"
+        )
 
     st.divider()
     st.caption(
@@ -486,7 +491,7 @@ st.title("Sidwell — Investment Analysis")
 
 if not ticker_input:
     st.info(
-        "Enter a ticker in the sidebar and click **Analyze** to run the full pipeline.\n\n"
+        "Enter a ticker in the sidebar and press **Enter** (or click **Analyze**) to run the full pipeline.\n\n"
         "Example tickers: `ASIANPAINT.NS`, `AAPL`, `RELIANCE.NS`"
     )
     st.stop()
