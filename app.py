@@ -98,10 +98,16 @@ def _fetch_damodaran(
 
 
 @st.cache_data(ttl=2_592_000, show_spinner=False)  # 30d
-def _extract_qualitative(ticker: str, doc_paths: tuple):
-    """doc_paths as tuple (hashable for st.cache_data)."""
+def _extract_qualitative(ticker: str, doc_tuples: tuple):
+    """v0.7: documents are now dicts with url/type/label/date.
+    We pass them in as a tuple-of-tuples (hashable for @st.cache_data),
+    then reconstruct to list-of-dicts inside before calling the real extractor."""
     from analysis import qualitative
-    return qualitative.extract_qualitative(ticker, list(doc_paths))
+    documents = [
+        {"url": url, "type": dtype, "label": label, "date": date}
+        for (url, dtype, label, date) in doc_tuples
+    ]
+    return qualitative.extract_qualitative(ticker, documents)
 
 
 @st.cache_data(ttl=86_400, show_spinner=False)   # 24h
@@ -126,7 +132,13 @@ def _run_pipeline(ticker: str) -> dict:
     dcf_results = dcf.run_dcf_valuation(financials, damodaran_data, rf_rate)
 
     docs = doc_module.discover_documents(ticker)
-    qualitative_results = _extract_qualitative(ticker, tuple(sorted(str(d) for d in docs)))
+    # Convert list-of-dicts to tuple-of-tuples (hashable for @st.cache_data).
+    # Sorted by URL so cache key is stable regardless of doc-discovery order.
+    doc_tuples = tuple(sorted(
+        (d.get("url", ""), d.get("type", ""), d.get("label", ""), d.get("date") or "")
+        for d in docs
+    ))
+    qualitative_results = _extract_qualitative(ticker, doc_tuples)
 
     buffett_results = buffett.evaluate_buffett_lens(
         financials, dcf_results, qualitative_results=qualitative_results
