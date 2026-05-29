@@ -79,9 +79,22 @@ def _fetch_rf_rate(ticker: str):
 
 
 @st.cache_data(ttl=2_592_000, show_spinner=False)  # 30d — matches TTL_MACRO
-def _fetch_damodaran(ticker: str):
+def _fetch_damodaran(
+    ticker: str,
+    scraped_industry: str | None,
+    scraped_broad_industry: str | None,
+    scraped_sector: str | None,
+):
+    """v0.6.4.2 changed fetch_damodaran_data signature to (ticker, financials).
+    Pass scraped fields as separate strings (hashable for @st.cache_data)
+    and reconstruct minimal financials dict inside."""
     from data import public
-    return public.fetch_damodaran_data(ticker)
+    financials_subset = {
+        "scraped_industry": scraped_industry,
+        "scraped_broad_industry": scraped_broad_industry,
+        "scraped_sector": scraped_sector,
+    }
+    return public.fetch_damodaran_data(ticker, financials_subset)
 
 
 @st.cache_data(ttl=2_592_000, show_spinner=False)  # 30d
@@ -104,7 +117,12 @@ def _run_pipeline(ticker: str) -> dict:
 
     financials = _fetch_financials(ticker)
     rf_rate = _fetch_rf_rate(ticker)
-    damodaran_data = _fetch_damodaran(ticker)
+    damodaran_data = _fetch_damodaran(
+        ticker,
+        financials.get("scraped_industry"),
+        financials.get("scraped_broad_industry"),
+        financials.get("scraped_sector"),
+    )
     dcf_results = dcf.run_dcf_valuation(financials, damodaran_data, rf_rate)
 
     docs = doc_module.discover_documents(ticker)

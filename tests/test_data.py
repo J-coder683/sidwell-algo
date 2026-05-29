@@ -301,3 +301,19 @@ def test_get_industry_default_fallback_logs_warning(caplog):
 
 def test_normalize_sector_key_handles_nbsp_and_case():
     assert _normalize_sector_key('Software—Infrastructure\xa0') == 'software-infrastructure'
+
+
+def test_fetch_damodaran_signature_matches_callers():
+    """Regression for v0.6.4.5: fetch_damodaran_data signature changed in v0.6.4.2
+    to accept financials as second arg. Both value.py and app.py must call it correctly.
+    This test asserts the signature contract so future drift breaks tests, not Streamlit Cloud."""
+    import inspect
+    from data.public import fetch_damodaran_data
+    sig = inspect.signature(fetch_damodaran_data)
+    params = list(sig.parameters.keys())
+    assert 'financials' in params, (
+        f"fetch_damodaran_data must accept 'financials' argument; got {params}"
+    )
+    assert len(params) == 2, (
+        f"Expected exactly 2 params (ticker, financials), got {params}"
+    )
