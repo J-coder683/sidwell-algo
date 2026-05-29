@@ -107,12 +107,12 @@ def _get_row_data(table, match_texts, parent_only=True, is_shareholding=False):
             
     return []
 
-def _get_subrows(company_id: str, section: str, parent_match: str):
+def _get_subrows(company_id: str, section: str, parent_match: str, full_labels: list[str]):
     """
-    Fetches the sub-rows JSON from screener API since they are not rendered in the HTML for anonymous users.
-    Returns a dict mapping normalized child labels to their data arrays (last 4 years).
+    Fetches the sub-rows JSON from screener API.
+    Returns a dict mapping normalized child labels to their data arrays, aligned to full_labels.
     """
-    if not company_id:
+    if not company_id or not full_labels:
         return {}
         
     for p in [parent_match, parent_match + " %"]:
@@ -124,10 +124,21 @@ def _get_subrows(company_id: str, section: str, parent_match: str):
                 if data:
                     children = {}
                     for k, d in data.items():
-                        vals = [_parse_float(str(v)) for v in list(d.values())[-4:]]
-                        if len(vals) < 4:
-                            vals = ([None] * (4 - len(vals))) + vals
-                        children[_normalize_label(k)] = vals
+                        aligned_vals = []
+                        for label in full_labels:
+                            if label in d:
+                                aligned_vals.append(_parse_float(str(d[label])))
+                            else:
+                                year = label[-4:] if len(label) >= 4 else label
+                                found = False
+                                for dk, dv in d.items():
+                                    if year in dk:
+                                        aligned_vals.append(_parse_float(str(dv)))
+                                        found = True
+                                        break
+                                if not found:
+                                    aligned_vals.append(None)
+                        children[_normalize_label(k)] = aligned_vals
                     return children
         except Exception as e:
             logger.debug(f"Failed to fetch schedules for {parent_match}: {e}")
@@ -214,12 +225,15 @@ def fetch_screener_financials(ticker: str) -> dict:
     bs_table = soup.find('section', id='balance-sheet').find('table') if soup.find('section', id='balance-sheet') else None
     cf_table = soup.find('section', id='cash-flow').find('table') if soup.find('section', id='cash-flow') else None
     sh_table = soup.find('section', id='shareholding').find('table') if soup.find('section', id='shareholding') else None
+    q_table = soup.find('section', id='quarters').find('table') if soup.find('section', id='quarters') else None
+    ratios_table = soup.find('section', id='ratios').find('table') if soup.find('section', id='ratios') else None
     
     if not pl_table or not bs_table or not cf_table:
         raise ValueError(f"Could not find financial tables on screener.in for {ticker}.")
         
     headers = [th.text.strip() for th in pl_table.find('thead').find_all('th')[1:]]
     has_ttm = len(headers) > 0 and headers[-1].upper() == "TTM"
+    headers_no_ttm = headers[:-1] if has_ttm else headers
     
     years_extracted = [h[-4:] if len(h) >= 4 else h for h in headers]
     if has_ttm:
@@ -254,7 +268,7 @@ def fetch_screener_financials(ticker: str) -> dict:
         tax_provision.append((p * (tp / 100.0)) if p is not None and tp is not None else None)
         
     # Gross Profit Extraction (Fix 8)
-    mat_subrows = _get_subrows(company_id, "profit-loss", "Material Cost")
+    mat_subrows = _get_subrows(company_id, "profit-loss", "Material Cost", headers_no_ttm)
     raw_material_cost = None
     change_in_inventory = None
     
@@ -305,7 +319,7 @@ def fetch_screener_financials(ticker: str) -> dict:
             total_equity.append(None)
             
     # Cash Extraction (Fix 3)
-    other_assets_subrows = _get_subrows(company_id, "balance-sheet", "Other Assets")
+    other_assets_subrows = _get_subrows(company_id, "balance-sheet", "Other Assets", headers_no_ttm)
     cash_row = None
     for target in ["cash equivalents", "cash & equivalents", "cash and bank", "cash & bank balance", "cash"]:
         if target in other_assets_subrows:
@@ -324,7 +338,7 @@ def fetch_screener_financials(ticker: str) -> dict:
     fcf = _slice_row(_get_row_data(cf_table, "Free Cash Flow"))
     
     # Capex Extraction (Fix 4)
-    cfi_subrows = _get_subrows(company_id, "cash-flow", "Cash from Investing Activity")
+    cfi_subrows = _get_subrows(company_id, "cash-flow", "Cash from Investing Activity", headers_no_ttm)
     fixed_assets_purchased = None
     fixed_assets_sold = None
     
@@ -350,7 +364,7 @@ def fetch_screener_financials(ticker: str) -> dict:
         capex = [abs(c) if c is not None else None for c in cfi]
         
     # Working Capital Changes (Fix 5)
-    cfo_subrows = _get_subrows(company_id, "cash-flow", "Cash from Operating Activity")
+    cfo_subrows = _get_subrows(company_id, "cash-flow", "Cash from Operating Activity", headers_no_ttm)
     wc_row = None
     for k, v in cfo_subrows.items():
         if k == "working capital changes":
@@ -401,6 +415,99 @@ def fetch_screener_financials(ticker: str) -> dict:
     if div_yield_val is not None:
         dividend_yield = div_yield_val / 100.0
 
+    # statements extraction
+    def _extract_full_table(table, section_id, labels):
+        if not table or not labels:
+            return {}
+        result = {}
+        tbody = table.find('tbody')
+        if not tbody:
+            return result
+            
+        all_headers = [th.text.strip() for th in table.find('thead').find_all('th')[1:]]
+        table_has_ttm = len(all_headers) > 0 and all_headers[-1].upper() == "TTM"
+        header_texts = all_headers[:-1] if table_has_ttm else all_headers
+        
+        for tr in tbody.find_all('tr'):
+            tds = tr.find_all('td')
+            if not tds:
+                continue
+            label_raw = tds[0].text
+            label_norm = _normalize_label(label_raw)
+            
+            td_vals = tds[1:-1] if table_has_ttm else tds[1:]
+            
+            val_map = {}
+            for i, td in enumerate(td_vals):
+                if i < len(header_texts):
+                    val_map[header_texts[i]] = _parse_float(td.text)
+            
+            vals = []
+            for lbl in labels:
+                vals.append(val_map.get(lbl, None))
+                
+            result[label_norm] = vals
+            
+            is_expandable = False
+            button = tds[0].find('button')
+            if button and ('showSchedule' in button.get('onclick', '') or 'button-plain' in button.get('class', [])):
+                is_expandable = True
+            elif 'onclick' in tr.attrs and 'showSchedule' in tr.get('onclick', ''):
+                is_expandable = True
+            elif '+' in label_raw:
+                is_expandable = True
+                
+            if is_expandable:
+                subrows = _get_subrows(company_id, section_id, label_raw.replace('+', '').strip(), labels)
+                for child_k, child_v in subrows.items():
+                    key = child_k if child_k not in result else f"{label_norm}::{child_k}"
+                    result[key] = child_v
+        return result
+
+    years_annual = headers_no_ttm[-10:] if headers_no_ttm else []
+    
+    q_headers = []
+    if q_table:
+        q_headers = [th.text.strip() for th in q_table.find('thead').find_all('th')[1:]]
+        if q_headers and q_headers[-1].upper() == "TTM":
+            q_headers = q_headers[:-1]
+    quarters_extracted = q_headers[-10:] if q_headers else []
+    
+    peers_section = soup.find('section', id='peers')
+    peers_list = []
+    if peers_section:
+        peers_table = peers_section.find('table')
+        if peers_table:
+            th_cols = [th.text.strip() for th in peers_table.find('thead').find_all('th')]
+            tbody = peers_table.find('tbody')
+            if tbody:
+                for tr in tbody.find_all('tr'):
+                    tds = tr.find_all('td')
+                    if len(tds) == len(th_cols):
+                        peer = {}
+                        for i, td in enumerate(tds):
+                            text = td.text.strip()
+                            peer[_normalize_label(th_cols[i])] = _parse_float(text) if _parse_float(text) is not None else text
+                        peers_list.append(peer)
+
+    fin = {}
+    fin["statements"] = {
+        "years_annual": years_annual,
+        "quarters": quarters_extracted,
+        "annual": {
+            "profit_loss": _extract_full_table(pl_table, "profit-loss", years_annual),
+            "balance_sheet": _extract_full_table(bs_table, "balance-sheet", years_annual),
+            "cash_flow": _extract_full_table(cf_table, "cash-flow", years_annual),
+        },
+        "quarterly": {
+            "profit_loss": _extract_full_table(q_table, "quarters", quarters_extracted) if quarters_extracted else {}
+        },
+        "ratios": _extract_full_table(ratios_table, "ratios", years_annual),
+        "shareholding": _extract_full_table(sh_table, "shareholding", quarters_extracted if quarters_extracted else []),
+        "top_ratios": ratios_dict,
+        "peers": peers_list
+    }
+
     logger.info(
         f"Stock beta not directly available on screener.in for {ticker.upper()}; "
         f"WACC will use Damodaran industry levered beta as fallback (standard practice for "
@@ -409,7 +516,6 @@ def fetch_screener_financials(ticker: str) -> dict:
     stock_beta = 1.0
     recommendation_mean = None
 
-    fin = {}
     fin["ticker"] = ticker.upper()
     fin["current_price"] = current_price
     fin["market_cap"] = market_cap
