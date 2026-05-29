@@ -361,9 +361,29 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
             or (min_fcf < 0 and max(fcf_4y) > 0)  # straddles zero
         )
         
-        if is_likely_cyclical:
-            # Format FCF for the message
-            fcf_display = [f"${v/1e9:.1f}B" for v in fcf_4y]
+        is_structurally_cash_burning = (
+            max(fcf_4y) < 0          # all four years negative
+            and fcf_sign_flips == 0  # consistent (not cycling around zero)
+        )
+
+        # Format FCF once for whichever message fires
+        fcf_display = [f"${v/1e9:.2f}B" for v in fcf_4y]
+
+        if is_structurally_cash_burning:
+            raise ValueError(
+                f"DCF cannot value {ticker}: this company is structurally cash-burning.\n"
+                f"4-year FCF window: {fcf_display} \u2014 all four years negative, no sign changes.\n"
+                f"\n"
+                f"The DCF model values future cash flows; companies in pre-revenue or "
+                f"clinical/R&D phases (early-stage biotech, growth-stage SaaS pre-profitability, "
+                f"some EV startups) cannot be valued this way. They require option-pricing "
+                f"or pipeline-NPV models which Sidwell does not yet implement.\n"
+                f"\n"
+                f"This is a KNOWN MODEL LIMITATION, not a data error. Lens checks will not run "
+                f"for this ticker. Affected sectors: clinical-stage biotech (NVAX, MRNA pre-2020), "
+                f"pre-profit growth SaaS, capital-burn EV/AV plays."
+            )
+        elif is_likely_cyclical:
             raise ValueError(
                 f"DCF cannot value {ticker}: this company appears to be cyclical.\n"
                 f"4-year FCF window: {fcf_display} \u2014 straddles or includes a trough.\n"
@@ -381,11 +401,11 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float)
                 f"Mining, Oil & Gas E&P, Shipping, Commodity chemicals."
             )
         else:
-            # Existing generic message stays for non-cyclical negative intrinsic
+            # Generic fallback: WACC/inputs issue, not a business-model issue
             raise ValueError(
                 f"DCF produced non-positive intrinsic value ({intrinsic_value_per_share:.2f}) for {ticker}. "
                 f"WACC={wacc:.4f}, terminal_growth={g_terminal:.4f}, stage_1_growth={proj_revenue_growth:.4f}, "
-                f"last_year_fcf={hist_fcf[-1]}. Likely causes: terminal_growth >= WACC; corrupted CRP/beta inputs; "
+                f"last_year_fcf={fcf_4y[-1]}. Likely causes: terminal_growth >= WACC; corrupted CRP/beta inputs; "
                 f"projected FCF negative across forecast horizon."
             )
 
