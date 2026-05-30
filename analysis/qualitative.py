@@ -111,7 +111,9 @@ def _extract_annual_report_sections(pdf_bytes: bytes) -> tuple[str, dict]:
         toc_page_idx = None
         toc_range = min(TOC_SEARCH_RANGE_MAX, total_pages)
         for i in range(toc_range):
-            page_text = (pdf.pages[i].extract_text() or "").lower()
+            page = pdf.pages[i]
+            page_text = (page.extract_text() or "").lower()
+            page.flush_cache()
             if any(marker in page_text for marker in
                    ["table of contents", "contents", "inside this report", "in this report"]):
                 # Heuristic: real TOC pages reference at least 2 of our target sections
@@ -127,7 +129,9 @@ def _extract_annual_report_sections(pdf_bytes: bytes) -> tuple[str, dict]:
 
         def _find_section_start(keywords: list, search_from: int = 0) -> int | None:
             for i in range(search_from, total_pages):
-                txt = (pdf.pages[i].extract_text() or "").lower().strip()
+                page = pdf.pages[i]
+                txt = (page.extract_text() or "").lower().strip()
+                page.flush_cache()
                 if not txt:
                     continue
                 # Only match keyword in first 300 chars of page (section header zone)
@@ -176,9 +180,14 @@ def _extract_annual_report_sections(pdf_bytes: bytes) -> tuple[str, dict]:
                 end = sorted_sections[idx + 1][1]
             else:
                 end = min(total_pages, start + 30)
-            section_text = "\n".join(
-                pdf.pages[p].extract_text() or "" for p in range(start, end)
-            )
+                
+            section_text_parts = []
+            for p in range(start, end):
+                page = pdf.pages[p]
+                section_text_parts.append(page.extract_text() or "")
+                page.flush_cache()
+                
+            section_text = "\n".join(section_text_parts)
             pages_this = end - start
             total_pages_extracted += pages_this
             chunks.append(f"\n\n### {name} (PDF pages {start + 1}-{end})\n\n{section_text}")
@@ -211,8 +220,21 @@ def _extract_fallback(pdf, total_pages: int) -> str:
     + risk factors typically appearing toward end."""
     head_end = min(80, total_pages)
     tail_start = max(head_end, total_pages - 30)
-    head_text = "\n".join(pdf.pages[p].extract_text() or "" for p in range(0, head_end))
-    tail_text = "\n".join(pdf.pages[p].extract_text() or "" for p in range(tail_start, total_pages))
+    
+    head_parts = []
+    for p in range(0, head_end):
+        page = pdf.pages[p]
+        head_parts.append(page.extract_text() or "")
+        page.flush_cache()
+        
+    tail_parts = []
+    for p in range(tail_start, total_pages):
+        page = pdf.pages[p]
+        tail_parts.append(page.extract_text() or "")
+        page.flush_cache()
+        
+    head_text = "\n".join(head_parts)
+    tail_text = "\n".join(tail_parts)
     return (f"\n\n### Pages 1-{head_end} (fallback)\n\n{head_text}"
             f"\n\n### Last {total_pages - tail_start} pages (fallback)\n\n{tail_text}")
 
@@ -221,7 +243,12 @@ def _extract_concall(pdf_bytes: bytes) -> tuple[str, dict]:
     """Concall transcripts: full text, no truncation."""
     with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
         total_pages = len(pdf.pages)
-        text = "\n\n".join(pdf.pages[p].extract_text() or "" for p in range(total_pages))
+        parts = []
+        for p in range(total_pages):
+            page = pdf.pages[p]
+            parts.append(page.extract_text() or "")
+            page.flush_cache()
+        text = "\n\n".join(parts)
     return text, {"sections_found": ["full_text"], "fallback_used": False, "pages_extracted": total_pages}
 
 
@@ -310,6 +337,11 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
             resp = requests.get(url, timeout=30, headers=BROWSER_HEADERS)
             resp.raise_for_status()
             pdf_bytes = resp.content
+            
+            # Prevent Streamlit Cloud OOM: Skip PDFs larger than 15MB
+            if len(pdf_bytes) > 15 * 1024 * 1024:
+                logger.warning(f"Skipping {url}: file too large ({len(pdf_bytes)/1024/1024:.1f} MB). Prevents OOM.")
+                continue
 
             if doc_type == "annual_report":
                 text, meta = _extract_annual_report_sections(pdf_bytes)
