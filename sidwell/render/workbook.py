@@ -231,11 +231,15 @@ class WorkbookRenderer:
                 c.number_format = fmt; c.font = F.FONT_INPUT
         put_hist(R_REV, hist_rev); put_hist(R_EBIT, hist_ebit)
         put_hist(R_NP, hist_np); put_hist(R_DA, hist_da); put_hist(R_CX, hist_capex)
-        # Projected Net Profit (engine net income, after the debt schedule)
-        net_inc = proj.get("net_income", proj.get("nopat", []))
-        for j, v in enumerate(net_inc):
-            cc = ws.cell(row=R_NP, column=pc0 + j, value=v)
-            cc.number_format = F.FMT_NUMBER; cc.font = F.FONT_NORMAL
+        # Projected Net Profit (formula). Pre-financing (= NOPAT) so the integrated
+        # balance sheet stays live and balances without debt-schedule circularity.
+        for j in range(ny):
+            cc = pc0 + j
+            ws.cell(row=R_NP, column=cc, value=f"={L(cc)}{R_NOP}").number_format = F.FMT_NUMBER
+
+        # Expose cell coordinates for the FCF/BS/CF sheets
+        self._is_ref = {"pc0": pc0, "ny": ny, "R_NOP": R_NOP, "R_DA": R_DA,
+                        "R_CX": R_CX, "R_EBIT": R_EBIT, "R_NP": R_NP, "R_REV": R_REV}
 
         # Per-year projection drivers from the engine (editable blue inputs)
         prev = hist_rev[-1] if hist_rev else (proj["revenue"][0])
@@ -259,37 +263,74 @@ class WorkbookRenderer:
             ws.cell(row=R_CX, column=cc, value=f"={Lc}{R_REV}*{Lc}{R_CXP}").number_format = F.FMT_NUMBER
             ws.cell(row=R_DA, column=cc, value=f"={Lc}{R_REV}*{Lc}{R_DAP}").number_format = F.FMT_NUMBER
 
-        # Expose cell coordinates for the FCF sheet
-        self._is_ref = {"pc0": pc0, "ny": ny, "R_NOP": R_NOP, "R_DA": R_DA,
-                        "R_CX": R_CX, "R_EBIT": R_EBIT}
-            
     def render_bs(self):
+        """Integrated, balancing Balance Sheet. Projections are LIVE formulas that
+        link to the Income Statement (Revenue, CapEx, D&A, Net Profit): AR/Inv/AP
+        from DSO/DIO/DPO × revenue, PP&E rolls (prior + CapEx − D&A), Equity rolls
+        (prior + Net Profit), Cash rolls (prior + NP + D&A − ΔNWC − CapEx), debt is
+        held flat and a constant 'other net assets' plug makes year-0 tie. Net income
+        is pre-financing (≈ NOPAT) so there is NO circular reference — opens clean —
+        yet the Balance Check is 0 every year. Edit any driver and it re-balances."""
+        from openpyxl.utils import get_column_letter as L
+        F = Formats
         ws = self._create_sheet("5_Balance_Sheet")
-        n = self._av_header(ws, "Balance Sheet (Rs mm)")
-        p = self.results["proj"]
+        n = self._av_header(ws, "Balance Sheet (Rs mm) — integrated / balancing")
+        ref = self._is_ref
+        R_REV, R_CX, R_DA, R_NP = ref["R_REV"], ref["R_CX"], ref["R_DA"], ref["R_NP"]
+        ny = ref["ny"]
+        ISN = "'4_Income_Statement'"
         hb = self.results.get("hist", {}).get("bs", {})
+        au = self.results["proj"].get("assumptions_used", {})
 
-        def add(a, b):
-            a = a or []; b = b or []
-            return [(a[i] if i < len(a) else 0.0) + (b[i] if i < len(b) else 0.0) for i in range(max(len(a), len(b)))]
+        def hl(key):
+            s = hb.get(key) or []
+            return (s[-1] if s and s[-1] else 0.0)
+        last_cash, last_ppe = hl("cash_equivalents"), hl("fixed_assets")
+        last_ar, last_inv, last_ap = hl("trade_receivables"), hl("inventories"), hl("trade_payables")
+        last_debt = hl("borrowings") + hl("lease_liabilities")
+        last_eq = hl("equity_capital") + hl("reserves")
+        last_nwc = last_ar + last_inv - last_ap
+        other = (last_ap + last_debt + last_eq) - (last_cash + last_ar + last_inv + last_ppe)
+        dso, dio, dpo = au.get("dso_days", 45.0), au.get("dio_days", 30.0), au.get("dpo_days", 45.0)
 
-        r = 3
-        r = self._av_row(ws, r, "Cash", hb.get("cash_equivalents"), p["cash"], n)
-        r = self._av_row(ws, r, "Trade Receivables", hb.get("trade_receivables"), p["ar"], n)
-        r = self._av_row(ws, r, "Inventories", hb.get("inventories"), p["inv"], n)
-        r = self._av_row(ws, r, "Net Fixed Assets", hb.get("fixed_assets"), p["net_fixed_assets"], n)
-        r += 1
-        r = self._av_row(ws, r, "Trade Payables", hb.get("trade_payables"), p["ap"], n)
-        r = self._av_row(ws, r, "Debt", add(hb.get("borrowings"), hb.get("lease_liabilities")), p["debt"], n)
-        r = self._av_row(ws, r, "Equity", add(hb.get("equity_capital"), hb.get("reserves")), p["equity"], n)
-        r += 1
-        lr = ws.cell(row=r, column=2, value="Balance Check (proj, ≈0)")
-        lr.font = Formats.FONT_BOLD
-        for i, val in enumerate(p["balance_check"]):
-            cell = ws.cell(row=r, column=3 + n + i, value=val)
-            cell.number_format = Formats.FMT_NUMBER
-            if abs(val) > 1.0:
-                cell.fill = Formats.FILL_FLAGGED
+        R_DSO, R_DIO, R_DPO, R_CASH, R_AR, R_INV, R_PPE, R_OTH, R_TA = 3, 4, 5, 6, 7, 8, 9, 10, 11
+        R_AP, R_DEBT, R_EQ, R_TLE, R_NWC, R_BC = 12, 13, 14, 15, 16, 17
+        for rr, lab in [(R_DSO, "DSO (days)"), (R_DIO, "DIO (days)"), (R_DPO, "DPO (days)"),
+                        (R_CASH, "Cash"), (R_AR, "Trade Receivables"), (R_INV, "Inventories"),
+                        (R_PPE, "Net Fixed Assets"), (R_OTH, "Other net assets (plug)"), (R_TA, "Total Assets"),
+                        (R_AP, "Trade Payables"), (R_DEBT, "Debt"), (R_EQ, "Equity"),
+                        (R_TLE, "Total Liab + Equity"), (R_NWC, "Net Working Capital"), (R_BC, "Balance Check")]:
+            ws.cell(row=rr, column=2, value=lab).font = F.FONT_BOLD
+
+        def hist(row, key):
+            for i, v in enumerate((hb.get(key) or [])[-n:] if n else []):
+                if v:
+                    c = ws.cell(row=row, column=3 + i, value=v); c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
+        hist(R_CASH, "cash_equivalents"); hist(R_AR, "trade_receivables")
+        hist(R_INV, "inventories"); hist(R_PPE, "fixed_assets"); hist(R_AP, "trade_payables")
+
+        for j in range(ny):
+            cc = 3 + n + j
+            col, colp = L(cc), L(cc - 1)
+            for rr, val in [(R_DSO, dso), (R_DIO, dio), (R_DPO, dpo)]:
+                c = ws.cell(row=rr, column=cc, value=val); c.number_format = '0.0'; c.font = F.FONT_INPUT
+            ws.cell(row=R_AR, column=cc, value=f"={ISN}!{col}{R_REV}*{col}{R_DSO}/365").number_format = F.FMT_NUMBER
+            ws.cell(row=R_INV, column=cc, value=f"={ISN}!{col}{R_REV}*{col}{R_DIO}/365").number_format = F.FMT_NUMBER
+            ws.cell(row=R_AP, column=cc, value=f"={ISN}!{col}{R_REV}*{col}{R_DPO}/365").number_format = F.FMT_NUMBER
+            ws.cell(row=R_NWC, column=cc, value=f"={col}{R_AR}+{col}{R_INV}-{col}{R_AP}").number_format = F.FMT_NUMBER
+            ppe_prev = f"{colp}{R_PPE}" if j else repr(last_ppe)
+            ws.cell(row=R_PPE, column=cc, value=f"={ppe_prev}+{ISN}!{col}{R_CX}-{ISN}!{col}{R_DA}").number_format = F.FMT_NUMBER
+            eq_prev = f"{colp}{R_EQ}" if j else repr(last_eq)
+            ws.cell(row=R_EQ, column=cc, value=f"={eq_prev}+{ISN}!{col}{R_NP}").number_format = F.FMT_NUMBER
+            dnwc = f"({col}{R_NWC}-{colp}{R_NWC})" if j else f"({col}{R_NWC}-{repr(last_nwc)})"
+            cash_prev = f"{colp}{R_CASH}" if j else repr(last_cash)
+            ws.cell(row=R_CASH, column=cc,
+                    value=f"={cash_prev}+{ISN}!{col}{R_NP}+{ISN}!{col}{R_DA}-{dnwc}-{ISN}!{col}{R_CX}").number_format = F.FMT_NUMBER
+            dcell = ws.cell(row=R_DEBT, column=cc, value=last_debt); dcell.number_format = F.FMT_NUMBER
+            ocell = ws.cell(row=R_OTH, column=cc, value=other); ocell.number_format = F.FMT_NUMBER
+            ws.cell(row=R_TA, column=cc, value=f"={col}{R_CASH}+{col}{R_AR}+{col}{R_INV}+{col}{R_PPE}+{col}{R_OTH}").number_format = F.FMT_NUMBER
+            ws.cell(row=R_TLE, column=cc, value=f"={col}{R_AP}+{col}{R_DEBT}+{col}{R_EQ}").number_format = F.FMT_NUMBER
+            ws.cell(row=R_BC, column=cc, value=f"={col}{R_TA}-{col}{R_TLE}").number_format = F.FMT_NUMBER
 
     def render_cf(self):
         """Cash Flow linked to the Income Statement: Net Income, D&A and CapEx are
