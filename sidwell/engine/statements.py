@@ -92,7 +92,26 @@ class StatementsEngine:
             "inventory_days": convert_ratio_row(ratios.get("inventory days", [])),
             "days_payable": convert_ratio_row(ratios.get("days payable", []))
         }
-        
+
+        # Annualize transition-period columns (e.g. a 15-month stub when a company
+        # changes fiscal year — Nestlé). FLOW items (IS, CF) are scaled to 12 months;
+        # STOCK items (balance sheet) are left as-is. Ratios (days/%) are unaffected.
+        import re as _re
+        factors = []
+        for y in years_annual:
+            mm = _re.search(r"(\d{1,2})\s*m\b", str(y).lower())
+            months = int(mm.group(1)) if mm else 12
+            factors.append((12.0 / months) if 0 < months != 12 else 1.0)
+        if any(fct != 1.0 for fct in factors):
+            flow_is = ["sales", "expenses", "operating_profit", "other_income", "depreciation",
+                       "interest", "profit_before_tax", "tax", "net_profit", "revenue", "financing_profit"]
+            flow_cf = ["cfo", "cfi", "cff", "fixed_assets_purchased", "receivables", "inventory",
+                       "payables", "working_capital_changes", "proceeds_from_borrowings", "repayment_of_borrowings"]
+            for k in flow_is:
+                mapped_is[k] = [(v * factors[i]) if i < len(factors) else v for i, v in enumerate(mapped_is.get(k, []))]
+            for k in flow_cf:
+                mapped_cf[k] = [(v * factors[i]) if i < len(factors) else v for i, v in enumerate(mapped_cf.get(k, []))]
+
         return {
             "years_annual": years_annual,
             "is": mapped_is,

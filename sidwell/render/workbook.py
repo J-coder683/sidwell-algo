@@ -70,14 +70,16 @@ class WorkbookRenderer:
         return len(h_years)
 
     def _av_row(self, ws, r, label, hvals, pvals, n_hist, fmt=None, bold=False):
-        """Row across historical (blue) + projected (black) columns."""
+        """Row across historical (blue) + projected (black) columns. Historical
+        cells that are missing (0/None from un-scraped years) are left blank."""
         lc = ws.cell(row=r, column=2, value=label)
         lc.font = Formats.FONT_BOLD if bold else Formats.FONT_NORMAL
         c = 3
         for v in (hvals[-n_hist:] if n_hist else hvals):
-            cell = ws.cell(row=r, column=c, value=v)
-            cell.number_format = fmt or Formats.FMT_NUMBER
-            cell.font = Formats.FONT_INPUT  # blue = actual
+            if v:  # skip 0/None → not-reported, leave blank
+                cell = ws.cell(row=r, column=c, value=v)
+                cell.number_format = fmt or Formats.FMT_NUMBER
+                cell.font = Formats.FONT_INPUT  # blue = actual
             c += 1
         for v in pvals:
             cell = ws.cell(row=r, column=c, value=v)
@@ -170,12 +172,14 @@ class WorkbookRenderer:
 
     @staticmethod
     def _fy_label(raw, suffix):
-        """'Mar 2025' -> 'FY2025A'; pass-through if already an FY label."""
+        """'Mar 2025' -> 'FY2025A'. Extracts a real 4-digit year (handles noisy
+        labels like 'Mar 2024\\n...15m' which must NOT become FY2415)."""
+        import re
         s = str(raw)
         if s.startswith("FY"):
             return s
-        digits = "".join(c for c in s if c.isdigit())[-4:]
-        return f"FY{digits}{suffix}" if digits else s + suffix
+        m = re.search(r"(19|20)\d{2}", s)
+        return f"FY{m.group(0)}{suffix}" if m else (s.strip()[:7] + suffix)
 
     def render_is(self):
         """Formula-driven Income Statement: projection DRIVER rows are blue editable
@@ -216,15 +220,22 @@ class WorkbookRenderer:
         for rr, lab in [(R_G, "Revenue growth %"), (R_REV, "Revenue"), (R_MG, "EBIT margin %"),
                         (R_EBIT, "EBIT"), (R_TAX, "Tax rate %"), (R_NOP, "NOPAT"),
                         (R_CXP, "CapEx % sales"), (R_CX, "CapEx"), (R_DAP, "D&A % sales"),
-                        (R_DA, "D&A"), (R_NP, "Net Profit (hist)")]:
+                        (R_DA, "D&A"), (R_NP, "Net Profit")]:
             ws.cell(row=rr, column=2, value=lab).font = F.FONT_BOLD
 
         def put_hist(row, vals, fmt=F.FMT_NUMBER):
             for i, v in enumerate(vals[-n:] if n else []):
+                if not v:   # missing/un-scraped → leave blank
+                    continue
                 c = ws.cell(row=row, column=3 + i, value=v)
                 c.number_format = fmt; c.font = F.FONT_INPUT
         put_hist(R_REV, hist_rev); put_hist(R_EBIT, hist_ebit)
         put_hist(R_NP, hist_np); put_hist(R_DA, hist_da); put_hist(R_CX, hist_capex)
+        # Projected Net Profit (engine net income, after the debt schedule)
+        net_inc = proj.get("net_income", proj.get("nopat", []))
+        for j, v in enumerate(net_inc):
+            cc = ws.cell(row=R_NP, column=pc0 + j, value=v)
+            cc.number_format = F.FMT_NUMBER; cc.font = F.FONT_NORMAL
 
         # Per-year projection drivers from the engine (editable blue inputs)
         prev = hist_rev[-1] if hist_rev else (proj["revenue"][0])
@@ -281,32 +292,66 @@ class WorkbookRenderer:
                 cell.fill = Formats.FILL_FLAGGED
 
     def render_cf(self):
+        """Cash Flow linked to the Income Statement: Net Income, D&A and CapEx are
+        formulas pulling from the IS; CFO and FCF are formulas. CapEx is shown as a
+        consistent outflow (negative) in both actuals and projections."""
+        from openpyxl.utils import get_column_letter as L
+        F = Formats
         ws = self._create_sheet("6_Cash_Flow")
-        n = self._av_header(ws, "Cash Flow (Rs mm)")
+        n = self._av_header(ws, "Cash Flow (Rs mm) — linked to Income Statement")
         p = self.results["proj"]
+        ref = getattr(self, "_is_ref", {})
+        R_NP, R_DA, R_CX = ref.get("R_NP", 13), ref.get("R_DA", 12), ref.get("R_CX", 10)
+        ny = len(p["years"])
+        ISN = "'4_Income_Statement'"
+        h_is = self.results.get("hist", {}).get("is", {})
         hc = self.results.get("hist", {}).get("cf", {})
-        cfo = [ni + da - nwc for ni, da, nwc in zip(p["net_income"], p["da"], p["nwc_change"])]
-        fcf = [c - cx for c, cx in zip(cfo, p["capex"])]
-        hist_capex = [-(x or 0.0) for x in (hc.get("fixed_assets_purchased") or [])]
-        hist_fcf = [(c or 0.0) - abs(cx or 0.0)
-                    for c, cx in zip(hc.get("cfo") or [], hc.get("fixed_assets_purchased") or [])]
-        r = 3
-        r = self._av_row(ws, r, "Cash from Operations", hc.get("cfo"), cfo, n, bold=True)
-        r = self._av_row(ws, r, "CapEx", hist_capex, [-x for x in p["capex"]], n)
-        r = self._av_row(ws, r, "Free Cash Flow", hist_fcf, fcf, n, bold=True)
+        hist_ni = h_is.get("net_profit") or []
+        hist_da = h_is.get("depreciation") or []
+        hist_cfo = hc.get("cfo") or []
+        fap = hc.get("fixed_assets_purchased") or []
+        hist_capex = [-(abs(x)) if x else 0.0 for x in fap]            # outflow (negative)
+        hist_fcf = [(c or 0.0) - abs(x or 0.0) for c, x in zip(hist_cfo, fap)]
+
+        for rr, lab in [(3, "Net Income"), (4, "Add: Depreciation"), (5, "Less: Change in NWC"),
+                        (6, "Cash from Operations"), (7, "Less: CapEx"), (8, "Free Cash Flow")]:
+            ws.cell(row=rr, column=2, value=lab).font = F.FONT_BOLD
+
+        def hist(row, vals):
+            for i, v in enumerate(vals[-n:] if n else []):
+                if v:
+                    c = ws.cell(row=row, column=3 + i, value=v)
+                    c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
+        hist(3, hist_ni); hist(4, hist_da); hist(6, hist_cfo); hist(7, hist_capex); hist(8, hist_fcf)
+
+        nwc = p.get("nwc_change", [0.0] * ny)
+        for j in range(ny):
+            cc = 3 + n + j            # projection column (aligns to the IS projection column)
+            col = L(cc)
+            nv = ws.cell(row=5, column=cc, value=-(nwc[j] if j < len(nwc) else 0.0))
+            nv.number_format = F.FMT_NUMBER; nv.font = F.FONT_INPUT
+            l1 = ws.cell(row=3, column=cc, value=f"={ISN}!{col}{R_NP}"); l1.number_format = F.FMT_NUMBER; l1.font = F.FONT_LINK
+            l2 = ws.cell(row=4, column=cc, value=f"={ISN}!{col}{R_DA}"); l2.number_format = F.FMT_NUMBER; l2.font = F.FONT_LINK
+            ws.cell(row=6, column=cc, value=f"={col}3+{col}4+{col}5").number_format = F.FMT_NUMBER
+            l3 = ws.cell(row=7, column=cc, value=f"=-{ISN}!{col}{R_CX}"); l3.number_format = F.FMT_NUMBER; l3.font = F.FONT_LINK
+            ws.cell(row=8, column=cc, value=f"={col}6+{col}7").number_format = F.FMT_NUMBER
 
     def render_debt(self):
         ws = self._create_sheet("7_Debt_Schedule")
-        self._proj_header(ws, "Debt Schedule (Rs mm)")
+        self._proj_header(ws, "Debt Schedule (Rs mm) — Projected")
         p = self.results["proj"]
         hbs = self.results.get("hist", {}).get("bs", {})
         prev = ((hbs.get("borrowings") or [0.0])[-1] or 0.0) + ((hbs.get("lease_liabilities") or [0.0])[-1] or 0.0)
-        openings = [prev] + list(p["debt"][:-1])
-        net = [c - o for o, c in zip(openings, p["debt"])]
+        debt = p["debt"]
+        openings = [prev] + list(debt[:-1])
+        net = [cl - op for op, cl in zip(openings, debt)]
         r = 3
-        r = self._row(ws, r, "Opening Debt", openings)
+        r = self._row(ws, r, "Opening Debt (borrowings + leases)", openings)
         r = self._row(ws, r, "Net Draw / (Paydown)", net)
-        r = self._row(ws, r, "Closing Debt", p["debt"], bold=True)
+        r = self._row(ws, r, "Closing Debt", debt, bold=True)
+        if prev < 1.0 and (not debt or max(abs(x) for x in debt) < 1.0):
+            ws.cell(row=r + 1, column=2,
+                    value="(Company is effectively debt-free — schedule is nil.)").font = Formats.FONT_NORMAL
 
     def render_fcf(self):
         """Live DCF: UFCF = NOPAT + D&A − CapEx − ΔNWC (NOPAT/D&A/CapEx linked from the
