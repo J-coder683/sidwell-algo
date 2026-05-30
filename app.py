@@ -382,17 +382,24 @@ def _render_dcf_tab(dcf_results: dict, financials: dict):
         else:
             st.caption("Projection data unavailable.")
 
-    # ---- Excel download ----
+    # ---- Excel download (new 13-sheet, 3-statement AJP engine workbook) ----
     st.divider()
-    st.markdown("**Export DCF as Excel workbook**")
-    if st.button("Generate DCF Excel", key="btn_excel"):
+    st.markdown("**Export DCF as Excel workbook** (13-sheet, 3-statement model)")
+    eng = dcf_results.get("engine_results")
+    if not eng:
+        st.caption("Workbook unavailable for this ticker (DCF not applicable).")
+    elif st.button("Generate DCF Excel", key="btn_excel"):
         with st.spinner("Building workbook…"):
-            from exports.excel import export_dcf_excel
-            excel_bytes = export_dcf_excel(dcf_results, financials)
+            import tempfile, os
+            from sidwell.render.workbook import create_workbook
+            tmp = os.path.join(tempfile.gettempdir(), f"{ticker}_DCF_v0.7.xlsx")
+            create_workbook(eng, dcf_results.get("ajp"), tmp)
+            with open(tmp, "rb") as fh:
+                excel_bytes = fh.read()
         st.download_button(
             label="Download DCF Workbook (.xlsx)",
             data=excel_bytes,
-            file_name=f"{ticker}_DCF_{SIDWELL_VERSION}.xlsx",
+            file_name=f"{ticker}_DCF_v0.7.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             key="dl_excel",
         )

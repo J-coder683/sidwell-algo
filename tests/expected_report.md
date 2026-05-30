@@ -6,7 +6,7 @@
 > [!WARNING]
 > **DCF COVERAGE GAP WARNING**: The computed DCF intrinsic value
 > deviates significantly from the current market price (intrinsic
-> at 34101736% of price).
+> at 60897902% of price).
 >
 > Even this v0.4 2-stage DCF (Stage 1 high-growth + Stage 2 fade +
 > sector-aware terminal) may understate premium businesses because:
@@ -25,7 +25,7 @@
 | Metric | Value | Source / Detail |
 | :--- | :--- | :--- |
 | **Current Price** | ₹50.00 | Yahoo Finance |
-| **Intrinsic Value (DCF)** | ₹17.05M | Sidwell DCF Engine |
+| **Intrinsic Value (DCF)** | ₹30.45M | Sidwell DCF Engine |
 | **Margin of Safety** | 100.00% margin of safety | Current Discount to Intrinsic |
 | **Buffett Score** | **14/14** | Buffett Lens (14 checks) |
 | **Buffett Verdict** | **BUY** ✅ | Buffett Lens Rules |
@@ -68,7 +68,7 @@ Every component of the Weighted Average Cost of Capital (WACC) is explicitly sou
 | **Mature Market ERP** | 5.00% | Damodaran NYU Stern (Mature Equity Risk Premium) |
 | **Country Risk Premium** | 0.00% | Damodaran NYU Stern (Country default spread adjusted) |
 | **Total Equity Risk Premium** | 5.00% | Damodaran mature ERP + country premium = 5.00% |
-| **Industry Unlevered Beta** | 1.00 | Damodaran 'AJP Detected' (hardcoded fallback (Damodaran lookup failed)) |
+| **Industry Unlevered Beta** | 1.00 | Damodaran 'Unknown' (hardcoded fallback (Damodaran lookup failed)) |
 | **Beta ($\beta$)** | 1.03 | Direct $\beta$ from stockanalysis.com |
 | **Cost of Equity ($K_e$)** | 12.15% | CAPM: $R_f + \beta \times ERP$ = 12.15% |
 | **Cost of Debt ($K_d$)** | 6.00% | AJP Engine Fallback |
@@ -78,50 +78,50 @@ Every component of the Weighted Average Cost of Capital (WACC) is explicitly sou
 | **Computed WACC** | **11.73%** | Weighted cost of capital = **11.73%** |
 
 ### 5-Year High-Growth Forecast (Stage 1)
-Projections are based on historical averages relative to Revenue. Revenue growth is projected at **8.00%** (historical 4y CAGR capped between 5% and 20%).
+Projections are based on historical averages relative to Revenue. Revenue growth is projected at **10.00%** (historical 4y CAGR capped between 5% and 20%).
 
 | Metric | FY2026E | FY2027E | FY2028E | FY2029E | FY2030E |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| Revenue | ₹139.75M | ₹146.74M | ₹154.08M | ₹161.78M | ₹169.87M |
-| EBIT | ₹26.55M | ₹26.41M | ₹26.19M | ₹25.89M | ₹25.48M |
-| Taxes | ₹6.24M | ₹6.60M | ₹6.55M | ₹6.47M | ₹6.37M |
-| D&A | ₹4.47M | ₹4.99M | ₹5.55M | ₹6.15M | ₹6.79M |
-| CapEx | ₹6.99M | ₹7.34M | ₹7.70M | ₹8.09M | ₹8.49M |
-| NWC Change (CF) | ₹-1.82M | ₹574,335.62 | ₹603,052.40 | ₹633,205.02 | ₹664,865.27 |
-| Free Cash Flow | ₹19.22M | ₹16.89M | ₹16.89M | ₹16.84M | ₹16.75M |
+| Revenue | ₹146.41M | ₹161.05M | ₹177.16M | ₹194.87M | ₹214.36M |
+| EBIT | ₹29.28M | ₹32.21M | ₹35.43M | ₹38.97M | ₹42.87M |
+| Taxes | ₹6.92M | ₹8.05M | ₹8.86M | ₹9.74M | ₹10.72M |
+| D&A | ₹3.99M | ₹4.19M | ₹4.42M | ₹4.69M | ₹4.99M |
+| CapEx | ₹7.32M | ₹8.05M | ₹8.86M | ₹9.74M | ₹10.72M |
+| NWC Change (CF) | ₹1.33M | ₹1.46M | ₹1.61M | ₹1.77M | ₹1.95M |
+| Free Cash Flow | ₹17.30M | ₹18.83M | ₹20.53M | ₹22.41M | ₹24.48M |
 | Discount Factor | 0.8950 | 0.8010 | 0.7169 | 0.6416 | 0.5743 |
-| PV of Cash Flow | ₹18.19M | ₹14.30M | ₹12.80M | ₹11.42M | ₹10.17M |
+| PV of Cash Flow | ₹16.37M | ₹15.95M | ₹15.56M | ₹15.20M | ₹14.86M |
 
-### 5-Year Fade Forecast (Stage 2) — growth fading from 5.00% to 2.00%
+### 5-Year Fade Forecast (Stage 2) — growth fading from 10.00% to 2.00%
 
 | Metric | FY2031E | FY2032E | FY2033E | FY2034E | FY2035E |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| Revenue | ₹177.52M | ₹184.62M | ₹191.08M | ₹196.81M | ₹201.73M |
-| EBIT | ₹24.85M | ₹24.00M | ₹22.93M | ₹21.65M | ₹20.17M |
-| Taxes | ₹6.21M | ₹6.00M | ₹5.73M | ₹5.41M | ₹5.04M |
-| D&A | ₹7.46M | ₹8.12M | ₹8.79M | ₹9.45M | ₹10.09M |
-| CapEx | ₹8.88M | ₹9.23M | ₹9.55M | ₹9.84M | ₹10.09M |
-| NWC Change (CF) | ₹628,297.68 | ₹583,618.73 | ₹531,093.05 | ₹471,155.40 | ₹404,408.39 |
-| Free Cash Flow | ₹16.59M | ₹16.31M | ₹15.90M | ₹15.37M | ₹14.73M |
+| Revenue | ₹232.94M | ₹250.02M | ₹265.02M | ₹277.39M | ₹286.63M |
+| EBIT | ₹46.59M | ₹50.00M | ₹53.00M | ₹55.48M | ₹57.33M |
+| Taxes | ₹11.65M | ₹12.50M | ₹13.25M | ₹13.87M | ₹14.33M |
+| D&A | ₹5.34M | ₹5.72M | ₹6.12M | ₹6.55M | ₹6.99M |
+| CapEx | ₹11.65M | ₹12.50M | ₹13.25M | ₹13.87M | ₹14.33M |
+| NWC Change (CF) | ₹1.86M | ₹1.71M | ₹1.50M | ₹1.24M | ₹924,624.61 |
+| Free Cash Flow | ₹26.77M | ₹29.01M | ₹31.12M | ₹33.05M | ₹34.73M |
 | Discount Factor | 0.5140 | 0.4600 | 0.4117 | 0.3685 | 0.3298 |
-| PV of Cash Flow | ₹9.01M | ₹7.93M | ₹6.92M | ₹5.99M | ₹5.13M |
+| PV of Cash Flow | ₹14.55M | ₹14.11M | ₹13.54M | ₹12.87M | ₹12.11M |
 
 ### Terminal Value
-- Final fade year (Year 10) FCF: ₹14.73M
+- Final fade year (Year 10) FCF: ₹34.73M
 - Terminal growth (Gordon): 2.00%
 - Sector mapping: AJP Engine Fallback
-- Terminal Value: ₹228.47M
-- PV of Terminal Value (discounted from Year 10): ₹75.35M
+- Terminal Value: ₹503.58M
+- PV of Terminal Value (discounted from Year 10): ₹166.07M
 
 ### Valuation Bridge
-- **PV of Explicit FCFs**: ₹101.85M
-- **PV of Terminal Value (g = 2.00%)**: ₹75.35M
-- **Enterprise Value**: ₹177.20M
+- **PV of Explicit FCFs**: ₹145.11M
+- **PV of Terminal Value (g = 2.00%)**: ₹166.07M
+- **Enterprise Value**: ₹311.18M
 - **Add: Cash & Equivalents**: ₹13.31M
 - **Less: Total Debt**: ₹20.00M
-- **Equity Value**: ₹170.51M
+- **Equity Value**: ₹304.49M
 - **Shares Outstanding**: 10
-- **Intrinsic Value per Share**: **₹17.05M**
+- **Intrinsic Value per Share**: **₹30.45M**
 
 ## 3. Buffett Investor Lens
 All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
@@ -133,7 +133,7 @@ All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.
 | Durable competitive advantage (moat) | ✅ | 0.00% | < 3.0% | stdev = 0.00% < 3% |
 | High return on invested capital | ✅ | 22.26% | > 15.0% | 4y avg = 22.26% > 15% |
 | Strong free-cash-flow generation | ✅ | 0.12 / 0.37 | Margin > 10% & Growth > 0% | avg margin = 11.69%, FCF growth = 37.42% |
-| Earnings predictability | ✅ | 0.08 / 0.00 | 5% < CAGR < 30% & YoY Growth StDev < 10.0% | Revenue CAGR = 8.00%, YoY Growth StDev = 0.00% |
+| Earnings predictability | ✅ | 0.10 / 0.00 | 5% < CAGR < 30% & YoY Growth StDev < 10.0% | Revenue CAGR = 10.00%, YoY Growth StDev = 0.00% |
 
 _Part A — Business Quality: **4/4 passed**_
 
@@ -162,7 +162,7 @@ _Part C — Management & Capital Allocation: **4/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Margin of safety | ✅ | 100.00% | > 25.0% | mos = 100.00% (Price: 50.00, Intrinsic: 17050867.79) |
+| Margin of safety | ✅ | 100.00% | > 25.0% | mos = 100.00% (Price: 50.00, Intrinsic: 30448951.20) |
 | Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
 | Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. Demand category structurally enduring; no single-technology dependence identified in documents. |
 
@@ -248,9 +248,9 @@ _Part B — Operational Upside: **2/6 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Sector Compatibility | ❌ | AJP Detected | In KKR Playbook | AJP Detected is NOT in KKR playbook. |
+| Sector Compatibility | ❌ | Unknown | In KKR Playbook | Unknown is NOT in KKR playbook. |
 | Willing Seller | ✅ | unclear | Positive catalyst | neutral default — qualitative unavailable; check counted as PASS |
-| Regulatory Freedom | ✅ | AJP Detected | Not restricted | Clear. |
+| Regulatory Freedom | ✅ | Unknown | Not restricted | Clear. |
 
 _Part C — Strategic Fit: **2/3 passed**_
 
@@ -293,7 +293,7 @@ _Part A — Good Business Filter: **4/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Theme Alignment | ❌ | AJP Detected | Favored Theme | AJP Detected not in themes. |
+| Theme Alignment | ❌ | Unknown | Favored Theme | Unknown not in themes. |
 | Cycle Position | ✅ | mid_cycle | Not peak/late | Cycle: mid_cycle |
 | Structural Tailwind | ✅ | tailwind | Tailwind/neutral | Tailwind: tailwind |
 
@@ -351,7 +351,7 @@ _Part A — Purchase Price & Capital Structure Entry: **1/4 passed**_
 | Fulcrum Security | ✅ | (0.653317218175285, 13.31, 25.0) | Hard or Soft Fulcrum | Qual: fulcrum_identified. Hard signals: A=False, B=False. |
 | ABF/Credit Fit | ✅ | abf_primary_opportunity | Compatible | Signal: abf_primary_opportunity |
 | Complexity Moat | ✅ | 15.03% | >55% or High Qual | Debt/Assets 15.0%. Qual: high. |
-| Domain Knowledge | ❌ | AJP Detected | In Apollo Playbook | AJP Detected not in playbook. |
+| Domain Knowledge | ❌ | Unknown | In Apollo Playbook | Unknown not in playbook. |
 
 _Part B — Chaos, Complexity, Credit Edge: **4/5 passed**_
 
@@ -416,7 +416,7 @@ _Numeric claims tie out across documents and strategy is consistent._
 
 ## 4. Margin-of-Safety Check
 Current Stock Price: **₹50.00**
-DCF Intrinsic Value: **₹17.05M**
+DCF Intrinsic Value: **₹30.45M**
 Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)
 Computed Margin of Safety: 100.00% margin of safety
 ### Status: [PASS] ✅

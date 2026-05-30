@@ -77,9 +77,20 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float,
         
     # 3. Call the deterministic engine!
     engine_results = run_engine(financials, ajp)
-    
+
+    # If the Gemini AJP produced a non-positive valuation (an extreme forward
+    # assumption can do this), retry on the company's own historical-default
+    # assumptions rather than mislabelling the ticker. Gemini is best-effort.
+    if engine_results.get("intrinsic_value_per_share", 0) <= 0 and getattr(ajp, "assumptions", None):
+        logger.warning(
+            f"AJP-driven valuation non-positive for {ticker}; "
+            f"falling back to historical-default assumptions."
+        )
+        from sidwell.ajp.schema import AJP as _AJP
+        engine_results = run_engine(financials, _AJP(meta=ajp.meta, assumptions=[]))
+
     intrinsic_value_per_share = engine_results["intrinsic_value_per_share"]
-    
+
     # 4. Check cyclical / cash-burning constraint if valuation is negative
     if intrinsic_value_per_share <= 0:
         fcf_4y = [(v if v is not None else 0.0) for v in (financials.get("fcf", []) or [])]
@@ -179,12 +190,14 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float,
         "terminal_value": engine_results["terminal"]["avg_tv"] * 1e6,
         "projections": proj_mapped,
         "engine_results": engine_results,  # attach full payload for workbook
+        "ajp": ajp,                        # attach AJP for the workbook renderer
         "assumptions": {
             "dcf_methodology": "3-Statement AJP Engine v0.7",
-            "target_industry": "AJP Detected",
-            "tax_rate": 0.25, # Required by buffett lens
-            "revenue_growth": 0.08, # Required by lenses
-            "ebit_margin": 0.15,
+            "target_industry": macro_data.get("target_industry", "Unknown") if macro_data else "Unknown",
+            # Real, data-derived values from the engine (feed the lenses + report)
+            "tax_rate": engine_results["proj"].get("assumptions_used", {}).get("tax_rate", 0.25),
+            "revenue_growth": engine_results["proj"].get("assumptions_used", {}).get("stage1_revenue_growth", 0.08),
+            "ebit_margin": engine_results["proj"].get("assumptions_used", {}).get("ebit_margin_start", 0.15),
             "cost_of_equity": engine_results["wacc"]["current_ke"],
             "cost_of_debt": engine_results["wacc"]["after_tax_kd"],
             "terminal_growth_rate": engine_results["terminal"]["terminal_growth"],

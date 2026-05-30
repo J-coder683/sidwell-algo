@@ -132,7 +132,23 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
         "rationale": "Why you chose this number based on docs.",
         "interrogation_refs": ["1.1"]
       }
-      // Include all required DCF drivers here: ebit_margin_target, capex_pct_sales_target, etc.
+      // REQUIRED: output one object (same shape) for EACH driver_id below that the
+      // documents actually support a forward view on. OMIT any you cannot ground —
+      // the engine then falls back to the company's own historical average (do NOT guess):
+      //
+      //   "ebit_margin_target"     unit "ratio" — the operating (EBIT) margin level management is
+      //                            steering toward, and WHY (mix shift, operating leverage, cost programme).
+      //   "capex_pct_sales_target" unit "ratio" — forward capex as a % of sales. IMPORTANT: if management
+      //                            signalled EXPANSION (new plants/factories, capacity additions, a large
+      //                            project/order pipeline, a step-up in growth capex), set this ABOVE the
+      //                            historical ratio and cite the specific plan, amount, and timeline.
+      //   "tax_rate"               unit "ratio" — guided / normalized effective tax rate.
+      //   "terminal_growth"        unit "ratio" — long-run growth, must be <= long-run nominal GDP.
+      //   "dso_days" / "dio_days" / "dpo_days"  unit "days" — only if working-capital terms are discussed.
+      //
+      // Percentages are decimals (0.085 = 8.5%). Always include source_type, confidence, and a
+      // rationale that quotes/paraphrases the specific document evidence. Provide a scenario
+      // {BEAR, BASE, BULL} where management framing supports a range.
     ]
   }
 }

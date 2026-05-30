@@ -39,6 +39,7 @@ class StatementsEngine:
             "interest": convert_row(pl.get("interest", [])),
             "profit_before_tax": convert_row(pl.get("profit before tax", [])),
             "tax": convert_row(pl.get("tax", [])),
+            "tax_pct": convert_ratio_row(pl.get("tax %", [])),  # screener's effective tax rate (%)
             "net_profit": convert_row(pl.get("net profit", [])),
             # Bank specific
             "revenue": convert_row(pl.get("revenue", [])),
@@ -132,17 +133,85 @@ class StatementsEngine:
                 if a.scenario.BASE is not None: return a.scenario.BASE
             return float(a.value) if a.value is not None else default
 
-        rev_g_s1 = get_val("stage1_revenue_growth", 0.05)
+        # ── Data-derived defaults (company-specific; used when the AJP is silent).
+        # Growth/tax/capex/margins reflect the company's own history instead of
+        # fixed constants. The AJP (Gemini forward judgment) overrides any of them.
+        is_h, bs_h, cf_h, r_h = hist["is"], hist["bs"], hist["cf"], hist["ratios"]
+
+        def _avg(xs):
+            xs = [x for x in xs if x is not None]
+            return (sum(xs) / len(xs)) if xs else None
+
+        def _clamp(x, lo, hi):
+            return max(lo, min(hi, x))
+
+        sales_series = is_h.get("sales") or []
+        if not any(sales_series):
+            sales_series = is_h.get("revenue") or []
+        nz_sales = [s for s in sales_series if s]
+
+        if len(nz_sales) >= 2 and nz_sales[0] > 0:
+            hist_cagr = (nz_sales[-1] / nz_sales[0]) ** (1.0 / (len(nz_sales) - 1)) - 1.0
+        else:
+            hist_cagr = 0.08
+        default_growth = _clamp(hist_cagr, 0.0, 0.30)
+
+        # Effective tax rate: prefer screener's "tax %" line (already tax/PBT);
+        # fall back to (PBT − net profit)/PBT, then to 25%.
+        tax_pcts = [tp / 100.0 for tp in is_h.get("tax_pct", []) if tp]
+        if not tax_pcts:
+            tax_pcts = [(p - n) / p for p, n in zip(is_h.get("profit_before_tax", []), is_h.get("net_profit", []))
+                        if p and p > 0 and n is not None]
+        default_tax = _clamp(_avg(tax_pcts) if tax_pcts else 0.25, 0.0, 0.45)
+
+        _ns = nz_sales[-1] if nz_sales else 0.0
+        _op = is_h.get("operating_profit") or []
+        _margin = (_op[-1] / _ns) if (_op and _ns > 0) else 0.10
+
+        capex_series = [abs(c) for c in cf_h.get("fixed_assets_purchased", [])]
+        cs_ratios = [c / s for c, s in zip(capex_series, sales_series) if s and s > 0]
+        default_capex_sales = _clamp(_avg(cs_ratios) if cs_ratios else 0.05, 0.0, 0.40)
+
+        nb_series = bs_h.get("fixed_assets") or []
+        dep_rates = [d / b for d, b in zip(is_h.get("depreciation", []), nb_series) if b and b > 0 and d]
+        default_dep_rate = _clamp(_avg(dep_rates) if dep_rates else 0.08, 0.01, 0.40)
+        starting_net_block = nb_series[-1] if nb_series else 0.0
+
+        default_dso = _avg(r_h.get("debtor_days", [])) or 45.0
+        default_dio = _avg(r_h.get("inventory_days", [])) or 30.0
+        default_dpo = _avg(r_h.get("days_payable", [])) or 45.0
+
+        rev_g_s1 = get_val("stage1_revenue_growth", default_growth)
         term_g = get_val("terminal_growth", 0.02)
-        target_margin = get_val("ebit_margin_target", 0.10)
-        target_capex_sales = get_val("capex_pct_sales_target", 0.05)
-        target_da_sales = get_val("da_pct_sales_target", 0.05)
-        tax_rate = get_val("tax_rate", 0.25)
+        target_margin = get_val("ebit_margin_target", _margin)
+        target_capex_sales = get_val("capex_pct_sales_target", default_capex_sales)
+        target_da_sales = 0.0  # retained for compatibility; D&A now uses a PP&E schedule
+        tax_rate = get_val("tax_rate", default_tax)
+        dep_rate = get_val("da_rate_on_block", default_dep_rate)
         
         # Working capital fallbacks
-        dso_days = get_val("dso_days", 45.0)
-        dio_days = get_val("dio_days", 30.0)
-        dpo_days = get_val("dpo_days", 45.0)
+        dso_days = get_val("dso_days", default_dso)
+        dio_days = get_val("dio_days", default_dio)
+        dpo_days = get_val("dpo_days", default_dpo)
+
+        # Sanity-bound every driver (whether from the AJP/Gemini or the historical
+        # default) so an extreme forward assumption can't drive the model negative.
+        rev_g_s1 = _clamp(rev_g_s1, -0.05, 0.30)
+        term_g = _clamp(term_g, 0.0, 0.06)
+        target_margin = _clamp(target_margin, 0.02, 0.50)
+        target_capex_sales = _clamp(target_capex_sales, 0.0, 0.22)
+        tax_rate = _clamp(tax_rate, 0.0, 0.45)
+        dep_rate = _clamp(dep_rate, 0.01, 0.40)
+        if term_g >= rev_g_s1:
+            term_g = max(0.0, rev_g_s1 - 0.01)
+
+        proj["assumptions_used"] = {
+            "stage1_revenue_growth": rev_g_s1, "hist_revenue_cagr": hist_cagr,
+            "terminal_growth": term_g, "ebit_margin_start": _margin,
+            "ebit_margin_target": target_margin, "tax_rate": tax_rate,
+            "capex_pct_sales": target_capex_sales, "da_rate_on_block": dep_rate,
+            "dso_days": dso_days, "dio_days": dio_days, "dpo_days": dpo_days,
+        }
         
         # Initial values from hist
         last_sales = hist["is"]["sales"][-1] if hist["is"]["sales"] else 0.0
@@ -176,6 +245,7 @@ class StatementsEngine:
         proj["inv"] = []
         proj["ap"] = []
         proj["nwc"] = []
+        proj_net_block = starting_net_block  # opening PP&E for the depreciation schedule
 
         for i in range(explicit_years):
             # Growth fade
@@ -205,10 +275,11 @@ class StatementsEngine:
             capex = sales * capex_pct
             proj["capex"].append(capex)
             
-            da_step = (target_da_sales - last_da_sales) / explicit_years
-            da_pct = last_da_sales + da_step * (i + 1)
-            da = sales * da_pct
+            # Depreciation from a PP&E roll-forward schedule:
+            # D&A = opening net block × effective dep rate; block rolls with capex − D&A.
+            da = proj_net_block * dep_rate
             proj["da"].append(da)
+            proj_net_block = proj_net_block + capex - da
             
             # NWC projection via Days
             ar = sales * (dso_days / 365.0)

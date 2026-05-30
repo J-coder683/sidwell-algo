@@ -26,15 +26,16 @@ class BridgeEngine:
         
         sotp_value = 0.0
         holdco_discount = 0.0
-        if is_holdco:
-            seg_assumption = AJPLoader.get_assumption_or_fallback(ajp, "segments", [], "Holdco segments")
-            if seg_assumption.segments:
-                for seg in seg_assumption.segments:
-                    sotp_value += seg.value_mm * seg.stake_pct
-            
+        seg_assumption = AJPLoader.get_assumption_or_fallback(ajp, "segments", [], "Holdco segments")
+        # SOTP only when the ticker is a holdco AND we actually have segment values.
+        # If holdco is flagged but no segments are supplied (e.g. Gemini set the
+        # flag from subsidiary mentions but gave no stake values), fall back to the
+        # standard EV→equity bridge so the valuation isn't zeroed out.
+        if is_holdco and seg_assumption.segments:
+            for seg in seg_assumption.segments:
+                sotp_value += seg.value_mm * seg.stake_pct
             holdco_discount = float(AJPLoader.get_assumption_or_fallback(ajp, "holdco_discount", 0.0, "Discount").value)
-            equity_value_sotp = sotp_value * (1 - holdco_discount)
-            equity_value = equity_value_sotp
+            equity_value = sotp_value * (1 - holdco_discount)
         else:
             equity_value = equity_value_core
             

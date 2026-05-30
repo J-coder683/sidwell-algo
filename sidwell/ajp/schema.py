@@ -1,3 +1,4 @@
+import dataclasses
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict, Any
 
@@ -53,20 +54,47 @@ class AJP:
 
     @classmethod
     def from_dict(cls, data: dict) -> "AJP":
-        meta_dict = data.get("meta", {})
-        assumptions_list = data.get("assumptions", [])
-        
-        meta = AJPMeta(**meta_dict)
-        
+        """Tolerant parser: fills missing meta fields and ignores unknown keys so
+        imperfect Gemini output still parses into a usable AJP."""
+        meta_dict = dict(data.get("meta", {}) or {})
+        meta_defaults = {
+            "ticker": "", "as_of": "", "currency": "INR_MM",
+            "sources_ingested": [], "fiscal_year_end_month": 3,
+            "last_actual_fy": "", "is_holdco": False, "scenario_active": "BASE",
+        }
+        meta_fields = {f.name for f in dataclasses.fields(AJPMeta)}
+        merged = {**meta_defaults, **{k: v for k, v in meta_dict.items() if k in meta_fields}}
+        meta = AJPMeta(**merged)
+
+        a_fields = {f.name for f in dataclasses.fields(AJPAssumption)}
         assumptions = []
-        for a_dict in assumptions_list:
-            a = a_dict.copy()
-            if "scenario" in a:
-                a["scenario"] = AJPScenario(**a["scenario"])
-            if "options_outstanding" in a and a["options_outstanding"]:
-                a["options_outstanding"] = [AJPOptionTranche(**opt) for opt in a["options_outstanding"]]
-            if "segments" in a and a["segments"]:
-                a["segments"] = [AJPSegment(**seg) for seg in a["segments"]]
-            assumptions.append(AJPAssumption(**a))
-            
+        for a_dict in (data.get("assumptions", []) or []):
+            a = {k: v for k, v in dict(a_dict).items() if k in a_fields}
+            if not a.get("driver_id"):
+                continue
+            a.setdefault("unit", "ratio")
+            a.setdefault("source_type", "ASSUMED")
+            a.setdefault("confidence", "MEDIUM")
+            a.setdefault("rationale", "")
+            sc = a.get("scenario")
+            if isinstance(sc, dict):
+                a["scenario"] = AJPScenario(BEAR=sc.get("BEAR"), BASE=sc.get("BASE"), BULL=sc.get("BULL"))
+            elif sc is not None and not isinstance(sc, AJPScenario):
+                a["scenario"] = None
+            if a.get("options_outstanding"):
+                a["options_outstanding"] = [
+                    AJPOptionTranche(shares=o.get("shares", 0.0), strike_price=o.get("strike_price", 0.0))
+                    for o in a["options_outstanding"] if isinstance(o, dict)
+                ]
+            if a.get("segments"):
+                a["segments"] = [
+                    AJPSegment(name=s.get("name", ""), valuation_method=s.get("valuation_method", ""),
+                               stake_pct=s.get("stake_pct", 1.0), value_mm=s.get("value_mm", 0.0))
+                    for s in a["segments"] if isinstance(s, dict)
+                ]
+            try:
+                assumptions.append(AJPAssumption(**a))
+            except TypeError:
+                continue
+
         return cls(meta=meta, assumptions=assumptions)
