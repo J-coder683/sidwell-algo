@@ -252,9 +252,13 @@ class StatementsEngine:
         fade_years = explicit_years - stage1_years
         
         prev_sales = last_sales
-        prev_ar = (hist["bs"]["trade_receivables"][-1] if hist["bs"]["trade_receivables"] else (prev_sales * dso_days / 365.0))
-        prev_inv = (hist["bs"]["inventories"][-1] if hist["bs"]["inventories"] else (prev_sales * dio_days / 365.0))
-        prev_ap = (hist["bs"]["trade_payables"][-1] if hist["bs"]["trade_payables"] else (prev_sales * dpo_days / 365.0))
+        hist_ar_0 = (hist["bs"]["trade_receivables"][-1] if hist["bs"]["trade_receivables"] else (prev_sales * dso_days / 365.0))
+        hist_inv_0 = (hist["bs"]["inventories"][-1] if hist["bs"]["inventories"] else (prev_sales * dio_days / 365.0))
+        hist_ap_0 = (hist["bs"]["trade_payables"][-1] if hist["bs"]["trade_payables"] else (prev_sales * dpo_days / 365.0))
+        
+        prev_ar = hist_ar_0
+        prev_inv = hist_inv_0
+        prev_ap = hist_ap_0
         
         # To avoid circularity in debt schedule, we will build standard UFCF first.
         # The full 3-statement will be built deterministically here.
@@ -338,9 +342,9 @@ class StatementsEngine:
         # We must balance the starting historical balance sheet exactly, 
         # so we calculate a 'net_other_assets' plug representing un-modeled items 
         # (like investments, deferred taxes, other liabilities, etc).
-        hist_ar = hist["bs"]["trade_receivables"][-1] if hist["bs"]["trade_receivables"] else 0.0
-        hist_inv = hist["bs"]["inventories"][-1] if hist["bs"]["inventories"] else 0.0
-        hist_ap = hist["bs"]["trade_payables"][-1] if hist["bs"]["trade_payables"] else 0.0
+        hist_ar = hist_ar_0
+        hist_inv = hist_inv_0
+        hist_ap = hist_ap_0
         
         hist_assets = cash_balance + hist_ar + hist_inv + net_fixed_assets
         hist_liab_eq = hist_ap + debt_balance + equity_balance
