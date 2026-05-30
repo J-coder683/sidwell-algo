@@ -250,7 +250,12 @@ def _call_gemini(documents_text: str, ticker: str) -> dict:
     prompt = f"{prompt_template}\n\n## Documents for {ticker}\n\n{documents_text}"
 
     try:
-        client = genai.Client(api_key=api_key)
+        # Hard timeout (ms) so a slow/stuck call degrades gracefully instead of
+        # hanging the whole app (Streamlit Cloud has no request watchdog).
+        client = genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(timeout=120_000),
+        )
         resp = client.models.generate_content(
             model=MODEL_NAME,
             contents=prompt,
