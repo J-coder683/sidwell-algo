@@ -1,4 +1,4 @@
-# Qualitative Extraction Prompt v0.5
+# Qualitative Extraction Prompt v0.10
 
 You are an investment analyst extracting structured insights from company
 documents. Read all the documents provided below. Return ONLY a JSON object
@@ -127,28 +127,64 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
         "value": 0.085,
         "unit": "ratio",
         "scenario": { "BEAR": 0.05, "BASE": 0.085, "BULL": 0.11 },
+        "split": { "volume": 0.055, "price": 0.03 },
         "source_type": "MGMT_GUIDANCE",
         "confidence": "HIGH",
-        "rationale": "Why you chose this number based on docs.",
+        "rationale": "Quote/paraphrase the specific guidance and the page/call timestamp.",
         "interrogation_refs": ["1.1"]
       }
-      // REQUIRED: output one object (same shape) for EACH driver_id below that the
-      // documents actually support a forward view on. OMIT any you cannot ground —
-      // the engine then falls back to the company's own historical average (do NOT guess):
+      // HOW MANY TO OUTPUT:
+      //  * ALWAYS output the SIX CORE drivers with your best document-grounded BASE
+      //    value — an annual report plus three concalls always give enough to form a
+      //    defensible view. Use "confidence" (HIGH/MEDIUM/LOW) to flag how firm it is,
+      //    and the rationale to cite the evidence. The six core drivers are:
+      //      stage1_revenue_growth, ebit_margin_target, capex_pct_sales_target,
+      //      tax_rate, terminal_growth, exit_ev_ebitda_multiple
+      //  * Output the OPTIONAL drivers ONLY when the documents disclose them; omit the
+      //    rest (the engine then falls back to the company's own history — never guess
+      //    on the optional ones).
+      // Percentages are decimals (0.085 = 8.5%). Always include source_type, confidence
+      // and a rationale citing specific evidence; give a scenario {BEAR,BASE,BULL} when
+      // the framing supports a range.
       //
-      //   "ebit_margin_target"     unit "ratio" — the operating (EBIT) margin level management is
-      //                            steering toward, and WHY (mix shift, operating leverage, cost programme).
-      //   "capex_pct_sales_target" unit "ratio" — forward capex as a % of sales. IMPORTANT: if management
-      //                            signalled EXPANSION (new plants/factories, capacity additions, a large
-      //                            project/order pipeline, a step-up in growth capex), set this ABOVE the
-      //                            historical ratio and cite the specific plan, amount, and timeline.
-      //   "tax_rate"               unit "ratio" — guided / normalized effective tax rate.
-      //   "terminal_growth"        unit "ratio" — long-run growth, must be <= long-run nominal GDP.
-      //   "dso_days" / "dio_days" / "dpo_days"  unit "days" — only if working-capital terms are discussed.
+      // === DRIVER REFERENCE (the six core driver_ids named above are REQUIRED;
+      //     everything else here is OPTIONAL — output only if disclosed) ===
       //
-      // Percentages are decimals (0.085 = 8.5%). Always include source_type, confidence, and a
-      // rationale that quotes/paraphrases the specific document evidence. Provide a scenario
-      // {BEAR, BASE, BULL} where management framing supports a range.
+      // --- GROWTH & MARGINS ---
+      //   stage1_revenue_growth   unit "ratio" — near-term (1-3y) growth. Add "split":{volume,price}
+      //                           when management separates them (pricing power is a key signal).
+      //                           (The engine fades this to terminal_growth over years 4-10.)
+      //   ebit_margin_target      unit "ratio" — the operating-margin level they are steering to, the
+      //                           DRIVER (mix / operating leverage / cost programme) and the timeline.
+      //   da_rate_on_block        unit "ratio" — depreciation as a % of the net fixed-asset base, if guided.
+      //   tax_rate                unit "ratio" — guided / normalized effective tax rate.
+      //
+      // --- INVESTMENT & WORKING CAPITAL ---
+      //   capex_pct_sales_target  unit "ratio" — forward capex % of sales. If they signalled EXPANSION
+      //                           (new plants/factories, capacity, a large project/order pipeline), set it
+      //                           ABOVE the historical ratio and cite the plan, amount and timeline.
+      //   dso_days / dio_days / dpo_days   unit "days" — receivable / inventory / payable terms, if discussed.
+      //
+      // --- TERMINAL VALUE & CAPITAL STRUCTURE ---
+      //   terminal_growth         unit "ratio" — long-run growth, must be <= long-run nominal GDP.
+      //   exit_ev_ebitda_multiple unit "x" — a DEFENSIBLE terminal EV/EBITDA exit multiple justified by the
+      //                           company's quality and sector (do not leave it at a generic 10x).
+      //   target_debt_to_cap      unit "ratio" — management's intended long-run debt / (debt + equity), if stated.
+      //   pretax_cost_of_debt_override  unit "ratio" — only if they disclose their actual borrowing rate.
+      //
+      // --- EV -> EQUITY BRIDGE (only if the filings DISCLOSE these; values in INR_MM, source_type FILING) ---
+      //   preferred_stock, unfunded_pension, nols
+      //   (Cash, total debt, minority interest and investments are taken from the scraped balance
+      //    sheet automatically — do NOT output those.)
+      //
+      // --- DILUTION (use the special fields, not "value") ---
+      //   options_outstanding   add field "options_outstanding": [{ "shares": <count>, "strike_price": <Rs> }, ...]
+      //   rsus_psus_outstanding unit "shares" — "value" = count of unvested RSUs/PSUs.
+      //
+      // --- HOLDCO / SUM-OF-THE-PARTS (only when meta.is_holdco = true) ---
+      //   segments         add field "segments": [{ "name": "...", "valuation_method": "stake|consol",
+      //                    "stake_pct": 0.51, "value_mm": <INR_MM> }, ...] for each listed/material stake.
+      //   holdco_discount  unit "ratio" — the conglomerate discount management/analysts reference.
     ]
   }
 }

@@ -38,7 +38,7 @@ QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
 # annual report extraction, in-memory PDF pipeline, 3 concalls, screener
 # auto-fetch) is preserved — only the LLM client layer reverts.
 MODEL_NAME = "gemini-3.5-flash"
-PROMPT_VERSION = "v0.9"  # v0.9: explicit AJP driver questions (growth/capex/margin/tax/WC)
+PROMPT_VERSION = "v0.10"  # v0.10: enriched AJP drivers (exit multiple, capital structure, bridge, dilution, holdco segments, volume/price split)
 
 # Maximum characters sent to Gemini for annual reports (smart-extracted).
 # Concalls use full-text — they are typically short (20-60 pages).
