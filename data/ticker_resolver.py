@@ -6,6 +6,7 @@ and accurate exchange resolution (.NS vs .BO). Fallbacks to screener.in search A
 US names resolve via hardcoded map + stockanalysis.com fallback.
 """
 import csv
+import os
 import json
 import logging
 import requests
@@ -133,27 +134,53 @@ def _build_local_index() -> tuple[dict, dict]:
     return final_index, status
 
 
+_STATIC_INDEX_PATH = os.path.join(os.path.dirname(__file__), "universe_index.json")
+
+
+def _load_static_index() -> dict:
+    """Load the committed NSE+BSE universe snapshot shipped in the repo.
+
+    This is the PRIMARY source: it loads instantly and works OFFLINE — critical on
+    Streamlit Cloud, where NSE/BSE block server IPs so the live download fails and
+    the search dropdown would otherwise come back empty. Returns {} if the file is
+    missing or unreadable (dev environments can still fall back to a live build).
+    """
+    try:
+        with open(_STATIC_INDEX_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict) and data:
+            return data
+    except Exception as e:
+        logger.warning(f"Could not load static universe index: {e}")
+    return {}
+
+
 def get_local_index() -> dict:
-    """Returns local universe index, building/caching if necessary."""
+    """Returns the local NSE+BSE universe index.
+
+    Order: committed static snapshot (instant, offline) → runtime cache → live build.
+    The live build only runs in environments where no snapshot/cache exists AND
+    NSE/BSE are reachable (e.g. a dev laptop refreshing the snapshot)."""
+    # 1. Committed static snapshot — works on cloud, no network dependency.
+    static = _load_static_index()
+    if static:
+        return static
+
+    # 2. Runtime cache (a prior successful live build).
     cache_key = "local_universe_index.json"
     cached = cache.get_json(cache_key, _INDEX_CACHE_TTL)
-    
-    if cached:
-        # Check for poisoned cache (e.g. no BSE codes)
-        has_bse = any("bse_code" in v for v in cached.values())
-        if has_bse:
-            return cached
-        logger.warning("Cached index has 0 BSE codes. Treating as stale and rebuilding.")
-    
+    if cached and any("bse_code" in v for v in cached.values()):
+        return cached
+
+    # 3. Live build (dev only; never trusted partial — see _build_local_index status).
     logger.info("Building local universe index...")
     index, status = _build_local_index()
-    
     if index and status.get("nse") and status.get("bse"):
         logger.info("Index build complete. Caching to disk.")
         cache.set_json(cache_key, index)
     else:
         logger.warning(f"Index build partial {status}. NOT caching to disk.")
-        
+
     return index
 
 

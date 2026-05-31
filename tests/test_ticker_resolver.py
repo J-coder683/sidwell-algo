@@ -162,10 +162,11 @@ def test_search_companies_offline(mock_screener, mock_get_index, mock_index):
     assert res[0][1] == "NSEONLY.NS"
 
 
+@patch("data.ticker_resolver._load_static_index", return_value={})
 @patch("data.ticker_resolver._build_local_index")
 @patch("data.cache.get_json", return_value=None)
 @patch("data.cache.set_json")
-def test_get_local_index_partial_no_cache(mock_set_json, mock_get_json, mock_build):
+def test_get_local_index_partial_no_cache(mock_set_json, mock_get_json, mock_build, mock_static):
     # Simulate a partial build: NSE succeeds, BSE fails
     mock_build.return_value = ({"NSE Only Ltd": {"nse_symbol": "NSEONLY"}}, {"nse": True, "bse": False})
     
