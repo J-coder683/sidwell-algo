@@ -414,30 +414,32 @@ with st.sidebar:
     st.markdown("Personal investment decision engine")
     st.divider()
 
-    # Wrap ticker input + Analyze button in a form so pressing Enter
-    # in the text field submits (same effect as clicking Analyze).
-    with st.form(key="ticker_form", clear_on_submit=False, border=False):
-        has_searchbox = False
-        try:
-            from streamlit_searchbox import st_searchbox
-            from data.ticker_resolver import search_companies
-            has_searchbox = True
-        except ImportError:
-            pass
+    # streamlit-searchbox needs a rerun on every keystroke to populate its live
+    # dropdown — that CANNOT happen inside st.form (forms suppress reruns until the
+    # submit button). So the searchbox lives OUTSIDE any form, with a plain Analyze
+    # button. The text_input fallback stays inside a form so pressing Enter submits.
+    has_searchbox = False
+    try:
+        from streamlit_searchbox import st_searchbox
+        from data.ticker_resolver import search_companies
+        has_searchbox = True
+    except ImportError:
+        pass
 
-        if has_searchbox:
-            @st.cache_data(ttl=3600, show_spinner=False)
-            def _cached_search(query: str):
-                return search_companies(query)
+    if has_searchbox:
+        @st.cache_data(ttl=3600, show_spinner=False)
+        def _cached_search(query: str):
+            return search_companies(query)
 
-            ticker_input = st_searchbox(
-                _cached_search,
-                key="ticker_input",
-                placeholder="Search company or ticker...",
-                label="Company Name or Ticker",
-                clear_on_submit=False,
-            )
-        else:
+        ticker_input = st_searchbox(
+            _cached_search,
+            key="ticker_input",
+            placeholder="Search company or ticker...",
+            label="Company Name or Ticker",
+        )
+        analyze_btn = st.button("Analyze", type="primary", width="stretch")
+    else:
+        with st.form(key="ticker_form", clear_on_submit=False, border=False):
             ticker_input = st.text_input(
                 "Ticker",
                 value="",
@@ -445,10 +447,9 @@ with st.sidebar:
                 help="Press Enter or click Analyze. Append .NS for NSE India, .BO for BSE.",
                 key="ticker_input",
             )
-
-        analyze_btn = st.form_submit_button(
-            "Analyze", type="primary", width="stretch"
-        )
+            analyze_btn = st.form_submit_button(
+                "Analyze", type="primary", width="stretch"
+            )
 
     st.divider()
     st.caption(
