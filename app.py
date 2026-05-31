@@ -410,20 +410,41 @@ def _render_dcf_tab(dcf_results: dict, financials: dict):
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.markdown(f"## Sidwell {SIDWELL_VERSION}")
+    st.markdown("## Sidwell")
     st.markdown("Personal investment decision engine")
     st.divider()
 
     # Wrap ticker input + Analyze button in a form so pressing Enter
     # in the text field submits (same effect as clicking Analyze).
     with st.form(key="ticker_form", clear_on_submit=False, border=False):
-        ticker_input = st.text_input(
-            "Ticker",
-            value="",
-            placeholder="e.g. ASIANPAINT.NS or AAPL",
-            help="Press Enter or click Analyze. Append .NS for NSE India, .BO for BSE.",
-            key="ticker_input",
-        )
+        has_searchbox = False
+        try:
+            from streamlit_searchbox import st_searchbox
+            from data.ticker_resolver import search_companies
+            has_searchbox = True
+        except ImportError:
+            pass
+
+        if has_searchbox:
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_search(query: str):
+                return search_companies(query)
+
+            ticker_input = st_searchbox(
+                _cached_search,
+                key="ticker_input",
+                placeholder="Search company or ticker...",
+                label="Company Name or Ticker",
+                clear_on_submit=False,
+            )
+        else:
+            ticker_input = st.text_input(
+                "Ticker",
+                value="",
+                placeholder="e.g. ASIANPAINT.NS",
+                help="Press Enter or click Analyze. Append .NS for NSE India, .BO for BSE.",
+                key="ticker_input",
+            )
 
         analyze_btn = st.form_submit_button(
             "Analyze", type="primary", width="stretch"
@@ -446,7 +467,7 @@ st.title("Sidwell — Investment Analysis")
 if not ticker_input:
     st.info(
         "Enter a **ticker or company name** in the sidebar and press **Enter** (or click **Analyze**) to run the full pipeline.\n\n"
-        "Examples — names: `Reliance`, `Apple`, `Nestle India`. Tickers: `AAPL`, `ASIANPAINT.NS`, `RELIANCE.NS`."
+        "Examples — names: `Reliance`, `Nestle India`. Tickers: `ASIANPAINT.NS`, `RELIANCE.NS`."
     )
     st.stop()
 
@@ -495,10 +516,16 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
         st.success(f"Qualitative layer: {n_docs} document(s) analyzed via **{model}**")
     else:
         reason = qualitative_results.get("reason", "unknown")
-        st.info(
-            f"Qualitative layer unavailable ({reason}). "
-            f"Soft checks default to their documented neutral values."
-        )
+        if "no documents" in reason.lower() or "fewer than" in reason.lower() or "0" in reason:
+            st.info(
+                "**Numbers-only valuation** — no curated high-value filings available; qualitative drivers unavailable. "
+                "Soft checks default to neutral values."
+            )
+        else:
+            st.info(
+                f"Qualitative layer unavailable ({reason}). "
+                f"Soft checks default to their documented neutral values."
+            )
 
     # ---- Tabs ----
     tabs = st.tabs([

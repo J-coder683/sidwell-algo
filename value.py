@@ -83,6 +83,10 @@ def analyze(ticker: str, lenses_to_run: list | None = None) -> dict:
     # Step 3: Fetch Damodaran ERP and Sector Betas
     damodaran_data = public.fetch_damodaran_data(ticker, financials)
 
+    # Fast Fail: Check if the company has any usable financial statements before invoking expensive Gemini
+    if not financials.get("statements", {}).get("years_annual"):
+        raise ValueError(f"Insufficient historical data to run projections for {ticker}. The company may have no usable statements on screener.")
+
     # Step 4: Discover documents and run qualitative analysis (graceful degrade)
     # DCF Engine now requires the Assumption Justification Pack (AJP) built from docs
     docs = doc_module.discover_documents(ticker)

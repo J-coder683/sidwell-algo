@@ -300,6 +300,8 @@ def _call_gemini(documents_text: str, ticker: str) -> dict:
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
+MIN_USABLE_DOCS = 1
+
 def extract_qualitative(ticker: str, documents: list) -> dict:
     """
     Run Gemini 3.5 Flash extraction across the documents.
@@ -316,6 +318,10 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
     """
     if not documents:
         return _unavailable(f"No documents found for {ticker} on screener.in")
+        
+    high_value_docs = [d for d in documents if d.get("type") in ("annual_report", "concall_transcript")]
+    if len(high_value_docs) < MIN_USABLE_DOCS:
+        return _unavailable(f"Fewer than {MIN_USABLE_DOCS} high-value document(s) (AR/Concall) found for {ticker}")
 
     urls = sorted(d["url"] for d in documents)
     combined_url_hash = hashlib.sha256("".join(urls).encode()).hexdigest()[:16]

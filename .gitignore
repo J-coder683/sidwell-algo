@@ -73,6 +73,8 @@ verify_*.py
 get_goldens.py
 test_scrape.py
 bergepaint_statements.json
+scratch_*.py
+old_test_*.py
 
 # Scraped pages saved locally for inspection
 *.html
@@ -81,3 +83,7 @@ bergepaint_statements.json
 # Generated workbook/report outputs
 exports/*.xlsx
 output/*.md
+
+# Local universe index + exchange master files (regenerable data)
+*_index.json
+EQUITY_L.csv

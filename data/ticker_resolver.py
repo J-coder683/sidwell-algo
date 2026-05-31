@@ -1,14 +1,15 @@
 """
 Resolve user input (ticker or company name) to a canonical ticker.
 
-v0.7.5: User can type "Reliance" or "Apple" instead of "RELIANCE.NS" or "AAPL".
-Indian names resolve via screener.in's search API (already integrated for slug
-resolution). US names resolve via a hardcoded top-50 mapping plus a
-stockanalysis.com search fallback.
+v0.8.0: User can type names. Resolves via a local index (NSE+BSE) for instant lookup
+and accurate exchange resolution (.NS vs .BO). Fallbacks to screener.in search API.
+US names resolve via hardcoded map + stockanalysis.com fallback.
 """
+import csv
 import json
 import logging
 import requests
+from io import StringIO
 from data import cache
 
 logger = logging.getLogger("sidwell.ticker_resolver")
@@ -19,9 +20,8 @@ HEADERS = {
     "Accept": "application/json,text/html;q=0.9,*/*;q=0.5",
 }
 
-# Resolved name → ticker mappings cached for 7 days so repeat queries are
-# instant and don't hammer the search APIs.
 _RESOLVE_CACHE_TTL = 7 * 24 * 60 * 60
+_INDEX_CACHE_TTL = 30 * 24 * 60 * 60
 
 
 # Hardcoded top-50 US name → ticker map. Covers the most common reviewer
@@ -73,6 +73,177 @@ def _looks_like_ticker(s: str) -> bool:
     return False
 
 
+def _build_local_index() -> tuple[dict, dict]:
+    """
+    Downloads NSE EQUITY_L.csv and BSE Scrip master, merges on ISIN.
+    Returns: (index_dict, status_dict)
+    """
+    index_by_isin = {}
+    nse_count = 0
+    bse_count = 0
+
+    # 1. Fetch NSE
+    try:
+        r = requests.get('https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv', headers=HEADERS, timeout=10)
+        if r.status_code == 200:
+            reader = csv.DictReader(StringIO(r.text))
+            for row in reader:
+                symbol = row.get("SYMBOL", "").strip()
+                name = row.get("NAME OF COMPANY", "").strip()
+                isin = row.get(" ISIN NUMBER", "").strip()
+                if symbol and name and isin:
+                    index_by_isin[isin] = {"name": name, "nse_symbol": symbol}
+                    nse_count += 1
+    except Exception as e:
+        logger.warning(f"NSE download error: {e}")
+
+    # 2. Fetch BSE
+    bse_headers = {
+        **HEADERS,
+        'Referer': 'https://www.bseindia.com/',
+        'Origin': 'https://www.bseindia.com',
+    }
+    try:
+        r = requests.get('https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?Group=&Scripcode=&industry=&segment=Equity&status=Active', headers=bse_headers, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            for item in data:
+                scrip_code = str(item.get("SCRIP_CD", "")).strip()
+                name = item.get("Scrip_Name", "").strip()
+                isin = item.get("ISIN_NUMBER", "").strip()
+                if scrip_code and name and isin:
+                    if isin in index_by_isin:
+                        index_by_isin[isin]["bse_code"] = scrip_code
+                    else:
+                        index_by_isin[isin] = {"name": name, "bse_code": scrip_code}
+                    bse_count += 1
+    except Exception as e:
+        logger.warning(f"BSE download error: {e}")
+
+    # Re-key by company name
+    final_index = {}
+    for isin, info in index_by_isin.items():
+        name = info.pop("name")
+        final_index[name] = info
+
+    status = {
+        "nse": nse_count >= 1500,
+        "bse": bse_count >= 3000
+    }
+    return final_index, status
+
+
+def get_local_index() -> dict:
+    """Returns local universe index, building/caching if necessary."""
+    cache_key = "local_universe_index.json"
+    cached = cache.get_json(cache_key, _INDEX_CACHE_TTL)
+    
+    if cached:
+        # Check for poisoned cache (e.g. no BSE codes)
+        has_bse = any("bse_code" in v for v in cached.values())
+        if has_bse:
+            return cached
+        logger.warning("Cached index has 0 BSE codes. Treating as stale and rebuilding.")
+    
+    logger.info("Building local universe index...")
+    index, status = _build_local_index()
+    
+    if index and status.get("nse") and status.get("bse"):
+        logger.info("Index build complete. Caching to disk.")
+        cache.set_json(cache_key, index)
+    else:
+        logger.warning(f"Index build partial {status}. NOT caching to disk.")
+        
+    return index
+
+
+def search_companies(query: str) -> list[tuple[str, str]]:
+    """
+    Search callback for st_searchbox.
+    Returns list of (label, value) e.g. [("Reliance Industries (RELIANCE.NS)", "RELIANCE.NS")]
+    """
+    if not query or len(query) < 2:
+        return []
+
+    q = query.lower()
+    index = get_local_index()
+    results = []
+
+    # 1. Search local index
+    for name, info in index.items():
+        nse = info.get("nse_symbol", "")
+        bse = info.get("bse_code", "")
+        
+        match = False
+        if q in name.lower():
+            match = True
+        elif nse and q in nse.lower():
+            match = True
+        elif bse and q in bse.lower():
+            match = True
+            
+        if match:
+            if nse:
+                ticker = f"{nse}.NS"
+                label = f"{name} ({ticker})"
+            else:
+                ticker = f"{bse}.BO"
+                label = f"{name} ({ticker})"
+            results.append((label, ticker))
+            if len(results) >= 15:
+                break
+
+    # 2. Search US hardcoded map
+    for us_name, us_ticker in _US_NAME_TO_TICKER.items():
+        if q in us_name or q in us_ticker.lower():
+            label = f"{us_name.title()} ({us_ticker})"
+            if not any(t == us_ticker for _, t in results):
+                results.append((label, us_ticker))
+
+    # 3. If few results, fallback to screener live search
+    if len(results) < 5:
+        try:
+            resp = requests.get(
+                f"https://www.screener.in/api/company/search/?q={requests.utils.quote(query)}",
+                headers=HEADERS,
+                timeout=5,
+            )
+            if resp.status_code == 200:
+                screener_results = resp.json()
+                for sr in screener_results:
+                    sr_name = sr.get("name", "")
+                    url = sr.get("url", "")
+                    if url.startswith("/company/"):
+                        parts = url.strip("/").split("/")
+                        if len(parts) >= 2:
+                            slug = parts[1].upper()
+                            
+                            # Determine exchange suffix
+                            ticker = f"{slug}.NS"
+                            for n, i in index.items():
+                                if i.get("nse_symbol") == slug:
+                                    ticker = f"{slug}.NS"
+                                    break
+                                elif i.get("bse_code") == slug:
+                                    ticker = f"{slug}.BO"
+                                    break
+                                    
+                            label = f"{sr_name} ({ticker})"
+                            if not any(t == ticker for _, t in results):
+                                results.append((label, ticker))
+                                if len(results) >= 15:
+                                    break
+        except Exception as e:
+            logger.warning(f"Screener fallback search failed: {e}")
+
+    # 4. Always provide the exact input as a fallback option so users can search unlisted or international tickers
+    raw_ticker = query.upper()
+    if not any(t == raw_ticker for _, t in results):
+        results.append((f"Use exact: {raw_ticker}", raw_ticker))
+
+    return results
+
+
 def _resolve_via_screener_search(name: str) -> str | None:
     """Search screener.in for an Indian company name. Returns 'TICKER' (no suffix) or None."""
     try:
@@ -86,11 +257,12 @@ def _resolve_via_screener_search(name: str) -> str | None:
         results = resp.json()
         if not results:
             return None
-        # results[0] is best match. URL like "/company/RELIANCE/"
         url = results[0].get("url", "")
-        if "/company/" in url:
-            slug = url.strip("/").split("/")[-1]
-            return slug.upper() if slug else None
+        if url.startswith("/company/"):
+            parts = url.strip("/").split("/")
+            if len(parts) >= 2:
+                slug = parts[1]
+                return slug.upper()
     except Exception as e:
         logger.warning(f"Screener search failed for '{name}': {type(e).__name__}: {e}")
     return None
@@ -127,13 +299,10 @@ def resolve_ticker_from_input(user_input: str) -> tuple[str, str]:
 
     Returns (resolved_ticker, source) where source is one of:
       - "ticker": input was already a ticker, returned uppercased
-      - "indian_name": resolved via screener.in search
+      - "indian_name": resolved via local index or screener.in search
       - "us_name_hardcoded": resolved via hardcoded top-50 US map
       - "us_name_search": resolved via stockanalysis.com search
       - "unresolved": returned input uppercased (downstream will fail with clear error)
-
-    The (ticker, source) tuple lets the UI display "Resolved 'Reliance' → RELIANCE.NS"
-    when source != "ticker", helping the user confirm what got matched.
     """
     raw = (user_input or "").strip()
     if not raw:
@@ -150,10 +319,31 @@ def resolve_ticker_from_input(user_input: str) -> tuple[str, str]:
     if cached and isinstance(cached, dict) and cached.get("ticker"):
         return cached["ticker"], cached.get("source", "cached")
 
-    # Try Indian first (user is India-based; default bias)
+    # Try local index exact match
+    index = get_local_index()
+    for name, info in index.items():
+        if _normalize(name) == norm:
+            nse = info.get("nse_symbol")
+            bse = info.get("bse_code")
+            if nse:
+                ticker = f"{nse}.NS"
+            else:
+                ticker = f"{bse}.BO"
+            cache.set_json(cache_key, {"ticker": ticker, "source": "indian_name"})
+            logger.info(f"Resolved name '{raw}' → {ticker} via local index")
+            return ticker, "indian_name"
+
+    # Try Indian fallback (user is India-based; default bias)
     indian = _resolve_via_screener_search(raw)
     if indian:
-        ticker = f"{indian}.NS"
+        ticker = f"{indian}.NS" # Default
+        for name, info in index.items():
+            if info.get("nse_symbol") == indian:
+                ticker = f"{indian}.NS"
+                break
+            elif info.get("bse_code") == indian:
+                ticker = f"{indian}.BO"
+                break
         cache.set_json(cache_key, {"ticker": ticker, "source": "indian_name"})
         logger.info(f"Resolved name '{raw}' → {ticker} via screener.in")
         return ticker, "indian_name"

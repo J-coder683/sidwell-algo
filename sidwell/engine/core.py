@@ -24,6 +24,8 @@ def run_engine(financials: Dict[str, Any], ajp: AJP) -> Dict[str, Any]:
     proj = StatementsEngine.run_projections(
         hist, ajp, freeze_working_capital=financials.get("is_financial", False)
     )
+    if not proj:
+        raise ValueError(f"Insufficient historical data to run projections for {financials.get('ticker')}. The company may have no usable statements on screener.")
     
     # 3. Calculate WACC
     wacc_results = WACCEngine.calculate(financials, ajp)

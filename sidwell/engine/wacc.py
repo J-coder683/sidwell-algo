@@ -38,9 +38,11 @@ class WACCEngine:
         
         # Current structure
         current_debt_raw = fin.get("debt", 0.0)
+        current_debt_raw = 0.0 if current_debt_raw is None else current_debt_raw
         current_debt = current_debt_raw[-1] if isinstance(current_debt_raw, list) and current_debt_raw else float(current_debt_raw) if not isinstance(current_debt_raw, list) else 0.0
         
         current_equity_raw = fin.get("market_cap", 0.0)
+        current_equity_raw = 0.0 if current_equity_raw is None else current_equity_raw
         current_equity = current_equity_raw[-1] if isinstance(current_equity_raw, list) and current_equity_raw else float(current_equity_raw) if not isinstance(current_equity_raw, list) else 0.0
         
         current_d_e = current_debt / current_equity if current_equity > 0 else 0.0
