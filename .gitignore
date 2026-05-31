@@ -66,3 +66,18 @@ aapl_financials.json
 
 # PDF files
 *.pdf
+
+# Agent/verification scratch artifacts (not part of the project)
+*_verify.json
+verify_*.py
+get_goldens.py
+test_scrape.py
+bergepaint_statements.json
+
+# Scraped pages saved locally for inspection
+*.html
+*_files/
+
+# Generated workbook/report outputs
+exports/*.xlsx
+output/*.md

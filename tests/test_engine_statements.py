@@ -226,11 +226,15 @@ def test_nwc_change_is_delta_not_level():
     ajp = _make_ajp({"dso_days": 45.0, "dio_days": 30.0, "dpo_days": 45.0})
     proj = StatementsEngine.run_projections(hist, ajp)
 
-    # NWC is AR+Inv-AP. With dso=45, dio=30, dpo=45 net days = 30
-    net_nwc_days = 45.0 + 30.0 - 45.0   # = 30
-
+    # In the refactored engine, NWC (when wc_days_target is not set)
+    # is AR + Inv - AP, where Inv and AP use COGS.
+    # Since _make_hist doesn't provide 'cogs', cogs_margin defaults to 0.50.
     rev_y0 = proj["revenue"][0]
-    expected_nwc_y0 = rev_y0 * net_nwc_days / 365.0
+    cogs_y0 = proj["cogs"][0]
+    expected_ar = rev_y0 * 45.0 / 365.0
+    expected_inv = cogs_y0 * 30.0 / 365.0
+    expected_ap = cogs_y0 * 45.0 / 365.0
+    expected_nwc_y0 = expected_ar + expected_inv - expected_ap
 
     # Hist NWC from the hist BS arrays
     hist_nwc = (

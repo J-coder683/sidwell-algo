@@ -6,7 +6,7 @@
 > [!WARNING]
 > **DCF COVERAGE GAP WARNING**: The computed DCF intrinsic value
 > deviates significantly from the current market price (intrinsic
-> at 60897902% of price).
+> at 63879094% of price).
 >
 > Even this v0.4 2-stage DCF (Stage 1 high-growth + Stage 2 fade +
 > sector-aware terminal) may understate premium businesses because:
@@ -25,7 +25,7 @@
 | Metric | Value | Source / Detail |
 | :--- | :--- | :--- |
 | **Current Price** | ₹50.00 | Yahoo Finance |
-| **Intrinsic Value (DCF)** | ₹30.45M | Sidwell DCF Engine |
+| **Intrinsic Value (DCF)** | ₹31.94M | Sidwell DCF Engine |
 | **Margin of Safety** | 100.00% margin of safety | Current Discount to Intrinsic |
 | **Buffett Score** | **14/14** | Buffett Lens (14 checks) |
 | **Buffett Verdict** | **BUY** ✅ | Buffett Lens Rules |
@@ -84,13 +84,13 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | Revenue | ₹146.41M | ₹161.05M | ₹177.16M | ₹194.87M | ₹214.36M |
 | EBIT | ₹29.28M | ₹32.21M | ₹35.43M | ₹38.97M | ₹42.87M |
-| Taxes | ₹6.92M | ₹8.05M | ₹8.86M | ₹9.74M | ₹10.72M |
-| D&A | ₹3.99M | ₹4.19M | ₹4.42M | ₹4.69M | ₹4.99M |
-| CapEx | ₹7.32M | ₹8.05M | ₹8.86M | ₹9.74M | ₹10.72M |
+| Taxes | ₹6.92M | ₹8.03M | ₹8.86M | ₹9.74M | ₹10.72M |
+| D&A | ₹3.99M | ₹4.37M | ₹4.74M | ₹5.10M | ₹5.43M |
+| CapEx | ₹10.30M | ₹10.51M | ₹10.66M | ₹10.74M | ₹10.72M |
 | NWC Change (CF) | ₹1.33M | ₹1.46M | ₹1.61M | ₹1.77M | ₹1.95M |
-| Free Cash Flow | ₹17.30M | ₹18.83M | ₹20.53M | ₹22.41M | ₹24.48M |
+| Free Cash Flow | ₹14.32M | ₹16.55M | ₹19.04M | ₹21.82M | ₹24.92M |
 | Discount Factor | 0.8950 | 0.8010 | 0.7169 | 0.6416 | 0.5743 |
-| PV of Cash Flow | ₹16.37M | ₹15.95M | ₹15.56M | ₹15.20M | ₹14.86M |
+| PV of Cash Flow | ₹13.55M | ₹14.02M | ₹14.43M | ₹14.80M | ₹15.13M |
 
 ### 5-Year Fade Forecast (Stage 2) — growth fading from 10.00% to 2.00%
 
@@ -99,29 +99,29 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 | Revenue | ₹232.94M | ₹250.02M | ₹265.02M | ₹277.39M | ₹286.63M |
 | EBIT | ₹46.59M | ₹50.00M | ₹53.00M | ₹55.48M | ₹57.33M |
 | Taxes | ₹11.65M | ₹12.50M | ₹13.25M | ₹13.87M | ₹14.33M |
-| D&A | ₹5.34M | ₹5.72M | ₹6.12M | ₹6.55M | ₹6.99M |
-| CapEx | ₹11.65M | ₹12.50M | ₹13.25M | ₹13.87M | ₹14.33M |
+| D&A | ₹5.75M | ₹6.03M | ₹6.27M | ₹6.43M | ₹6.52M |
+| CapEx | ₹10.47M | ₹9.91M | ₹9.06M | ₹7.92M | ₹6.52M |
 | NWC Change (CF) | ₹1.86M | ₹1.71M | ₹1.50M | ₹1.24M | ₹924,624.61 |
-| Free Cash Flow | ₹26.77M | ₹29.01M | ₹31.12M | ₹33.05M | ₹34.73M |
+| Free Cash Flow | ₹28.37M | ₹31.91M | ₹35.46M | ₹38.88M | ₹42.07M |
 | Discount Factor | 0.5140 | 0.4600 | 0.4117 | 0.3685 | 0.3298 |
-| PV of Cash Flow | ₹14.55M | ₹14.11M | ₹13.54M | ₹12.87M | ₹12.11M |
+| PV of Cash Flow | ₹15.41M | ₹15.52M | ₹15.43M | ₹15.15M | ₹14.67M |
 
 ### Terminal Value
-- Final fade year (Year 10) FCF: ₹34.73M
+- Final fade year (Year 10) FCF: ₹42.07M
 - Terminal growth (Gordon): 2.00%
 - Sector mapping: AJP Engine Fallback
-- Terminal Value: ₹503.58M
-- PV of Terminal Value (discounted from Year 10): ₹166.07M
+- Terminal Value: ₹539.72M
+- PV of Terminal Value (discounted from Year 10): ₹177.99M
 
 ### Valuation Bridge
-- **PV of Explicit FCFs**: ₹145.11M
-- **PV of Terminal Value (g = 2.00%)**: ₹166.07M
-- **Enterprise Value**: ₹311.18M
+- **PV of Explicit FCFs**: ₹148.09M
+- **PV of Terminal Value (g = 2.00%)**: ₹177.99M
+- **Enterprise Value**: ₹326.09M
 - **Add: Cash & Equivalents**: ₹13.31M
 - **Less: Total Debt**: ₹20.00M
-- **Equity Value**: ₹304.49M
+- **Equity Value**: ₹319.40M
 - **Shares Outstanding**: 10
-- **Intrinsic Value per Share**: **₹30.45M**
+- **Intrinsic Value per Share**: **₹31.94M**
 
 ## 3. Buffett Investor Lens
 All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
@@ -162,7 +162,7 @@ _Part C — Management & Capital Allocation: **4/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Margin of safety | ✅ | 100.00% | > 25.0% | mos = 100.00% (Price: 50.00, Intrinsic: 30448951.20) |
+| Margin of safety | ✅ | 100.00% | > 25.0% | mos = 100.00% (Price: 50.00, Intrinsic: 31939547.11) |
 | Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
 | Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. Demand category structurally enduring; no single-technology dependence identified in documents. |
 
@@ -416,7 +416,7 @@ _Numeric claims tie out across documents and strategy is consistent._
 
 ## 4. Margin-of-Safety Check
 Current Stock Price: **₹50.00**
-DCF Intrinsic Value: **₹30.45M**
+DCF Intrinsic Value: **₹31.94M**
 Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)
 Computed Margin of Safety: 100.00% margin of safety
 ### Status: [PASS] ✅

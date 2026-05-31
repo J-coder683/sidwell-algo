@@ -32,6 +32,7 @@ class StatementsEngine:
         # Income Statement
         mapped_is = {
             "sales": convert_row(pl.get("sales", [])),
+            "cogs": convert_row(pl.get("cogs", [])),
             "expenses": convert_row(pl.get("expenses", [])),
             "operating_profit": convert_row(pl.get("operating profit", [])),
             "other_income": convert_row(pl.get("other income", [])),
@@ -86,12 +87,31 @@ class StatementsEngine:
             "repayment_of_borrowings": convert_row(cf.get("repayment of borrowings", []))
         }
 
-        # Ratios (days, %)
+        # Ratios (days, %). Working Capital Days is screener's signed net measure
+        # (often negative for capital-light businesses) and captures "other" current
+        # items the AR/Inv/AP trade legs miss — used to pin the comprehensive NWC.
         mapped_ratios = {
             "debtor_days": convert_ratio_row(ratios.get("debtor days", [])),
             "inventory_days": convert_ratio_row(ratios.get("inventory days", [])),
-            "days_payable": convert_ratio_row(ratios.get("days payable", []))
+            "days_payable": convert_ratio_row(ratios.get("days payable", [])),
+            "working_capital_days": convert_ratio_row(ratios.get("working capital days", [])),
         }
+
+        # Derive CapEx mathematically from Net Block and D&A: CapEx(t) = Net_Block(t) - Net_Block(t-1) + D&A(t)
+        derived_capex = []
+        net_block = mapped_bs["fixed_assets"]
+        da = mapped_is["depreciation"]
+        cf_capex = mapped_cf["fixed_assets_purchased"]
+        for i in range(len(net_block)):
+            if i == 0:
+                # No t-1, use absolute CF CapEx as a fallback
+                derived_capex.append(abs(cf_capex[i]) if i < len(cf_capex) else 0.0)
+            else:
+                nb_t = net_block[i]
+                nb_t_minus_1 = net_block[i-1]
+                da_t = da[i] if i < len(da) else 0.0
+                derived_capex.append(nb_t - nb_t_minus_1 + da_t)
+        mapped_cf["derived_capex"] = derived_capex
 
         # Annualize transition-period columns (e.g. a 15-month stub when a company
         # changes fiscal year — Nestlé). FLOW items (IS, CF) are scaled to 12 months;
@@ -103,9 +123,9 @@ class StatementsEngine:
             months = int(mm.group(1)) if mm else 12
             factors.append((12.0 / months) if 0 < months != 12 else 1.0)
         if any(fct != 1.0 for fct in factors):
-            flow_is = ["sales", "expenses", "operating_profit", "other_income", "depreciation",
+            flow_is = ["sales", "cogs", "expenses", "operating_profit", "other_income", "depreciation",
                        "interest", "profit_before_tax", "tax", "net_profit", "revenue", "financing_profit"]
-            flow_cf = ["cfo", "cfi", "cff", "fixed_assets_purchased", "receivables", "inventory",
+            flow_cf = ["cfo", "cfi", "cff", "fixed_assets_purchased", "derived_capex", "receivables", "inventory",
                        "payables", "working_capital_changes", "proceeds_from_borrowings", "repayment_of_borrowings"]
             for k in flow_is:
                 mapped_is[k] = [(v * factors[i]) if i < len(factors) else v for i, v in enumerate(mapped_is.get(k, []))]
@@ -121,10 +141,19 @@ class StatementsEngine:
         }
 
     @staticmethod
-    def run_projections(hist: Dict[str, Any], ajp: AJP, explicit_years: int = 10) -> Dict[str, Any]:
+    def run_projections(hist: Dict[str, Any], ajp: AJP, explicit_years: int = 10,
+                        freeze_working_capital: bool = False) -> Dict[str, Any]:
         """
         Runs the 3-statement projection for explicit_years (usually 10).
         Uses fade/convergence for margins and growth.
+
+        freeze_working_capital: set for financial-sector companies (brokers, NBFCs,
+        AMCs, insurers — flagged is_financial in the data layer, like is_bank). Their
+        balance sheets are dominated by client/settlement float, not operating working
+        capital, and the DSO/DIO/DPO-days framework produces a spurious Year-1 ΔNWC
+        (the days-based projection bears no relation to the historical float anchor).
+        When set, AR/Inv/AP are held flat at their historical anchor so ΔNWC = 0 every
+        year and UFCF reduces to NOPAT + D&A − CapEx.
         """
         years_hist = hist["years_annual"]
         if not years_hist:
@@ -161,6 +190,15 @@ class StatementsEngine:
             xs = [x for x in xs if x is not None]
             return (sum(xs) / len(xs)) if xs else None
 
+        def _recency_weighted_avg(values, max_years=5):
+            xs = [v for v in values if v]      # drop None and 0.0 (blank/de-fabricated);
+                                               # negatives (e.g. WC days -116) are kept
+            if not xs:
+                return None
+            xs = xs[-max_years:]               # last up to 5 populated years (oldest->newest)
+            w = range(1, len(xs) + 1)          # linear weights: oldest=1 … newest=n
+            return sum(wi * xi for wi, xi in zip(w, xs)) / sum(w)
+
         def _clamp(x, lo, hi):
             return max(lo, min(hi, x))
 
@@ -168,6 +206,10 @@ class StatementsEngine:
         if not any(sales_series):
             sales_series = is_h.get("revenue") or []
         nz_sales = [s for s in sales_series if s]
+
+        cogs_series = is_h.get("cogs") or []
+        cs_ratios = [c / s for c, s in zip(cogs_series, sales_series) if s and s > 0]
+        cogs_margin = _clamp(_recency_weighted_avg(cs_ratios) or 0.50, 0.0, 1.0)
 
         if len(nz_sales) >= 2 and nz_sales[0] > 0:
             hist_cagr = (nz_sales[-1] / nz_sales[0]) ** (1.0 / (len(nz_sales) - 1)) - 1.0
@@ -196,9 +238,18 @@ class StatementsEngine:
         default_dep_rate = _clamp(_avg(dep_rates) if dep_rates else 0.08, 0.01, 0.40)
         starting_net_block = nb_series[-1] if nb_series else 0.0
 
-        default_dso = _avg(r_h.get("debtor_days", [])) or 45.0
-        default_dio = _avg(r_h.get("inventory_days", [])) or 30.0
-        default_dpo = _avg(r_h.get("days_payable", [])) or 45.0
+        # Days from screener's own ratios. convert_ratio_row turned blank cells into
+        # 0.0, so filter those out: a *missing* line means 0 days, never a fabricated
+        # 30/45 (which used to invent inventory/payables that don't exist).
+        default_dso = _recency_weighted_avg(r_h.get("debtor_days", [])) or 0.0
+        default_dio = _recency_weighted_avg(r_h.get("inventory_days", [])) or 0.0
+        default_dpo = _recency_weighted_avg(r_h.get("days_payable", [])) or 0.0
+
+        # Working Capital Days: screener's signed net measure (captures "other"
+        # current items the trade legs miss). Use the recency-weighted average as the
+        # forward net-WC ratio; None when screener doesn't report it.
+        _wc_avg = _recency_weighted_avg(r_h.get("working_capital_days", []))
+        wc_days_target = _clamp(_wc_avg, -270.0, 270.0) if _wc_avg is not None else None
 
         rev_g_s1 = get_val("stage1_revenue_growth", default_growth)
         term_g = get_val("terminal_growth", 0.02)
@@ -224,12 +275,15 @@ class StatementsEngine:
         if term_g >= rev_g_s1:
             term_g = max(0.0, rev_g_s1 - 0.01)
 
+        proj["freeze_working_capital"] = freeze_working_capital
         proj["assumptions_used"] = {
             "stage1_revenue_growth": rev_g_s1, "hist_revenue_cagr": hist_cagr,
             "terminal_growth": term_g, "ebit_margin_start": _margin,
             "ebit_margin_target": target_margin, "tax_rate": tax_rate,
             "capex_pct_sales": target_capex_sales, "da_rate_on_block": dep_rate,
             "dso_days": dso_days, "dio_days": dio_days, "dpo_days": dpo_days,
+            "working_capital_days": wc_days_target,
+            "freeze_working_capital": freeze_working_capital,
         }
         
         # Initial values from hist
@@ -241,7 +295,7 @@ class StatementsEngine:
         last_ebit = hist["is"]["operating_profit"][-1] if hist["is"]["operating_profit"] else 0.0
         last_margin = last_ebit / last_sales if last_sales > 0 else target_margin
         
-        last_capex = abs(hist["cf"]["fixed_assets_purchased"][-1]) if hist["cf"]["fixed_assets_purchased"] else 0.0
+        last_capex = hist["cf"].get("derived_capex", [0.0])[-1]
         last_capex_sales = last_capex / last_sales if last_sales > 0 else target_capex_sales
         
         last_da = hist["is"]["depreciation"][-1] if hist["is"]["depreciation"] else 0.0
@@ -252,22 +306,36 @@ class StatementsEngine:
         fade_years = explicit_years - stage1_years
         
         prev_sales = last_sales
+        prev_cogs = prev_sales * cogs_margin
         hist_ar_0 = (hist["bs"]["trade_receivables"][-1] if hist["bs"]["trade_receivables"] else (prev_sales * dso_days / 365.0))
-        hist_inv_0 = (hist["bs"]["inventories"][-1] if hist["bs"]["inventories"] else (prev_sales * dio_days / 365.0))
-        hist_ap_0 = (hist["bs"]["trade_payables"][-1] if hist["bs"]["trade_payables"] else (prev_sales * dpo_days / 365.0))
+        hist_inv_0 = (hist["bs"]["inventories"][-1] if hist["bs"]["inventories"] else (prev_cogs * dio_days / 365.0))
+        hist_ap_0 = (hist["bs"]["trade_payables"][-1] if hist["bs"]["trade_payables"] else (prev_cogs * dpo_days / 365.0))
         
         prev_ar = hist_ar_0
         prev_inv = hist_inv_0
         prev_ap = hist_ap_0
-        
+
+        # Comprehensive net-WC anchor. When screener reports Working Capital Days,
+        # the net WC (including "other" current items the trade legs miss) is pinned
+        # to it; otherwise it's the trade-only AR+Inv−AP. Anchoring Year-0 on the
+        # same basis the projection uses keeps ΔNWC continuous (no Year-1 phantom).
+        if wc_days_target is not None and not freeze_working_capital:
+            nwc_net_0 = (wc_days_target / 365.0) * prev_sales
+        else:
+            nwc_net_0 = hist_ar_0 + hist_inv_0 - hist_ap_0
+        other_wc_0 = nwc_net_0 - (hist_ar_0 + hist_inv_0 - hist_ap_0)
+        prev_nwc = nwc_net_0
+
         # To avoid circularity in debt schedule, we will build standard UFCF first.
         # The full 3-statement will be built deterministically here.
         # For simplicity in this core engine logic, we compute the UFCF components explicitly.
-        
+
         proj["ar"] = []
         proj["inv"] = []
         proj["ap"] = []
         proj["nwc"] = []
+        proj["other_wc"] = []
+        proj["cogs"] = []
         proj_net_block = starting_net_block  # opening PP&E for the depreciation schedule
 
         for i in range(explicit_years):
@@ -282,6 +350,9 @@ class StatementsEngine:
             sales = prev_sales * (1 + g)
             proj["revenue"].append(sales)
             
+            cogs = sales * cogs_margin
+            proj["cogs"].append(cogs)
+            
             # Margin fade
             margin_step = (target_margin - last_margin) / explicit_years
             margin = last_margin + margin_step * (i + 1)
@@ -292,43 +363,68 @@ class StatementsEngine:
             nopat = ebit * (1 - tax_rate)
             proj["nopat"].append(nopat)
             
-            # CapEx & D&A fade
-            capex_step = (target_capex_sales - last_capex_sales) / explicit_years
-            capex_pct = last_capex_sales + capex_step * (i + 1)
-            capex = sales * capex_pct
-            proj["capex"].append(capex)
-            
             # Depreciation from a PP&E roll-forward schedule:
-            # D&A = opening net block × effective dep rate; block rolls with capex − D&A.
+            # D&A = opening net block × effective dep rate
             da = proj_net_block * dep_rate
             proj["da"].append(da)
+            
+            # CapEx projection & fade
+            if i < stage1_years:
+                capex_step = (target_capex_sales - last_capex_sales) / stage1_years
+                capex_pct = last_capex_sales + capex_step * (i + 1)
+                capex = sales * capex_pct
+            else:
+                # Stage 2 fade: converge CapEx to 1.0x D&A to avoid infinite asset stripping or expansion
+                capex_base = sales * target_capex_sales
+                capex_target = da * 1.0
+                fade_progress = (i - stage1_years + 1) / fade_years
+                capex = capex_base * (1 - fade_progress) + capex_target * fade_progress
+                
+            proj["capex"].append(capex)
+            
+            # Roll block forward
             proj_net_block = proj_net_block + capex - da
             
-            # NWC projection via Days
-            ar = sales * (dso_days / 365.0)
-            inv = sales * (dio_days / 365.0)
-            ap = sales * (dpo_days / 365.0)
+            # NWC projection via Days. For financials, freeze AR/Inv/AP at the
+            # historical anchor (prev_* are unchanged when frozen) so ΔNWC = 0 —
+            # their "receivables/payables" are settlement float, not operating WC.
+            if freeze_working_capital:
+                ar, inv, ap = prev_ar, prev_inv, prev_ap
+            else:
+                ar = sales * (dso_days / 365.0)
+                inv = cogs * (dio_days / 365.0)
+                ap = cogs * (dpo_days / 365.0)
             
             proj["ar"].append(ar)
             proj["inv"].append(inv)
             proj["ap"].append(ap)
             
-            # NWC = AR + Inv - AP
-            nwc = ar + inv - ap
+            # Comprehensive net working capital. With Working Capital Days, pin the
+            # net to it (capturing "other" current items beyond the AR/Inv/AP trade
+            # legs); the reconciling residual is surfaced as other_wc so the trade
+            # lines stay screener-faithful. ΔNWC (the cash-flow term) uses this net.
+            trade_nwc = ar + inv - ap
+            if wc_days_target is not None and not freeze_working_capital:
+                nwc = (wc_days_target / 365.0) * sales
+            else:
+                nwc = trade_nwc
+            other_wc = nwc - trade_nwc
             proj["nwc"].append(nwc)
-            
-            nwc_change = nwc - (prev_ar + prev_inv - prev_ap)
+            proj["other_wc"].append(other_wc)
+
+            nwc_change = nwc - prev_nwc
             proj["nwc_change"].append(nwc_change)
-            
+
             # UFCF
             ufcf = nopat + da - capex - nwc_change
             proj["ufcf"].append(ufcf)
-            
+
             # Update prev
             prev_sales = sales
             prev_ar = ar
             prev_inv = inv
             prev_ap = ap
+            prev_nwc = nwc
             
         # Complete the 3-statement balance and debt schedule
         # Start with historical ending balances
@@ -346,9 +442,11 @@ class StatementsEngine:
         hist_inv = hist_inv_0
         hist_ap = hist_ap_0
         
-        hist_assets = cash_balance + hist_ar + hist_inv + net_fixed_assets
+        # other_wc_0 folds the Year-0 "other" current items into the anchor so the
+        # plug stays constant and the balance ties as other_wc moves over time.
+        hist_assets = cash_balance + hist_ar + hist_inv + other_wc_0 + net_fixed_assets
         hist_liab_eq = hist_ap + debt_balance + equity_balance
-        
+
         net_other_assets = hist_liab_eq - hist_assets
         
         proj["cash"] = []
@@ -407,8 +505,9 @@ class StatementsEngine:
             proj["cash"].append(cash_balance)
             proj["debt"].append(debt_balance)
             
-            # Balance Check: Assets - Liabilities - Equity
-            total_assets = cash_balance + proj["ar"][i] + proj["inv"][i] + net_fixed_assets + net_other_assets
+            # Balance Check: Assets - Liabilities - Equity. other_wc carries the
+            # "other" current items so the net WC equals Working Capital Days.
+            total_assets = cash_balance + proj["ar"][i] + proj["inv"][i] + proj["other_wc"][i] + net_fixed_assets + net_other_assets
             total_liab = proj["ap"][i] + debt_balance
             total_equity = equity_balance
             

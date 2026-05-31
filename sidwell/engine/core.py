@@ -18,8 +18,12 @@ def run_engine(financials: Dict[str, Any], ajp: AJP) -> Dict[str, Any]:
     fin_statements = financials.get("statements", {})
     hist = StatementsEngine.map_historical(fin_statements)
     
-    # 2. Run 3-Statement Projections (IS, BS, CF, Debt Schedule, Balance Check)
-    proj = StatementsEngine.run_projections(hist, ajp)
+    # 2. Run 3-Statement Projections (IS, BS, CF, Debt Schedule, Balance Check).
+    # Financial-sector companies (is_financial, set in the data layer like is_bank)
+    # freeze operating working capital — their AR/AP are settlement float, not WC.
+    proj = StatementsEngine.run_projections(
+        hist, ajp, freeze_working_capital=financials.get("is_financial", False)
+    )
     
     # 3. Calculate WACC
     wacc_results = WACCEngine.calculate(financials, ajp)

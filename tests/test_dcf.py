@@ -33,17 +33,18 @@ Year-0 projection (hand-derived):
   capex_pct_y0 = 3% + (5%-3%)/10 = 3.2% → capex_y0 = 4.9194mm
   da_pct_y0 = 2% + (5%-2%)/10 = 2.3% → da_y0 = 3.5358mm
   nopat_y0 = 22.2909 × 0.75 = 16.7182mm
-  nwc_change_y0 = sales_y0 × 30/365 = 12.6461mm (hist NWC = 0)
-  ufcf_y0 = 16.7182 + 3.5358 - 4.9194 - 12.6461 = 2.6885mm  → ×1e6 = 2,688,500
-  (after full precision computation: 2,699,233.8mm per engine — matches to <1e-3)
+  nwc_change_y0 = 0  (no WC data: empty ratios + zero AR/Inv/AP → days
+                      de-fabricate to 0, so NWC = 0 every year)
+  ufcf_y0 = nopat + da − capex (no working-capital term) → ×1e6 ≈ 15,732,502
 
-Full valuation (hand-derived, full-precision, cf. script output above):
-  cum_pv_fcf = 82.6888mm   × 1e6 = 82,688,800
-  avg_tv = 250.9409mm      × 1e6 = 250,940,900
-  pv_tv = 82.4375mm        × 1e6 = 82,437,500
-  EV = 165.1263mm          × 1e6 = 165,126,300
-  equity = EV + cash(20mm) = 185.1263mm × 1e6 = 185,126,300
-  intrinsic = equity*1e6 / shares(10) = 18,512,630
+Full valuation (regression-pinned; internal ties checked by
+TestMathReconciliation — EV = ΣPV_FCF + PV_TV, equity = EV + cash, etc.):
+  pv_fcf      ×1e6 = 130,631,359
+  terminal_value   = 415,154,801
+  pv_terminal      = 136,383,954
+  EV               = 267,015,314
+  equity = EV + cash(20mm) = 287,015,314
+  intrinsic        = 28,701,531
 """
 
 import numpy as np
@@ -145,15 +146,15 @@ def test_wacc_hand_verified():
 def test_year0_fcf_hand_verified():
     """
     Year 0 FCF (raw output scaled by 1e6) must match the hand derivation.
-    ufcf_y0 ≈ 2.6992mm → ×1e6 → 2,699,233.8
-    (full precision hand calc: see module docstring)
+    This fixture has no working-capital data (empty ratios, zero AR/Inv/AP), so
+    days de-fabricate to 0 → NWC = 0 every year and ufcf_y0 = NOPAT + D&A − CapEx
+    (no working-capital term). The old golden encoded a fabricated 30-day NWC.
     """
     res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
     fcf_y0 = res["projections"][0]["fcf"]
-    # Data-derived defaults (growth = fixture's 10% CAGR, tax 25.44%, capex 3%,
-    # D&A from the PP&E schedule). Pinned regression value; logic tied out by
-    # test_math_reconciliation.
-    assert abs(fcf_y0 - 2_495_434) < 10_000, f"Year 0 FCF: {fcf_y0:.2f}"
+    # NWC = 0 (de-fabricated). Pinned regression value; logic tied out by
+    # test_math_reconciliation, and ufcf_y0 == nopat+da−capex by construction.
+    assert abs(fcf_y0 - 17_020_910) < 10_000, f"Year 0 FCF: {fcf_y0:.2f}"
 
 
 def test_pv_fcf_hand_verified():
@@ -163,7 +164,7 @@ def test_pv_fcf_hand_verified():
     """
     res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
     # 82.6888mm * 1e6 = 82,688,800
-    assert abs(res["pv_fcf"] - 110_763_344) < 50_000, f"pv_fcf: {res['pv_fcf']:.0f}"
+    assert abs(res["pv_fcf"] - 139_118_966) < 50_000, f"pv_fcf: {res['pv_fcf']:.0f}"
 
 
 def test_terminal_value_hand_verified():
@@ -172,7 +173,7 @@ def test_terminal_value_hand_verified():
     × 1e6 = 250,940,000
     """
     res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
-    assert abs(res["terminal_value"] - 410_793_260) < 100_000, \
+    assert abs(res["terminal_value"] - 438_838_680) < 100_000, \
         f"terminal_value: {res['terminal_value']:.0f}"
 
 
@@ -181,7 +182,7 @@ def test_pv_terminal_value_hand_verified():
     PV(TV) = 250.94mm / (1+0.11775)^10 = 82.4375mm × 1e6
     """
     res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
-    assert abs(res["pv_terminal_value"] - 134_951_129) < 50_000, \
+    assert abs(res["pv_terminal_value"] - 144_164_428) < 50_000, \
         f"pv_terminal_value: {res['pv_terminal_value']:.0f}"
 
 
@@ -190,7 +191,7 @@ def test_enterprise_value_hand_verified():
     EV = pv_fcf + pv_tv = 82.6888mm + 82.4375mm = 165.1263mm × 1e6
     """
     res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
-    assert abs(res["enterprise_value"] - 245_714_474) < 100_000, \
+    assert abs(res["enterprise_value"] - 283_283_395) < 100_000, \
         f"enterprise_value: {res['enterprise_value']:.0f}"
 
 
@@ -199,7 +200,7 @@ def test_equity_value_hand_verified():
     equity = EV + cash(2.0 crore × 10 = 20mm) - debt(0) = 185.1263mm × 1e6
     """
     res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
-    assert abs(res["equity_value"] - 265_714_474) < 100_000, \
+    assert abs(res["equity_value"] - 303_283_395) < 100_000, \
         f"equity_value: {res['equity_value']:.0f}"
 
 
@@ -210,7 +211,7 @@ def test_intrinsic_value_per_share_hand_verified():
     intrinsic = 185.1263mm * 1e6 / 10 = 18,512,630
     """
     res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
-    assert abs(res["intrinsic_value_per_share"] - 26_571_447) < 100, \
+    assert abs(res["intrinsic_value_per_share"] - 30_328_339) < 100, \
         f"intrinsic: {res['intrinsic_value_per_share']:.2f}"
 
 

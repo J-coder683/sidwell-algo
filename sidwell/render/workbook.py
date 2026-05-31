@@ -153,7 +153,7 @@ class WorkbookRenderer:
                 "ebit_margin_start": "Latest historical EBIT margin",
                 "ebit_margin_target": "Held at latest margin (no AJP expansion view)",
                 "tax_rate": "Avg effective tax (tax / PBT) over history",
-                "capex_pct_sales": "Avg capex/sales from 'fixed assets purchased'",
+                "capex_pct_sales": "Derived CapEx (from Net Block & D&A) as % of sales",
                 "da_rate_on_block": "Effective depreciation rate on net fixed-asset base",
                 "dso_days": "Historical debtor days",
                 "dio_days": "Historical inventory days",
@@ -196,10 +196,11 @@ class WorkbookRenderer:
         h_years = hist.get("years_annual", [])
         n = len(h_years)
         hist_rev = h_is.get("sales") or h_is.get("revenue") or []
+        hist_cogs = h_is.get("cogs") or []
         hist_ebit = h_is.get("operating_profit") or []
         hist_np = h_is.get("net_profit") or []
         hist_da = h_is.get("depreciation") or []
-        hist_capex = [abs(c) for c in (h_cf.get("fixed_assets_purchased") or [])]
+        hist_capex = h_cf.get("derived_capex") or [abs(c) for c in (h_cf.get("fixed_assets_purchased") or [])]
         years = proj["years"]
         ny = len(years)
 
@@ -216,9 +217,9 @@ class WorkbookRenderer:
             c.font = F.FONT_HEADER; c.fill = F.FILL_HEADER; c.alignment = F.ALIGN_CENTER
             col += 1
 
-        R_G, R_REV, R_MG, R_EBIT, R_TAX, R_NOP, R_CXP, R_CX, R_DAP, R_DA, R_NP = 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
-        for rr, lab in [(R_G, "Revenue growth %"), (R_REV, "Revenue"), (R_MG, "EBIT margin %"),
-                        (R_EBIT, "EBIT"), (R_TAX, "Tax rate %"), (R_NOP, "NOPAT"),
+        R_G, R_REV, R_COGSP, R_COGS, R_MG, R_EBIT, R_TAX, R_NOP, R_CXP, R_CX, R_DAP, R_DA, R_NP = 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+        for rr, lab in [(R_G, "Revenue growth %"), (R_REV, "Revenue"), (R_COGSP, "COGS % sales"), (R_COGS, "COGS"), 
+                        (R_MG, "EBIT margin %"), (R_EBIT, "EBIT"), (R_TAX, "Tax rate %"), (R_NOP, "NOPAT"),
                         (R_CXP, "CapEx % sales"), (R_CX, "CapEx"), (R_DAP, "D&A % sales"),
                         (R_DA, "D&A"), (R_NP, "Net Profit")]:
             ws.cell(row=rr, column=2, value=lab).font = F.FONT_BOLD
@@ -229,7 +230,7 @@ class WorkbookRenderer:
                     continue
                 c = ws.cell(row=row, column=3 + i, value=v)
                 c.number_format = fmt; c.font = F.FONT_INPUT
-        put_hist(R_REV, hist_rev); put_hist(R_EBIT, hist_ebit)
+        put_hist(R_REV, hist_rev); put_hist(R_COGS, hist_cogs); put_hist(R_EBIT, hist_ebit)
         put_hist(R_NP, hist_np); put_hist(R_DA, hist_da); put_hist(R_CX, hist_capex)
         # Projected Net Profit (formula). Pre-financing (= NOPAT) so the integrated
         # balance sheet stays live and balances without debt-schedule circularity.
@@ -239,13 +240,14 @@ class WorkbookRenderer:
 
         # Expose cell coordinates for the FCF/BS/CF sheets
         self._is_ref = {"pc0": pc0, "ny": ny, "R_NOP": R_NOP, "R_DA": R_DA,
-                        "R_CX": R_CX, "R_EBIT": R_EBIT, "R_NP": R_NP, "R_REV": R_REV}
+                        "R_CX": R_CX, "R_EBIT": R_EBIT, "R_NP": R_NP, "R_REV": R_REV, "R_COGS": R_COGS}
 
         # Per-year projection drivers from the engine (editable blue inputs)
         prev = hist_rev[-1] if hist_rev else (proj["revenue"][0])
         gr = []
         for v in proj["revenue"]:
             gr.append((v / prev - 1.0) if prev else 0.0); prev = v
+        cogsp = [(c / r if r else 0.0) for c, r in zip(proj["cogs"], proj["revenue"])]
         mg = [(e / r if r else 0.0) for e, r in zip(proj["ebit"], proj["revenue"])]
         cxp = [(c / r if r else 0.0) for c, r in zip(proj["capex"], proj["revenue"])]
         dap = [(d / r if r else 0.0) for d, r in zip(proj["da"], proj["revenue"])]
@@ -254,10 +256,11 @@ class WorkbookRenderer:
         for j in range(ny):
             cc = pc0 + j
             Lc, Lp = L(cc), L(cc - 1)
-            for row, val in [(R_G, gr[j]), (R_MG, mg[j]), (R_TAX, tax), (R_CXP, cxp[j]), (R_DAP, dap[j])]:
+            for row, val in [(R_G, gr[j]), (R_COGSP, cogsp[j]), (R_MG, mg[j]), (R_TAX, tax), (R_CXP, cxp[j]), (R_DAP, dap[j])]:
                 c = ws.cell(row=row, column=cc, value=val)
                 c.number_format = F.FMT_PERCENT; c.font = F.FONT_INPUT  # blue editable driver
             ws.cell(row=R_REV, column=cc, value=f"={Lp}{R_REV}*(1+{Lc}{R_G})").number_format = F.FMT_NUMBER
+            ws.cell(row=R_COGS, column=cc, value=f"={Lc}{R_REV}*{Lc}{R_COGSP}").number_format = F.FMT_NUMBER
             ws.cell(row=R_EBIT, column=cc, value=f"={Lc}{R_REV}*{Lc}{R_MG}").number_format = F.FMT_NUMBER
             ws.cell(row=R_NOP, column=cc, value=f"={Lc}{R_EBIT}*(1-{Lc}{R_TAX})").number_format = F.FMT_NUMBER
             ws.cell(row=R_CX, column=cc, value=f"={Lc}{R_REV}*{Lc}{R_CXP}").number_format = F.FMT_NUMBER
@@ -276,7 +279,7 @@ class WorkbookRenderer:
         ws = self._create_sheet("5_Balance_Sheet")
         n = self._av_header(ws, "Balance Sheet (Rs mm) — integrated / balancing")
         ref = self._is_ref
-        R_REV, R_CX, R_DA, R_NP = ref["R_REV"], ref["R_CX"], ref["R_DA"], ref["R_NP"]
+        R_REV, R_COGS, R_CX, R_DA, R_NP = ref["R_REV"], ref["R_COGS"], ref["R_CX"], ref["R_DA"], ref["R_NP"]
         ny = ref["ny"]
         ISN = "'4_Income_Statement'"
         hb = self.results.get("hist", {}).get("bs", {})
@@ -290,14 +293,37 @@ class WorkbookRenderer:
         last_debt = hl("borrowings") + hl("lease_liabilities")
         last_eq = hl("equity_capital") + hl("reserves")
         last_nwc = last_ar + last_inv - last_ap
+        last_owc = 0.0
         other = (last_ap + last_debt + last_eq) - (last_cash + last_ar + last_inv + last_ppe)
         dso, dio, dpo = au.get("dso_days", 45.0), au.get("dio_days", 30.0), au.get("dpo_days", 45.0)
+        # Financials freeze operating working capital flat at the historical anchor
+        # (their AR/AP are settlement float, not WC), so the live formulas hold
+        # AR/Inv/AP constant and ΔNWC = 0 — mirroring the engine exactly.
+        frozen_wc = self.results["proj"].get("freeze_working_capital", False)
 
-        R_DSO, R_DIO, R_DPO, R_CASH, R_AR, R_INV, R_PPE, R_OTH, R_TA = 3, 4, 5, 6, 7, 8, 9, 10, 11
-        R_AP, R_DEBT, R_EQ, R_TLE, R_NWC, R_BC = 12, 13, 14, 15, 16, 17
-        for rr, lab in [(R_DSO, "DSO (days)"), (R_DIO, "DIO (days)"), (R_DPO, "DPO (days)"),
+        # Working Capital Days model (non-financial): NWC is pinned to screener's
+        # signed Working Capital Days, with AP derived so AR+Inv−AP = the net. The
+        # Year-0 anchor and plug use the same WC-days basis the engine does, so the
+        # live BS reproduces the engine and balances. The DPO row is repurposed to
+        # hold the signed "WC Days (net)" input.
+        wc_days = au.get("working_capital_days", None)
+        his = self.results.get("hist", {}).get("is", {})
+        _sales = his.get("sales") or his.get("revenue") or []
+        last_sales = (_sales[-1] if _sales and _sales[-1] else 0.0)
+        use_wc_days = (wc_days is not None) and not frozen_wc
+        if use_wc_days:
+            nwc_net_0 = (wc_days / 365.0) * last_sales
+            last_nwc = nwc_net_0
+            last_owc = nwc_net_0 - (last_ar + last_inv - last_ap)
+            other = (last_ap + last_debt + last_eq) - (last_cash + last_ar + last_inv + last_owc + last_ppe)
+
+        R_DSO, R_DIO, R_DPO, R_CASH, R_AR, R_INV, R_OWC, R_PPE, R_OTH, R_TA = 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+        R_AP, R_DEBT, R_EQ, R_TLE, R_NWC, R_BC = 13, 14, 15, 16, 17, 18
+        _dpo_label = "DPO (days)"
+        for rr, lab in [(R_DSO, "DSO (days)"), (R_DIO, "DIO (days)"), (R_DPO, _dpo_label),
                         (R_CASH, "Cash"), (R_AR, "Trade Receivables"), (R_INV, "Inventories"),
-                        (R_PPE, "Net Fixed Assets"), (R_OTH, "Other net assets (plug)"), (R_TA, "Total Assets"),
+                        (R_OWC, "Other net working capital"), (R_PPE, "Net Fixed Assets"), 
+                        (R_OTH, "Other net assets (plug)"), (R_TA, "Total Assets"),
                         (R_AP, "Trade Payables"), (R_DEBT, "Debt"), (R_EQ, "Equity"),
                         (R_TLE, "Total Liab + Equity"), (R_NWC, "Net Working Capital"), (R_BC, "Balance Check")]:
             ws.cell(row=rr, column=2, value=lab).font = F.FONT_BOLD
@@ -312,23 +338,43 @@ class WorkbookRenderer:
         for j in range(ny):
             cc = 3 + n + j
             col, colp = L(cc), L(cc - 1)
-            for rr, val in [(R_DSO, dso), (R_DIO, dio), (R_DPO, dpo)]:
-                c = ws.cell(row=rr, column=cc, value=val); c.number_format = '0.0'; c.font = F.FONT_INPUT
-            ws.cell(row=R_AR, column=cc, value=f"={ISN}!{col}{R_REV}*{col}{R_DSO}/365").number_format = F.FMT_NUMBER
-            ws.cell(row=R_INV, column=cc, value=f"={ISN}!{col}{R_REV}*{col}{R_DIO}/365").number_format = F.FMT_NUMBER
-            ws.cell(row=R_AP, column=cc, value=f"={ISN}!{col}{R_REV}*{col}{R_DPO}/365").number_format = F.FMT_NUMBER
-            ws.cell(row=R_NWC, column=cc, value=f"={col}{R_AR}+{col}{R_INV}-{col}{R_AP}").number_format = F.FMT_NUMBER
+            if frozen_wc:
+                # WC held flat at the historical anchor; days rows left blank
+                # (not used), AR/Inv/AP are constants, so ΔNWC is identically 0.
+                for rr, val in [(R_AR, last_ar), (R_INV, last_inv), (R_AP, last_ap), (R_OWC, last_owc)]:
+                    c = ws.cell(row=rr, column=cc, value=val)
+                    c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
+                ws.cell(row=R_NWC, column=cc, value=repr(last_nwc)).number_format = F.FMT_NUMBER
+                dnwc = "0"
+            elif use_wc_days:
+                # AR/Inv from real days; NWC pinned to WC Days; OWC explicit line
+                for rr, val in [(R_DSO, dso), (R_DIO, dio), (R_DPO, dpo)]:
+                    c = ws.cell(row=rr, column=cc, value=val); c.number_format = '0.0'; c.font = F.FONT_INPUT
+                ws.cell(row=R_AR, column=cc, value=f"={ISN}!{col}{R_REV}*{col}{R_DSO}/365").number_format = F.FMT_NUMBER
+                ws.cell(row=R_INV, column=cc, value=f"={ISN}!{col}{R_COGS}*{col}{R_DIO}/365").number_format = F.FMT_NUMBER
+                ws.cell(row=R_AP, column=cc, value=f"={ISN}!{col}{R_COGS}*{col}{R_DPO}/365").number_format = F.FMT_NUMBER
+                ws.cell(row=R_NWC, column=cc, value=f"={ISN}!{col}{R_REV}*{repr(wc_days)}/365").number_format = F.FMT_NUMBER
+                ws.cell(row=R_OWC, column=cc, value=f"={col}{R_NWC}-({col}{R_AR}+{col}{R_INV}-{col}{R_AP})").number_format = F.FMT_NUMBER
+                dnwc = f"({col}{R_NWC}-{colp}{R_NWC})" if j else f"({col}{R_NWC}-{repr(last_nwc)})"
+            else:
+                for rr, val in [(R_DSO, dso), (R_DIO, dio), (R_DPO, dpo)]:
+                    c = ws.cell(row=rr, column=cc, value=val); c.number_format = '0.0'; c.font = F.FONT_INPUT
+                ws.cell(row=R_AR, column=cc, value=f"={ISN}!{col}{R_REV}*{col}{R_DSO}/365").number_format = F.FMT_NUMBER
+                ws.cell(row=R_INV, column=cc, value=f"={ISN}!{col}{R_COGS}*{col}{R_DIO}/365").number_format = F.FMT_NUMBER
+                ws.cell(row=R_AP, column=cc, value=f"={ISN}!{col}{R_COGS}*{col}{R_DPO}/365").number_format = F.FMT_NUMBER
+                ws.cell(row=R_OWC, column=cc, value=0.0).number_format = F.FMT_NUMBER
+                ws.cell(row=R_NWC, column=cc, value=f"={col}{R_AR}+{col}{R_INV}-{col}{R_AP}+{col}{R_OWC}").number_format = F.FMT_NUMBER
+                dnwc = f"({col}{R_NWC}-{colp}{R_NWC})" if j else f"({col}{R_NWC}-{repr(last_nwc)})"
             ppe_prev = f"{colp}{R_PPE}" if j else repr(last_ppe)
             ws.cell(row=R_PPE, column=cc, value=f"={ppe_prev}+{ISN}!{col}{R_CX}-{ISN}!{col}{R_DA}").number_format = F.FMT_NUMBER
             eq_prev = f"{colp}{R_EQ}" if j else repr(last_eq)
             ws.cell(row=R_EQ, column=cc, value=f"={eq_prev}+{ISN}!{col}{R_NP}").number_format = F.FMT_NUMBER
-            dnwc = f"({col}{R_NWC}-{colp}{R_NWC})" if j else f"({col}{R_NWC}-{repr(last_nwc)})"
             cash_prev = f"{colp}{R_CASH}" if j else repr(last_cash)
             ws.cell(row=R_CASH, column=cc,
                     value=f"={cash_prev}+{ISN}!{col}{R_NP}+{ISN}!{col}{R_DA}-{dnwc}-{ISN}!{col}{R_CX}").number_format = F.FMT_NUMBER
             dcell = ws.cell(row=R_DEBT, column=cc, value=last_debt); dcell.number_format = F.FMT_NUMBER
             ocell = ws.cell(row=R_OTH, column=cc, value=other); ocell.number_format = F.FMT_NUMBER
-            ws.cell(row=R_TA, column=cc, value=f"={col}{R_CASH}+{col}{R_AR}+{col}{R_INV}+{col}{R_PPE}+{col}{R_OTH}").number_format = F.FMT_NUMBER
+            ws.cell(row=R_TA, column=cc, value=f"={col}{R_CASH}+{col}{R_AR}+{col}{R_INV}+{col}{R_OWC}+{col}{R_PPE}+{col}{R_OTH}").number_format = F.FMT_NUMBER
             ws.cell(row=R_TLE, column=cc, value=f"={col}{R_AP}+{col}{R_DEBT}+{col}{R_EQ}").number_format = F.FMT_NUMBER
             ws.cell(row=R_BC, column=cc, value=f"={col}{R_TA}-{col}{R_TLE}").number_format = F.FMT_NUMBER
 

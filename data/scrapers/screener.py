@@ -13,6 +13,21 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 }
 
+# Keyword signatures for financial-sector companies (brokers, NBFCs, AMCs,
+# insurers, exchanges, holding/investment companies). Their balance sheets are
+# dominated by client/settlement float, not operating working capital — the
+# engine freezes the DSO/DIO/DPO framework when is_financial is set.
+_FINANCIAL_KEYWORDS = (
+    "financial services", "broking", "broker", "capital market",
+    "asset management", "stock broking", "depositor", "nbfc",
+    "non banking financ", "insuranc",
+)
+
+def _is_financial_sector(*classification_fields) -> bool:
+    """True if any screener classification field marks a financial-sector company."""
+    blob = " ".join((f or "").lower() for f in classification_fields)
+    return any(kw in blob for kw in _FINANCIAL_KEYWORDS)
+
 def _to_screener_ticker(sidwell_ticker: str) -> str:
     """Strip .NS or .BO suffix from ticker for screener.in"""
     return sidwell_ticker.replace(".NS", "").replace(".BO", "").upper()
@@ -180,6 +195,12 @@ def fetch_screener_financials(ticker: str) -> dict:
             cached_fin["is_bank"] = any(
                 "bank" in (cached_fin.get(s) or "").lower()
                 for s in ("scraped_sector", "scraped_broad_industry", "scraped_industry")
+            )
+        # Backfill is_financial for payloads cached before the flag existed.
+        if "is_financial" not in cached_fin:
+            cached_fin["is_financial"] = _is_financial_sector(
+                *(cached_fin.get(s) for s in
+                  ("scraped_sector", "scraped_broad_industry", "scraped_industry"))
             )
         return cached_fin
         
@@ -562,11 +583,58 @@ def fetch_screener_financials(ticker: str) -> dict:
         for s in (scraped_sector, scraped_broad_industry, scraped_industry)
     )
 
+    # Financial-sector flag (data-layer responsibility, like is_bank). Financials
+    # (brokers, NBFCs, AMCs, insurers, exchanges) have balance sheets dominated by
+    # client/settlement float rather than operating working capital, so the engine
+    # freezes the DSO/DIO/DPO working-capital framework for them (see
+    # sidwell/engine/statements.py). Banks are a subset (also financial) but
+    # short-circuit before the DCF engine; flagging them here is harmless.
+    fin["is_financial"] = _is_financial_sector(
+        scraped_sector, scraped_broad_industry, scraped_industry
+    )
+
     if not scraped_sector and not scraped_broad_industry and not scraped_industry:
         logger.info(f"Could not extract sector/industry for {ticker} from screener.in")
     
     fin["source"] = "Screener.in"
     fin["book_value_per_share"] = (fin["total_equity"][-1] / shares_out) if shares_out and shares_out > 0 and len(fin["total_equity"]) > 0 and fin["total_equity"][-1] is not None else 0.0
+
+    # Derive COGS 10-year series
+    is_it_service = any(
+        kw in (s or "").lower() for s in (scraped_sector, scraped_broad_industry, scraped_industry)
+        for kw in ("information technology", "software", "services")
+    )
+    pl = fin["statements"].get("annual", {}).get("profit_loss", {})
+    _sales_s = pl.get("sales", [])
+    _mat_pct = pl.get("material cost %", [])
+    _mfg_pct = pl.get("manufacturing cost %", [])
+    _emp_pct = pl.get("employee cost %", [])
+    _oth_pct = pl.get("other cost %", [])
+    _exp_s = pl.get("expenses", [])
+    
+    cogs_series = []
+    for i in range(len(_sales_s)):
+        s = _sales_s[i] if _sales_s[i] is not None else 0.0
+        mat = _mat_pct[i] if (i < len(_mat_pct) and _mat_pct[i] is not None) else 0.0
+        mfg = _mfg_pct[i] if (i < len(_mfg_pct) and _mfg_pct[i] is not None) else 0.0
+        emp = _emp_pct[i] if (i < len(_emp_pct) and _emp_pct[i] is not None) else 0.0
+        oth = _oth_pct[i] if (i < len(_oth_pct) and _oth_pct[i] is not None) else 0.0
+        exp = _exp_s[i] if (i < len(_exp_s) and _exp_s[i] is not None) else 0.0
+        
+        has_mat_or_mfg = (i < len(_mat_pct) and _mat_pct[i] is not None) or (i < len(_mfg_pct) and _mfg_pct[i] is not None)
+        
+        if has_mat_or_mfg:
+            pct = mat + mfg
+            if is_it_service:
+                pct += emp
+            cogs_series.append(s * pct / 100.0)
+        else:
+            if is_it_service:
+                cogs_series.append(exp - (s * oth / 100.0))
+            else:
+                cogs_series.append(exp - (s * (emp + oth) / 100.0))
+                
+    pl["cogs"] = cogs_series
 
     # Defensive None→0.0 normalization for all historical numeric arrays.
     # Screener.in returns None when a row label doesn't match for a particular
