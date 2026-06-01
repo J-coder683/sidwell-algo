@@ -141,6 +141,7 @@ SECTOR_TO_DAMODARAN_MAP = {
     "realty":                            "R.E.I.T.",
     "diversified retail":                "Retail (General)",
     "e-commerce":                        "Retail (Online)",
+    "hotels & resorts":                  "Hotel/Gaming",
 
     # === India — Broad Industry tier (screener Broad Industry) ===
     "petroleum products":                "Oil/Gas (Integrated)",
@@ -174,6 +175,7 @@ SECTOR_TO_DAMODARAN_MAP = {
     "retailing":                         "Retail (General)",
     "entertainment":                     "Entertainment",
     "media":                             "Broadcasting",
+    "leisure services":                  "Hotel/Gaming",
 
     # === India — Sector tier (broadest, screener Sector) ===
     "oil, gas & consumable fuels":       "Oil/Gas (Integrated)",
@@ -192,6 +194,7 @@ SECTOR_TO_DAMODARAN_MAP = {
     "realty":                            "R.E.I.T.",
     "services":                          "Information Services",
     "capital goods":                     "Machinery",
+    "consumer services":                 "Hotel/Gaming",
 }
 
 DEFAULT_INDUSTRY = "Chemical (Specialty)"  # conservative fallback when ticker not mapped
