@@ -249,6 +249,8 @@ def _extract_concall(pdf_bytes: bytes) -> tuple[str, dict]:
             parts.append(page.extract_text() or "")
             page.flush_cache()
         text = "\n\n".join(parts)
+        
+    logger.info(f"Concall transcript extracted: {total_pages} PDF pages; ~{len(text)} chars")
     return text, {"sections_found": ["full_text"], "fallback_used": False, "pages_extracted": total_pages}
 
 
@@ -344,8 +346,8 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
             resp.raise_for_status()
             pdf_bytes = resp.content
             
-            # Prevent Streamlit Cloud OOM: Skip PDFs larger than 15MB
-            if len(pdf_bytes) > 15 * 1024 * 1024:
+            # Prevent Streamlit Cloud OOM: Skip PDFs larger than 25MB
+            if len(pdf_bytes) > 25 * 1024 * 1024:
                 logger.warning(f"Skipping {url}: file too large ({len(pdf_bytes)/1024/1024:.1f} MB). Prevents OOM.")
                 continue
 

@@ -513,8 +513,8 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
     # ---- Qualitative status banner ----
     if qualitative_results.get("status") == "available":
         model = qualitative_results.get("model", "unknown")
-        n_docs = len(results.get("docs", []))
-        st.success(f"Qualitative layer: {n_docs} document(s) analyzed via **{model}**")
+        docs_used = qualitative_results.get("documents_used", results.get("docs", []))
+        st.success(f"Qualitative layer: {len(docs_used)} document(s) analyzed via **{model}**")
     else:
         reason = qualitative_results.get("reason", "unknown")
         if "no documents" in reason.lower() or "fewer than" in reason.lower() or "0" in reason:

@@ -210,8 +210,9 @@ def main():
         print(f"Apollo Score    : {apollo_results['score']}/{apollo_results.get('max_score', 16)}")
         print(f"Apollo Verdict  : {apollo_results['verdict']}")
         if qualitative_results.get("status") == "available":
+            docs_used = qualitative_results.get("documents_used", docs)
             print(
-                f"Qualitative     : {len(docs)} doc(s) analyzed via "
+                f"Qualitative     : {len(docs_used)} doc(s) analyzed via "
                 f"{qualitative_results.get('model')}"
             )
         else:
