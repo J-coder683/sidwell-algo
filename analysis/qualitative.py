@@ -31,7 +31,7 @@ logger = logging.getLogger("sidwell.analysis.qualitative")
 QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
 # v0.7.6.4: Swapped Gemini 3.5 Flash → DeepSeek V4 Pro.
 # DeepSeek provides superior reasoning for qualitative metrics with a 1M token window.
-MODEL_NAME = "deepseek-reasoner"
+MODEL_NAME = "deepseek-v4-pro"
 PROMPT_VERSION = "v0.10"  # v0.10: enriched AJP drivers (exit multiple, capital structure, bridge, dilution, holdco segments, volume/price split)
 
 # Maximum characters sent to Gemini for annual reports (smart-extracted).
