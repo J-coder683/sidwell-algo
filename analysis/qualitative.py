@@ -31,7 +31,7 @@ logger = logging.getLogger("sidwell.analysis.qualitative")
 QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
 # v0.7.6.4: Swapped Gemini 3.5 Flash → DeepSeek V4 Pro.
 # DeepSeek provides superior reasoning for qualitative metrics with a 1M token window.
-MODEL_NAME = "deepseek-chat"
+MODEL_NAME = "deepseek-reasoner"
 PROMPT_VERSION = "v0.10"  # v0.10: enriched AJP drivers (exit multiple, capital structure, bridge, dilution, holdco segments, volume/price split)
 
 # Maximum characters sent to Gemini for annual reports (smart-extracted).
@@ -278,12 +278,18 @@ def _call_deepseek(documents_text: str, ticker: str) -> dict:
         resp = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "You are a top-tier Wall Street buy-side analyst."},
+                {"role": "system", "content": "You are a top-tier Wall Street buy-side analyst. Output ONLY valid JSON."},
                 {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"}
+            ]
         )
-        return json.loads(resp.choices[0].message.content)
+        
+        content = resp.choices[0].message.content.strip()
+        if content.startswith("```json"):
+            content = content.split("```json")[1].rsplit("```", 1)[0].strip()
+        elif content.startswith("```"):
+            content = content.split("```")[1].rsplit("```", 1)[0].strip()
+            
+        return json.loads(content)
     except json.JSONDecodeError as e:
         return _unavailable(f"DeepSeek response not valid JSON: {e}")
     except Exception as e:
