@@ -346,8 +346,8 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
             resp.raise_for_status()
             pdf_bytes = resp.content
             
-            # Prevent Streamlit Cloud OOM: Skip PDFs larger than 25MB
-            if len(pdf_bytes) > 25 * 1024 * 1024:
+            # Prevent Streamlit Cloud OOM: Skip PDFs larger than 50MB
+            if len(pdf_bytes) > 50 * 1024 * 1024:
                 logger.warning(f"Skipping {url}: file too large ({len(pdf_bytes)/1024/1024:.1f} MB). Prevents OOM.")
                 continue
 
