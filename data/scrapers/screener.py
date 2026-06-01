@@ -728,7 +728,22 @@ def fetch_screener_documents(ticker: str) -> list[dict]:
                         "label": f"{date_str} Concall"
                     })
 
-    # Credit ratings and investor presentations intentionally excluded:
+    # 3. Credit Ratings (Max 1)
+    credit_div = docs_section.find('div', class_='credit-ratings')
+    if credit_div:
+        ul = credit_div.find('ul')
+        if ul:
+            for li in ul.find_all('li')[:1]:
+                a = li.find('a')
+                if a and a.get('href'):
+                    documents.append({
+                        "url": a['href'],
+                        "type": "credit_rating",
+                        "date": a.text.split("\n")[0].strip() if "\n" in a.text else a.text.strip(),
+                        "label": "Credit Rating Rationale"
+                    })
+
+    # Investor presentations intentionally excluded:
     # low signal-to-noise for qualitative lens signals.
 
     cache.set_json(cache_key, documents)

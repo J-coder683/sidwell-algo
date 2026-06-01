@@ -66,24 +66,18 @@ RISK_KEYWORDS = [
     "risk review",
     "risks and mitigation",
 ]
-CHAIRMAN_KEYWORDS = [
-    "chairman's letter",
-    "chairman's message",
-    "managing director's letter",
-    "letter to shareholders",
-    "letter to members",
-    "letter from the chairman",
-    "letter from the md",
-    "chairman's communication",
-    "chairman and managing director's statement",  # Reliance pattern
-    "chairman and managing director",
+BOARDS_REPORT_KEYWORDS = [
+    "board's report",
+    "directors' report",
+    "directors report",
+    "report of the board",
+    "report of the directors",
 ]
-BUSINESS_KEYWORDS = [
-    "business overview",
-    "our business",
-    "about us",
-    "about the company",
-    "company overview",
+RPT_KEYWORDS = [
+    "related party transactions",
+    "related party disclosure",
+    "transactions with related parties",
+    "related parties",
 ]
 
 TOC_SEARCH_RANGE_MAX = 60  # pages; handles large Indian co preambles (AGM notices etc.)
@@ -111,7 +105,7 @@ def _extract_annual_report_sections(pdf_bytes: bytes) -> tuple[str, dict]:
             if any(marker in page_text for marker in
                    ["table of contents", "contents", "inside this report", "in this report"]):
                 # Heuristic: real TOC pages reference at least 2 of our target sections
-                if sum(1 for kw_set in [MDA_KEYWORDS, RISK_KEYWORDS, CHAIRMAN_KEYWORDS]
+                if sum(1 for kw_set in [MDA_KEYWORDS, RISK_KEYWORDS, BOARDS_REPORT_KEYWORDS, RPT_KEYWORDS]
                        if any(kw in page_text for kw in kw_set)) >= 2:
                     toc_page_idx = i
                     break
@@ -139,8 +133,8 @@ def _extract_annual_report_sections(pdf_bytes: bytes) -> tuple[str, dict]:
         for name, kw_list in [
             ("MD&A", MDA_KEYWORDS),
             ("Risk Factors", RISK_KEYWORDS),
-            ("Chairman's Letter", CHAIRMAN_KEYWORDS),
-            ("Business Overview", BUSINESS_KEYWORDS),
+            ("Board's Report", BOARDS_REPORT_KEYWORDS),
+            ("Related Party Transactions", RPT_KEYWORDS),
         ]:
             start_page = _find_section_start(kw_list, search_from=search_start)
             if start_page is not None:

@@ -191,6 +191,7 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
 
 ## Rules
 
+- **CYNICAL AUDITOR MODE**: Act as a cynical, forensic accountant. Cross-examine management's scripted remarks and MD&A against the Analyst Q&A section and Credit Rating reports (if provided). Penalize management humility and tone scores if they evade questions, blame macro environments, refuse specific guidance, or if the Credit Rating highlights working capital/debt stress that management ignored. Check Related Party Transactions (RPT) for promoter governance risks.
 - Do NOT invent content not in the documents. Every item must trace to source documents.
 - If a section has no findings, return an empty array (for list fields) or "unclear" / null (for verdict fields).
 - Cite source documents by filename exactly as provided.
