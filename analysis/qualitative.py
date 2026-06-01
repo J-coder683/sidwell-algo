@@ -255,7 +255,15 @@ def _extract_generic(pdf_bytes: bytes) -> tuple[str, dict]:
 def _call_deepseek(documents_text: str, ticker: str) -> dict:
     """Invoke DeepSeek V4 Pro for structured qualitative extraction.
     """
-    api_key = os.getenv("DEEPSEEK_API_KEY")
+    try:
+        import streamlit as st
+        api_key = st.secrets.get("DEEPSEEK_API_KEY")
+    except Exception:
+        api_key = None
+        
+    if not api_key:
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+
     if not api_key:
         return _unavailable("DEEPSEEK_API_KEY not configured")
 
