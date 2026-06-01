@@ -7,8 +7,8 @@
 | Metric | Value | Source / Detail |
 | :--- | :--- | :--- |
 | **Current Price** | ₹1,321.00 | Yahoo Finance |
-| **Intrinsic Value (DCF)** | ₹676.64 | Sidwell DCF Engine |
-| **Margin of Safety** | Trading at 2.0x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
+| **Intrinsic Value (DCF)** | ₹871.60 | Sidwell DCF Engine |
+| **Margin of Safety** | Trading at 1.5x intrinsic value (target ≤ 0.75x) | Current Discount to Intrinsic |
 | **Buffett Score** | **9/14** | Buffett Lens (14 checks) |
 | **Buffett Verdict** | **SKIP** ❌ | Buffett Lens Rules |
 | **Marks Score** | **10/14** | Marks Lens (14 checks) |
@@ -22,7 +22,7 @@
 
 ### Verdict Summary
 > **Buffett**: **SKIP** — Does not meet enough Buffett criteria across business quality, management, and price.
-> **Marks**: **WAIT** — Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 405.98 (60% of intrinsic = 40% MoS).
+> **Marks**: **WAIT** — Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 522.96 (60% of intrinsic = 40% MoS).
 > **KKR**: **SKIP** — Failed Part A pre-condition: not LBO-viable.
 > **Blackstone**: **SKIP** — Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar).
 > **Apollo**: **SKIP** — Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar).
@@ -50,60 +50,60 @@ Every component of the Weighted Average Cost of Capital (WACC) is explicitly sou
 | **Mature Market ERP** | 5.00% | Damodaran NYU Stern (Mature Equity Risk Premium) |
 | **Country Risk Premium** | 0.00% | Damodaran NYU Stern (Country default spread adjusted) |
 | **Total Equity Risk Premium** | 5.00% | Damodaran mature ERP + country premium = 5.00% |
-| **Industry Unlevered Beta** | 1.00 | Damodaran 'AJP Detected' (hardcoded fallback (Damodaran lookup failed)) |
-| **Beta ($\beta$)** | 1.17 | Damodaran industry $\beta$ for AJP Detected; company-specific $\beta$ unavailable on screener.in |
-| **Cost of Equity ($K_e$)** | 12.83% | CAPM: $R_f + \beta \times ERP$ = 12.83% |
-| **Cost of Debt ($K_d$)** | 6.00% | AJP Engine Fallback |
-| **Effective Tax Rate ($t$)** | 25.00% | 4-year historical average from filings |
+| **Industry Unlevered Beta** | 1.00 | Damodaran 'Oil/Gas (Integrated)' (hardcoded fallback (Damodaran lookup failed)) |
+| **Beta ($\beta$)** | 1.17 | Damodaran industry $\beta$ for Oil/Gas (Integrated); company-specific $\beta$ unavailable on screener.in |
+| **Cost of Equity ($K_e$)** | 12.86% | CAPM: $R_f + \beta \times ERP$ = 12.86% |
+| **Cost of Debt ($K_d$)** | 6.21% | AJP Engine Fallback |
+| **Effective Tax Rate ($t$)** | 22.40% | 4-year historical average from filings |
 | **Equity Weight ($W_e$)** | 50.00% | Market Cap / (Market Cap + Total Debt) |
 | **Debt Weight ($W_d$)** | 50.00% | Total Debt / (Market Cap + Total Debt) |
-| **Computed WACC** | **11.57%** | Weighted cost of capital = **11.57%** |
+| **Computed WACC** | **11.63%** | Weighted cost of capital = **11.63%** |
 
 ### 5-Year High-Growth Forecast (Stage 1)
-Projections are based on historical averages relative to Revenue. Revenue growth is projected at **8.00%** (historical 4y CAGR capped between 5% and 20%).
+Projections are based on historical averages relative to Revenue. Revenue growth is projected at **9.50%** (historical 4y CAGR capped between 5% and 20%).
 
 | Metric | FY2027E | FY2028E | FY2029E | FY2030E | FY2031E |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| Revenue | ₹11,100.80B | ₹11,655.84B | ₹12,238.63B | ₹12,850.56B | ₹13,493.09B |
-| EBIT | ₹1,802.08B | ₹1,811.45B | ₹1,817.25B | ₹1,819.10B | ₹1,816.60B |
-| Taxes | ₹366.20B | ₹391.35B | ₹403.31B | ₹415.86B | ₹429.06B |
-| D&A | ₹600.66B | ₹625.37B | ₹651.05B | ₹677.73B | ₹705.46B |
-| CapEx | ₹1,217.06B | ₹1,200.68B | ₹1,179.61B | ₹1,153.44B | ₹1,121.70B |
-| NWC Change (CF) | ₹246.49B | ₹45.62B | ₹47.90B | ₹50.30B | ₹52.81B |
-| Free Cash Flow | ₹488.66B | ₹737.65B | ₹786.47B | ₹838.32B | ₹893.39B |
-| Discount Factor | 0.8963 | 0.8033 | 0.7200 | 0.6454 | 0.5784 |
-| PV of Cash Flow | ₹462.63B | ₹625.94B | ₹598.15B | ₹571.47B | ₹545.85B |
+| Revenue | ₹11,576.55B | ₹12,676.32B | ₹13,880.57B | ₹15,199.22B | ₹16,643.15B |
+| EBIT | ₹1,890.88B | ₹1,995.39B | ₹2,102.69B | ₹2,212.37B | ₹2,323.92B |
+| Taxes | ₹348.01B | ₹415.16B | ₹449.83B | ₹485.45B | ₹520.56B |
+| D&A | ₹601.52B | ₹639.71B | ₹682.42B | ₹730.02B | ₹782.94B |
+| CapEx | ₹1,344.47B | ₹1,470.59B | ₹1,608.54B | ₹1,759.43B | ₹1,924.48B |
+| NWC Change (CF) | ₹-1,097.25B | ₹-40.98B | ₹-44.87B | ₹-49.13B | ₹-53.80B |
+| Free Cash Flow | ₹1,821.62B | ₹758.52B | ₹750.44B | ₹736.52B | ₹715.62B |
+| Discount Factor | 0.8958 | 0.8024 | 0.7188 | 0.6439 | 0.5768 |
+| PV of Cash Flow | ₹1,724.08B | ₹643.08B | ₹569.92B | ₹501.06B | ₹436.10B |
 
-### 5-Year Fade Forecast (Stage 2) — growth fading from 5.00% to 2.00%
+### 5-Year Fade Forecast (Stage 2) — growth fading from 9.50% to 5.00%
 
 | Metric | FY2032E | FY2033E | FY2034E | FY2035E | FY2036E |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| Revenue | ₹14,100.28B | ₹14,664.29B | ₹15,177.54B | ₹15,632.87B | ₹16,023.69B |
-| EBIT | ₹1,800.68B | ₹1,771.14B | ₹1,728.01B | ₹1,671.57B | ₹1,602.37B |
-| Taxes | ₹440.80B | ₹442.79B | ₹432.00B | ₹417.89B | ₹400.59B |
-| D&A | ₹730.77B | ₹753.30B | ₹772.74B | ₹788.78B | ₹801.18B |
-| CapEx | ₹1,078.75B | ₹1,024.73B | ₹960.02B | ₹885.23B | ₹801.18B |
-| NWC Change (CF) | ₹49.91B | ₹46.36B | ₹42.18B | ₹37.42B | ₹32.12B |
-| Free Cash Flow | ₹952.63B | ₹1,010.57B | ₹1,066.54B | ₹1,119.80B | ₹1,169.65B |
-| Discount Factor | 0.5185 | 0.4647 | 0.4165 | 0.3733 | 0.3346 |
-| PV of Cash Flow | ₹521.68B | ₹496.02B | ₹469.21B | ₹441.55B | ₹413.38B |
+| Revenue | ₹18,099.43B | ₹19,547.38B | ₹20,964.57B | ₹22,327.26B | ₹23,611.08B |
+| EBIT | ₹2,419.99B | ₹2,497.75B | ₹2,554.59B | ₹2,588.32B | ₹2,597.22B |
+| Taxes | ₹542.08B | ₹559.50B | ₹572.23B | ₹579.78B | ₹581.78B |
+| D&A | ₹841.62B | ₹905.82B | ₹975.19B | ₹1,049.26B | ₹1,127.46B |
+| CapEx | ₹2,090.58B | ₹2,255.36B | ₹2,416.22B | ₹2,570.46B | ₹2,715.27B |
+| NWC Change (CF) | ₹-54.26B | ₹-53.95B | ₹-52.80B | ₹-50.77B | ₹-47.84B |
+| Free Cash Flow | ₹683.21B | ₹642.66B | ₹594.13B | ₹538.11B | ₹475.46B |
+| Discount Factor | 0.5167 | 0.4628 | 0.4146 | 0.3714 | 0.3327 |
+| PV of Cash Flow | ₹372.96B | ₹314.26B | ₹260.25B | ₹211.14B | ₹167.12B |
 
 ### Terminal Value
-- Final fade year (Year 10) FCF: ₹1,169.65B
-- Terminal growth (Gordon): 2.00%
+- Final fade year (Year 10) FCF: ₹475.46B
+- Terminal growth (Gordon): 5.00%
 - Sector mapping: AJP Engine Fallback
-- Terminal Value: ₹18,250.89B
-- PV of Terminal Value (discounted from Year 10): ₹6,106.62B
+- Terminal Value: ₹26,110.27B
+- PV of Terminal Value (discounted from Year 10): ₹8,685.92B
 
 ### Valuation Bridge
-- **PV of Explicit FCFs**: ₹5,145.88B
-- **PV of Terminal Value (g = 2.00%)**: ₹6,106.62B
-- **Enterprise Value**: ₹11,252.49B
+- **PV of Explicit FCFs**: ₹5,199.96B
+- **PV of Terminal Value (g = 5.00%)**: ₹8,685.92B
+- **Enterprise Value**: ₹13,885.88B
 - **Add: Cash & Equivalents**: ₹1,459.77B
 - **Less: Total Debt**: ₹4,215.79B
-- **Equity Value**: ₹9,161.43B
-- **Shares Outstanding**: 13,539,598,789
-- **Intrinsic Value per Share**: **₹676.64**
+- **Equity Value**: ₹11,794.82B
+- **Shares Outstanding**: 13,532,417,490
+- **Intrinsic Value per Share**: **₹871.60**
 
 ## 3. Buffett Investor Lens
 All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
@@ -113,9 +113,9 @@ All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Durable competitive advantage (moat) | ✅ | 0.98% | < 3.0% | stdev = 0.98% < 3% |
-| High return on invested capital | ❌ | 11.04% | > 15.0% | 4y avg = 11.04% <= 15% |
+| High return on invested capital | ❌ | 11.42% | > 15.0% | 4y avg = 11.42% <= 15% |
 | Strong free-cash-flow generation | ❌ | 0.03 / 5.18 | Margin > 10% & Growth > 0% | avg margin = 2.83%, FCF growth = 517.55% |
-| Earnings predictability | ✅ | 0.08 / 0.04 | 5% < CAGR < 30% & YoY Growth StDev < 10.0% | Revenue CAGR = 8.00%, YoY Growth StDev = 3.65% |
+| Earnings predictability | ✅ | 0.10 / 0.04 | 5% < CAGR < 30% & YoY Growth StDev < 10.0% | Revenue CAGR = 9.50%, YoY Growth StDev = 3.65% |
 
 _Part A — Business Quality: **2/4 passed**_
 
@@ -134,9 +134,9 @@ _Part B — Financial Health: **1/3 passed**_
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
 | Anti-dilution discipline | ✅ | [4 values] | <= 2% growth over 4y | Share count growth (4y): +0.00% (threshold: <= +2%) |
-| Capital allocation track record | ✅ | 0.007171781908665659 / True | ROIC not declining > 3pp AND capital returned | ROIC trend (latter-2y vs earlier-2y): +0.72pp; capital returned to shareholders: yes |
+| Capital allocation track record | ✅ | 0.007420403681499391 / True | ROIC not declining > 3pp AND capital returned | ROIC trend (latter-2y vs earlier-2y): +0.74pp; capital returned to shareholders: yes |
 | Owner orientation | ✅ | 0.5 / owner_oriented | Insiders > 5% OR LLM = owner_oriented | Insider ownership: 50.00% (PASS at >5%). LLM owner-orientation: owner_oriented |
-| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: PASS (LLM coherence: coherent). The corporate disclosures and transcript messages are highly aligned. Management consistently presents its consumer businesses as stable cash engines that fund its capital-intensive transition to a deep-tech, vertically integrated new energy ecosystem. Adj |
+| Management coherence | ✅ | True | LLM coherence = coherent | Soft check: PASS (LLM coherence: coherent). The corporate strategic vision of transitioning toward a dominant consumer digital/retail platform and a vertically integrated green energy player matches their actual capital expenditure. Management's detailed progress reports—such as commissioning module |
 
 _Part C — Management & Capital Allocation: **4/4 passed**_
 
@@ -144,9 +144,9 @@ _Part C — Management & Capital Allocation: **4/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Margin of safety | ❌ | Trading at 2.0x intrinsic | > 25.0% | Trading at 2.0x intrinsic value (target ≤ 0.75x) (Price: 1321.00, Intrinsic: 676.64) |
+| Margin of safety | ❌ | Trading at 1.5x intrinsic | > 25.0% | Trading at 1.5x intrinsic value (target ≤ 0.75x) (Price: 1321.00, Intrinsic: 871.60) |
 | Understandable business (hard blacklist) | ✅ | True | Ticker not BTC/ETH/COIN | Hard check: PASS (ticker not in avoided-sector blacklist) |
-| Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. RIL’s businesses serve durable, structural needs in India across digital connectivity, retail, and energy. Its proactive pivot into a vertically integrated new energy and materials ecosystem effectively hedge-proofs the firm against 20-year fossil fuel obsolesc |
+| Holdability (20-year test) | ✅ | holdable_20y | LLM verdict = holdable_20y | LLM holdability verdict: holdable_20y. Reliance operates critical, virtually irreplaceable infrastructure across telecom (524M+ users), retail (20,000+ stores), and downstream refining. Its aggressive backward integration into clean solar PV, LFP batteries, and green hydrogen heavily insulates its b |
 
 _Part D — Margin of Safety & Holdability: **2/3 passed**_
 
@@ -159,7 +159,7 @@ All 14 checks per Howard Marks's risk-first framework (frameworks/marks.md):
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Deep margin of safety | ❌ | Trading at 2.0x intrinsic | > 40% | MoS = -95.23% (< 40% threshold) — Price 1321.00 vs Intrinsic 676.64 |
+| Deep margin of safety | ❌ | Trading at 1.5x intrinsic | > 40% | MoS = -51.56% (< 40% threshold) — Price 1321.00 vs Intrinsic 871.60 |
 | Asymmetric upside-to-downside payoff | ❌ | 0.000 | > 3.0x | Asymmetry ratio = 0.00 (< 3.0 threshold) |
 | Downside protection (tangible book) | ✅ | 50.54% | > 30% | Equity/MCap = 50.54% (> 30%) |
 | Multiple expansion not exhausted | ✅ | 22.100 | < 25x (v0.3 placeholder; sector comp in v0.4) | Trailing P/E = 22.1x (< 25x) |
@@ -170,7 +170,7 @@ _Part A — Margin of Safety & Asymmetric Payoff: **2/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Sector cycle position | ✅ | mid_cycle | trough | early_recovery | mid_cycle | LLM sector cycle: mid_cycle. While the downstream chemical sector is undergoing a major capacity rationalization to restore demand-supply balances, the refining sector remains structurally tight with high cracks. RIL's own cycle is mid-stage, with its mature telecom and retail assets generating stab |
+| Sector cycle position | ✅ | mid_cycle | trough | early_recovery | mid_cycle | LLM sector cycle: mid_cycle. The refining segment has experienced tight fuel cracks driven by global supply and logistical disruptions, while the petrochemical sector is facing late-cycle margin pressure due to Chinese capacity additions. However, the consumer businesses are in their mid-cycle expan |
 | Company earnings vs cyclical peak | ✅ | 100.00% | > 70% of peak | Latest NI / Peak NI = 100.0% |
 | Sentiment — going against the crowd | ✅ | N/A | Mean rating 2.5-4.0 (mixed/cautious consensus) | Consensus rating unavailable; defaulted PASS |
 
@@ -183,7 +183,7 @@ _Part B — Cycle Position: **3/3 passed**_
 | Capital structure resilience | ✅ | 1.68 / 6.61 | Debt/EBITDA < 4x AND Coverage > 4x | Debt/EBITDA = 1.68x, Coverage = 6.61x |
 | FCF stability through downturn | ❌ | -167700000000.000 | All 4 years positive FCF | 4y FCF: [-167700000000.0, 212120000000.0, 410790000000.0, 700230000000.0] |
 | Volatility / beta | ✅ | 1.000 | < 1.5 | Beta = 1.00 (< 1.5) |
-| No single-point failure mode | ✅ | 1 | <= 1 concentration/regulatory risk flagged | Concentration/regulatory risks identified: 1 |
+| No single-point failure mode | ✅ | 0 | <= 1 concentration/regulatory risk flagged | Concentration/regulatory risks identified: 0 |
 
 _Part C — Risk Architecture: **3/4 passed**_
 
@@ -191,9 +191,9 @@ _Part C — Risk Architecture: **3/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Variant perception | ✅ | True | variant_present=true AND specificity=high | Variant: True, Specificity: high. Consensus: 'Consensus views the near-term deceleration in retail growth and margin pressure from quick commerce as a negative trend.' | Company view: 'Management views this as temporary volatility, focusing on leveraging their physical stores as omni-nodes to achiev |
-| Management humility (knowing what you don't know) | ✅ | humble | verdict = humble | LLM humility verdict: humble. Management demonstrates humility by candidly acknowledging past mistakes, such as store locations that lost attractiveness over time, and regularizing store relocations. They also consistently refuse to provide multi-year quantitative financial forecasts that they canno |
-| Patient opportunism (why now) | ❌ | catalyst_present | verdict = dislocation_present | Why-now: catalyst_present. Event: S&P upgrading RIL to an A- rating and imminent IPO plans for Jio Platforms.. S&P upgraded RIL's rating to A-, making it the first Indian manufacturing company to achieve this milestone, which will significantly lower credit spreads and improve capital access. Additi |
+| Variant perception | ✅ | True | variant_present=true AND specificity=high | Variant: True, Specificity: high. Consensus: 'The market believes aggressive capex in low-margin quick commerce and high-risk new energy will depress returns on capital and drag down conglomerate margins.' | Company view: 'Management views vertical integration across the green energy chain and the u |
+| Management humility (knowing what you don't know) | ✅ | humble | verdict = humble | LLM humility verdict: humble. Management openly details the operational scramble and logistical difficulties forced on them by the Strait of Hormuz shutdown in March 2026, admitting to throughput drops and under-recoveries in retail. Furthermore, they refuse to provide specific multi-year forward-lo |
+| Patient opportunism (why now) | ❌ | catalyst_present | verdict = dislocation_present | Why-now: catalyst_present. Event: The imminent IPO of Jio Platforms and the operationalization of the 10 GW fully integrated solar giga-factory.. The company is transitioning from a peak capex cycle to commercialization of its massive green energy assets. Combined with the stated imminence of the Ji |
 
 _Part D — Second-Level Thinking & Contrarianism: **2/3 passed**_
 
@@ -230,9 +230,9 @@ _Part B — Operational Upside: **5/6 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Sector Compatibility | ❌ | AJP Detected | In KKR Playbook | AJP Detected is NOT in KKR playbook. |
+| Sector Compatibility | ❌ | Oil/Gas (Integrated) | In KKR Playbook | Oil/Gas (Integrated) is NOT in KKR playbook. |
 | Willing Seller | ✅ | unclear | Positive catalyst | neutral default — qualitative unavailable; check counted as PASS |
-| Regulatory Freedom | ✅ | AJP Detected | Not restricted | Clear. |
+| Regulatory Freedom | ✅ | Oil/Gas (Integrated) | Not restricted | Clear. |
 
 _Part C — Strategic Fit: **2/3 passed**_
 
@@ -275,7 +275,7 @@ _Part A — Good Business Filter: **3/4 passed**_
 
 | Check | Status | Value | Threshold | Detail |
 | :--- | :---: | :--- | :--- | :--- |
-| Theme Alignment | ❌ | AJP Detected | Favored Theme | AJP Detected not in themes. |
+| Theme Alignment | ❌ | Oil/Gas (Integrated) | Favored Theme | Oil/Gas (Integrated) not in themes. |
 | Cycle Position | ✅ | mid_cycle | Not peak/late | Cycle: mid_cycle |
 | Structural Tailwind | ❌ | present | Tailwind/neutral | Tailwind: present |
 
@@ -331,9 +331,9 @@ _Part A — Purchase Price & Capital Structure Entry: **2/4 passed**_
 | :--- | :---: | :--- | :--- | :--- |
 | Chaos/Dislocation Catalyst | ✅ | present | Present | Signal: present |
 | Fulcrum Security | ❌ | (1.6819009706850576, 6.612800709508148, 4.493922110552764) | Hard or Soft Fulcrum | Qual: absent. Hard signals: A=False, B=False. |
-| ABF/Credit Fit | ❌ | unclear | Compatible | Signal: unclear |
+| ABF/Credit Fit | ❌ | low | Compatible | Signal: low |
 | Complexity Moat | ✅ | 18.27% | >55% or High Qual | Debt/Assets 18.3%. Qual: high. |
-| Domain Knowledge | ❌ | AJP Detected | In Apollo Playbook | AJP Detected not in playbook. |
+| Domain Knowledge | ❌ | Oil/Gas (Integrated) | In Apollo Playbook | Oil/Gas (Integrated) not in playbook. |
 
 _Part B — Chaos, Complexity, Credit Edge: **2/5 passed**_
 
@@ -371,44 +371,44 @@ _Part E — Defensibility vs Phalippou Bar: **0/1 passed**_
 Based on 3 document(s): Financial Year 2026                from bse, Apr 2026 Concall, Jan 2026 Concall. Model: `gemini-3.5-flash`.
 
 ### Forward Guidance
-- **FY 2026-27** (volume): Targeted infill drilling of four infill wells and three workover wells are planned in FY 2026-27 for production sustenance and recovery of incremental gas. _[annual_report]_
-- **FY 2026-27** (margin): In FY 2026-27, volatile product and feedstock prices, supply disruptions from the Middle East, and Government of India directives on SAED may weigh on domestic demand and margins. _[annual_report]_
-- **FY 2026-27** (volume): RIL remains on track for the solar manufacturing facility to scale to 10 GWp per annum, with expansion to 20 GWp planned. _[annual_report]_
+- **FY2026-27** (capex): Three workover wells are planned in FY 2026-27 for production sustenance in KG D6, alongside four infill wells targeting incremental ~220 BCF of gas. _[annual_report]_
+- **FY2026-27** (volume): Beverage manufacturing capacity is planned to more than double during the current fiscal year. _[Jan_2026_Concall]_
+- **Next 12-15 months** (volume): New Energy generation capacity is targeted to start coming online and delivering power progressively. _[Jan_2026_Concall]_
 
 ### Risk Callouts
-- **Middle East supply shock**: The Strait of Hormuz blockade in March 2026 sharply disrupted product flows and oil throughput, driving up crude premiums, freight, and insurance costs. _[apr_2026_concall]_
-- **Special Additional Excise Duty**: The reintroduction of SAED in late March 2026 represents a regulatory risk that could weigh on domestic refining margins. _[apr_2026_concall]_
-- **E&P production decline**: Natural production declines in the mature KG D6 block fields lead to lower volumes and lower price realizations. _[annual_report]_
+- **Middle East Conflict & Strait of Hormuz Blockage**: The Strait of Hormuz conflict in March 2026 severely disrupted crude flows, caused refinery run cuts, and escalated OSP premiums and shipping freight rates. _[Apr_2026_Concall]_
+- **SAED Reintroduction**: The reintroduction of Special Additional Excise Duty (SAED) effective March 27, 2026, on diesel, gasoline, and jet fuel presents a domestic marketing risk. _[Apr_2026_Concall]_
+- **Rupee Depreciation**: The Rupee depreciated by 11% for the year and 4% in March 2026, creating immediate concerns regarding the landed cost of foreign currency liabilities. _[Apr_2026_Concall]_
 
 ### Strategic Themes
-- **Agile Crude Sourcing**: RIL successfully avoided sharp refinery throughput cuts during the March 2026 oil shock by sourcing alternative crudes from Venezuela, Russia, Brazil, and Mexico. _[apr_2026_concall]_
-- **Integrated New Energy Ecosystem**: The company is transitioning to Net Carbon Zero by 2035 by building gigawatt-scale solar, BESS, and green hydrogen giga-complexes at Jamnagar and Kutch. _[annual_report]_
-- **Omnichannel Retail Optimization**: Management is leveraging its physical store network of over 20,000 stores to act as delivery nodes for its rapid quick commerce expansion. _[jan_2026_concall]_
+- **New Energy Transition**: RIL is scaling a gigawatt-scale clean energy ecosystem at the Dhirubhai Ambani Green Energy Giga Complex in Jamnagar to target Net Carbon Zero by 2035. _[annual_report]_
+- **AI-First & Technology Integration**: Reliance is embedding AI across its retail supply chain, implementing AI-driven network slicing in Jio's standalone 5G core, and building AI-enabled smart factories. _[Jan_2026_Concall]_
+- **Hyperlocal Quick Commerce Expansion**: Management is aggressively expanding JioMart's dark store network and leveraging big-box store density to capture quick commerce market share. _[Jan_2026_Concall]_
 
 ### Tone & Coherence
 - **Tone (current)**: confident
 - **Tone (trajectory)**: stable
 - **Coherence verdict**: coherent
 
-_Management displays strong confidence in navigating severe geopolitical crises due to their high refinery complexity and agile crude sourcing. They remain deeply constructive on the long-term potential of the retail and telecom divisions, refusing to be distracted by short-term growth rate volatility. S&P's rating upgrade to A- further solidifies their optimistic outlook and operational stability._
+_Management exhibits robust confidence in their diversified, integrated business model, specifically emphasizing the resilience of their consumer-facing verticals. They remain calm and structured when addressing temporary headwinds like the March 2026 energy shock and quick commerce margin dilution. The tone is further supported by highlighting S&P's international credit rating upgrade of RIL to 'A-'._
 
-_The corporate disclosures and transcript messages are highly aligned. Management consistently presents its consumer businesses as stable cash engines that fund its capital-intensive transition to a deep-tech, vertically integrated new energy ecosystem. Adjustments to short-term setbacks, such as the March 2026 supply disruptions, are explained with consistent logic across both transcripts._
+_The corporate strategic vision of transitioning toward a dominant consumer digital/retail platform and a vertically integrated green energy player matches their actual capital expenditure. Management's detailed progress reports—such as commissioning module/cell lines, building Kutch transmission corridors, and completing land preparation—back up their large-scale New Energy capital allocation with physical operational execution._
 
 ### Marks-Relevant Signals
-- **Owner orientation**: owner_oriented — The promoter-led management repeatedly emphasizes long-term value creation and a partnership mindset. They explicitly state they will not be distracted by short-term growth rate volatility in retail and instead focus on maximizing overall customer wallet share. This long-term focus, combined with ca
-- **Holdability (20y)**: holdable_20y — RIL’s businesses serve durable, structural needs in India across digital connectivity, retail, and energy. Its proactive pivot into a vertically integrated new energy and materials ecosystem effectively hedge-proofs the firm against 20-year fossil fuel obsolescence or regulatory shifts. The unmatche
-- **Sector cycle**: mid_cycle / Company cycle: mid — While the downstream chemical sector is undergoing a major capacity rationalization to restore demand-supply balances, the refining sector remains structurally tight with high cracks. RIL's own cycle is mid-stage, with its mature telecom and retail assets generating stable cash flows, while its new 
-- **Variant perception**: present=True, specificity=high. Consensus: 'Consensus views the near-term deceleration in retail growth and margin pressure from quick commerce as a negative trend.'
-- **Management humility**: humble — Management demonstrates humility by candidly acknowledging past mistakes, such as store locations that lost attractiveness over time, and regularizing store relocations. They also consistently refuse to provide multi-year quantitative financial forecasts that they cannot defend, prioritizing operati
-- **Why now**: catalyst_present — S&P upgrading RIL to an A- rating and imminent IPO plans for Jio Platforms.
+- **Owner orientation**: owner_oriented — Management demonstrates a strong long-term focus, explicitly stating they refuse to be distracted by very short-term growth rate or margin volatility (e.g., in Retail and Quick Commerce) because the ultimate market opportunity is so massive. They emphasize building structural cost advantages—like vi
+- **Holdability (20y)**: holdable_20y — Reliance operates critical, virtually irreplaceable infrastructure across telecom (524M+ users), retail (20,000+ stores), and downstream refining. Its aggressive backward integration into clean solar PV, LFP batteries, and green hydrogen heavily insulates its business model from 20-year fossil fuel 
+- **Sector cycle**: mid_cycle / Company cycle: mid — The refining segment has experienced tight fuel cracks driven by global supply and logistical disruptions, while the petrochemical sector is facing late-cycle margin pressure due to Chinese capacity additions. However, the consumer businesses are in their mid-cycle expansion phase, driven by rapid 5
+- **Variant perception**: present=True, specificity=high. Consensus: 'The market believes aggressive capex in low-margin quick commerce and high-risk new energy will depress returns on capital and drag down conglomerate '
+- **Management humility**: humble — Management openly details the operational scramble and logistical difficulties forced on them by the Strait of Hormuz shutdown in March 2026, admitting to throughput drops and under-recoveries in retail. Furthermore, they refuse to provide specific multi-year forward-looking financial targets or IPO
+- **Why now**: catalyst_present — The imminent IPO of Jio Platforms and the operationalization of the 10 GW fully integrated solar giga-factory.
 
 ## 4. Margin-of-Safety Check
 Current Stock Price: **₹1,321.00**
-DCF Intrinsic Value: **₹676.64**
+DCF Intrinsic Value: **₹871.60**
 Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)
-Computed Margin of Safety: Trading at 2.0x intrinsic value (target ≤ 0.75x)
+Computed Margin of Safety: Trading at 1.5x intrinsic value (target ≤ 0.75x)
 ### Status: [FAIL] ❌
-The stock trades above the safety threshold. Trading at 2.0x intrinsic value is insufficient for investment under the Buffett framework.
+The stock trades above the safety threshold. Trading at 1.5x intrinsic value is insufficient for investment under the Buffett framework.
 
 ## 5. Investment Verdict
 **BUFFETT RECOMMENDATION: SKIP**
@@ -417,9 +417,9 @@ Does not meet enough Buffett criteria across business quality, management, and p
 
 **MARKS RECOMMENDATION: WAIT**
 
-Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 405.98 (60% of intrinsic = 40% MoS).
+Risk architecture acceptable but MoS or multiple position inadequate. Set re-rating alert at 522.96 (60% of intrinsic = 40% MoS).
 
-**Marks Action Item**: Set re-rating alert at **₹405.98** (60% of intrinsic = 40% MoS).
+**Marks Action Item**: Set re-rating alert at **₹522.96** (60% of intrinsic = 40% MoS).
 
 **KKR RECOMMENDATION: SKIP**
 
