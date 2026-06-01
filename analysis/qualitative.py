@@ -273,7 +273,7 @@ def _call_deepseek(documents_text: str, ticker: str) -> dict:
         client = OpenAI(
             api_key=api_key,
             base_url="https://api.deepseek.com",
-            timeout=180.0,
+            timeout=600.0,
         )
         resp = client.chat.completions.create(
             model=MODEL_NAME,
@@ -380,6 +380,7 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
         for d in extracted_docs
     )
 
+    logger.info(f"Sending {len(documents_text)} chars to DeepSeek for analysis. This may take a few minutes...")
     result = _call_deepseek(documents_text, ticker)
     if result.get("status") == "unavailable":
         return result
