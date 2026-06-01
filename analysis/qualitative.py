@@ -21,8 +21,7 @@ import requests
 from io import BytesIO
 from pathlib import Path
 
-from google import genai
-from google.genai import types
+from openai import OpenAI
 import pdfplumber
 
 from data import cache
@@ -30,14 +29,9 @@ from data import cache
 logger = logging.getLogger("sidwell.analysis.qualitative")
 
 QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
-# v0.7.6.3: Reverted from Bedrock/Claude Haiku 4.5 → Gemini.
-# AWS Marketplace blocked UPI autopay as a payment method for Anthropic models;
-# couldn't complete the subscription without a credit/debit card on file. Going
-# back to Gemini (raised the GCP spend cap from ₹100 → ₹500 to absorb any
-# v0.7.6 cache invalidation churn). All v0.7.6 architectural work (TOC-aware
-# annual report extraction, in-memory PDF pipeline, 3 concalls, screener
-# auto-fetch) is preserved — only the LLM client layer reverts.
-MODEL_NAME = "gemini-3.5-flash"
+# v0.7.6.4: Swapped Gemini 3.5 Flash → DeepSeek V4 Pro.
+# DeepSeek provides superior reasoning for qualitative metrics with a 1M token window.
+MODEL_NAME = "deepseek-chat"
 PROMPT_VERSION = "v0.10"  # v0.10: enriched AJP drivers (exit multiple, capital structure, bridge, dilution, holdco segments, volume/price split)
 
 # Maximum characters sent to Gemini for annual reports (smart-extracted).
@@ -262,42 +256,39 @@ def _extract_generic(pdf_bytes: bytes) -> tuple[str, dict]:
     return text, {"sections_found": [], "fallback_used": True, "pages_extracted": min(80, total_pages) + 30}
 
 
-# ─── Gemini client ────────────────────────────────────────────────────────────
+# ─── DeepSeek client ──────────────────────────────────────────────────────────
 
-def _call_gemini(documents_text: str, ticker: str) -> dict:
-    """Invoke Gemini 3.5 Flash for structured qualitative extraction.
-    Reverted from Bedrock/Claude in v0.7.6.3 due to AWS Marketplace payment
-    restrictions; v0.7.6 architectural work (TOC-aware extraction, in-memory
-    pipeline, screener auto-fetch) is preserved unchanged.
+def _call_deepseek(documents_text: str, ticker: str) -> dict:
+    """Invoke DeepSeek V4 Pro for structured qualitative extraction.
     """
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
-        return _unavailable("GEMINI_API_KEY not configured")
+        return _unavailable("DEEPSEEK_API_KEY not configured")
 
     prompt_path = Path(__file__).parent / "prompts" / "qualitative_extraction.md"
     prompt_template = prompt_path.read_text(encoding="utf-8")
     prompt = f"{prompt_template}\n\n## Documents for {ticker}\n\n{documents_text}"
 
     try:
-        # Hard timeout (ms) so a slow/stuck call degrades gracefully instead of
-        # hanging the whole app (Streamlit Cloud has no request watchdog).
-        client = genai.Client(
+        client = OpenAI(
             api_key=api_key,
-            http_options=types.HttpOptions(timeout=120_000),
+            base_url="https://api.deepseek.com",
+            timeout=180.0,
         )
-        resp = client.models.generate_content(
+        resp = client.chat.completions.create(
             model=MODEL_NAME,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-            ),
+            messages=[
+                {"role": "system", "content": "You are a top-tier Wall Street buy-side analyst."},
+                {"role": "user", "content": prompt}
+            ],
+            response_format={"type": "json_object"}
         )
-        return json.loads(resp.text)
+        return json.loads(resp.choices[0].message.content)
     except json.JSONDecodeError as e:
-        return _unavailable(f"Gemini response not valid JSON: {e}")
+        return _unavailable(f"DeepSeek response not valid JSON: {e}")
     except Exception as e:
-        logger.error(f"Gemini call failed for {ticker}: {e}")
-        return _unavailable(f"Gemini error: {type(e).__name__}: {e}")
+        logger.error(f"DeepSeek call failed for {ticker}: {e}")
+        return _unavailable(f"DeepSeek error: {type(e).__name__}: {e}")
 
 
 # ─── Public API ───────────────────────────────────────────────────────────────
@@ -383,7 +374,7 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
         for d in extracted_docs
     )
 
-    result = _call_gemini(documents_text, ticker)
+    result = _call_deepseek(documents_text, ticker)
     if result.get("status") == "unavailable":
         return result
 
@@ -392,7 +383,7 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
     result["documents_used"] = [d["filename"] for d in extracted_docs]
     result["extraction_metadata"] = {"documents": extraction_metadata_docs}
     cache.set_json(cache_key, result)
-    logger.info(f"Cached fresh qualitative analysis for {ticker} (Gemini/{MODEL_NAME})")
+    logger.info(f"Cached fresh qualitative analysis for {ticker} (DeepSeek/{MODEL_NAME})")
     return result
 
 
