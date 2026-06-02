@@ -219,11 +219,11 @@ class WorkbookRenderer:
             c.font = F.FONT_HEADER; c.fill = F.FILL_HEADER; c.alignment = F.ALIGN_CENTER
             col += 1
 
-        R_G, R_REV, R_COGSP, R_COGS, R_MG, R_EBIT, R_TAX, R_NOP, R_CXP, R_CX, R_DAP, R_DA, R_NP = 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+        R_G, R_REV, R_COGSP, R_COGS, R_MG, R_EBIT, R_TAX, R_NOP, R_CXP, R_CX, R_DAP, R_DA, R_INT, R_NP = 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
         for rr, lab in [(R_G, "Revenue growth %"), (R_REV, "Revenue"), (R_COGSP, "COGS % sales"), (R_COGS, "COGS"), 
                         (R_MG, "EBIT margin %"), (R_EBIT, "EBIT"), (R_TAX, "Tax rate %"), (R_NOP, "NOPAT"),
                         (R_CXP, "CapEx % sales"), (R_CX, "CapEx"), (R_DAP, "D&A rate on PP&E %"),
-                        (R_DA, "D&A"), (R_NP, "Net Profit")]:
+                        (R_DA, "D&A"), (R_INT, "Interest Expense"), (R_NP, "Net Profit")]:
             ws.cell(row=rr, column=2, value=lab).font = F.FONT_BOLD
 
         def put_hist(row, vals, fmt=F.FMT_NUMBER):
@@ -234,6 +234,8 @@ class WorkbookRenderer:
                 c.number_format = fmt; c.font = F.FONT_INPUT
         put_hist(R_REV, hist_rev); put_hist(R_COGS, hist_cogs); put_hist(R_EBIT, hist_ebit)
         put_hist(R_NP, hist_np); put_hist(R_DA, hist_da); put_hist(R_CX, hist_capex)
+        hist_int = h_is.get("interest") or []
+        put_hist(R_INT, hist_int)
 
         # Historical driver rows (ACTUALS) — LIVE Excel formulas referencing the
         # line-item rows already in this sheet (same pattern as projection columns).
@@ -289,11 +291,13 @@ class WorkbookRenderer:
                             value=f"={col_i}{R_DA}/{BSN_IS}!{col_p}{R_PPE_BS}")
                 f.number_format = F.FMT_PERCENT; f.font = F.FONT_INPUT
 
-        # Projected Net Profit (formula). Pre-financing (= NOPAT) so the integrated
-        # balance sheet stays live and balances without debt-schedule circularity.
+        # Projected Net Profit (formula). Levered: NOPAT - Interest * (1 - Tax)
+        DEBTN = "'7_Debt_Schedule'"
+        R_INT_DEBT = 9
         for j in range(ny):
             cc = pc0 + j
-            ws.cell(row=R_NP, column=cc, value=f"={L(cc)}{R_NOP}").number_format = F.FMT_NUMBER
+            ws.cell(row=R_INT, column=cc, value=f"={DEBTN}!{L(cc)}{R_INT_DEBT}").number_format = F.FMT_NUMBER
+            ws.cell(row=R_NP, column=cc, value=f"={L(cc)}{R_NOP}-{L(cc)}{R_INT}*(1-{L(cc)}{R_TAX})").number_format = F.FMT_NUMBER
 
         # Expose cell coordinates for the FCF/BS/CF sheets
         self._is_ref = {"pc0": pc0, "ny": ny, "R_NOP": R_NOP, "R_DA": R_DA,
@@ -589,13 +593,16 @@ class WorkbookRenderer:
                     value=f"={eq_prev}+{ISN}!{col}{R_NP}*(1-{col}{R_PAYP})"
                     ).number_format = F.FMT_NUMBER
 
+            DEBTN = "'7_Debt_Schedule'"
+            R_CLOSE_DEBT = 7
             cash_prev = f"{colp}{R_CASH}" if j else repr(last_cash)
-            # Cash roll: prior + NP + D&A − ΔNWC − CapEx − Dividends
+            # Cash roll: prior + NP + D&A − ΔNWC − CapEx − Dividends + (Debt_t - Debt_{t-1})
+            debt_diff = f"({DEBTN}!{col}{R_CLOSE_DEBT}-{DEBTN}!{colp}{R_CLOSE_DEBT})" if j else f"({DEBTN}!{col}{R_CLOSE_DEBT}-{repr(last_debt)})"
             ws.cell(row=R_CASH, column=cc,
-                    value=f"={cash_prev}+{ISN}!{col}{R_NP}+{ISN}!{col}{R_DA}-{dnwc}-{ISN}!{col}{R_CX}-{col}{R_DIV}"
+                    value=f"={cash_prev}+{ISN}!{col}{R_NP}+{ISN}!{col}{R_DA}-{dnwc}-{ISN}!{col}{R_CX}-{col}{R_DIV}+{debt_diff}"
                     ).number_format = F.FMT_NUMBER
 
-            dcell = ws.cell(row=R_DEBT, column=cc, value=last_debt); dcell.number_format = F.FMT_NUMBER
+            ws.cell(row=R_DEBT, column=cc, value=f"={DEBTN}!{col}{R_CLOSE_DEBT}").number_format = F.FMT_NUMBER
             ocell = ws.cell(row=R_OTH, column=cc, value=other); ocell.number_format = F.FMT_NUMBER
             ws.cell(row=R_TA, column=cc, value=f"={col}{R_CASH}+{col}{R_AR}+{col}{R_INV}+{col}{R_OWC}+{col}{R_PPE}+{col}{R_OTH}").number_format = F.FMT_NUMBER
             ws.cell(row=R_TLE, column=cc, value=f"={col}{R_AP}+{col}{R_DEBT}+{col}{R_EQ}").number_format = F.FMT_NUMBER
@@ -624,7 +631,9 @@ class WorkbookRenderer:
         hist_fcf = [(c or 0.0) - abs(x or 0.0) for c, x in zip(hist_cfo, fap)]
 
         for rr, lab in [(3, "Net Income"), (4, "Add: Depreciation"), (5, "Less: Change in NWC"),
-                        (6, "Cash from Operations"), (7, "Less: CapEx"), (8, "Free Cash Flow")]:
+                        (6, "Cash from Operations"), (7, "Less: CapEx"), (8, "Free Cash Flow"),
+                        (9, "Proceeds from Borrowings"), (10, "Repayment of Borrowings"),
+                        (11, "Net Change in Cash")]:
             ws.cell(row=rr, column=2, value=lab).font = F.FONT_BOLD
 
         def hist(row, vals):
@@ -632,7 +641,13 @@ class WorkbookRenderer:
                 if v:
                     c = ws.cell(row=row, column=3 + i, value=v)
                     c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
+        hist_proc = hc.get("proceeds_from_borrowings") or []
+        hist_rep = hc.get("repayment_of_borrowings") or []
+        hist_rep = [-abs(x) if x else 0.0 for x in hist_rep] # outflow
+        hist_net_cash = [(c or 0.0) + (f or 0.0) + (p or 0.0) + (r or 0.0) for c, f, p, r in zip(hist_cfo, hist_capex, hist_proc, hist_rep)]
+        
         hist(3, hist_ni); hist(4, hist_da); hist(6, hist_cfo); hist(7, hist_capex); hist(8, hist_fcf)
+        hist(9, hist_proc); hist(10, hist_rep); hist(11, hist_net_cash)
 
         # ΔNWC is no longer hardcoded — it is computed live as −(NWC_t − NWC_{t-1})
         # off the Balance Sheet's Net Working Capital row (which is driven by Working
@@ -648,6 +663,9 @@ class WorkbookRenderer:
             ch = ws.cell(row=5, column=3 + i, value=f"=-({BSN}!{ccur}{R_NWC_BS}-{BSN}!{cprev}{R_NWC_BS})")
             ch.number_format = F.FMT_NUMBER; ch.font = F.FONT_LINK
 
+        DEBTN = "'7_Debt_Schedule'"
+        R_PROC_DEBT = 5
+        R_REP_DEBT = 6
         for j in range(ny):
             cc = 3 + n + j            # projection column (aligns to the IS/BS projection column)
             col, colp = L(cc), L(cc - 1)
@@ -659,23 +677,102 @@ class WorkbookRenderer:
             ws.cell(row=6, column=cc, value=f"={col}3+{col}4+{col}5").number_format = F.FMT_NUMBER
             l3 = ws.cell(row=7, column=cc, value=f"=-{ISN}!{col}{R_CX}"); l3.number_format = F.FMT_NUMBER; l3.font = F.FONT_LINK
             ws.cell(row=8, column=cc, value=f"={col}6+{col}7").number_format = F.FMT_NUMBER
+            ws.cell(row=9, column=cc, value=f"={DEBTN}!{col}{R_PROC_DEBT}").number_format = F.FMT_NUMBER
+            ws.cell(row=10, column=cc, value=f"={DEBTN}!{col}{R_REP_DEBT}").number_format = F.FMT_NUMBER
+            ws.cell(row=11, column=cc, value=f"={col}8+{col}9+{col}10").number_format = F.FMT_NUMBER
 
     def render_debt(self):
+        F = Formats
+        from openpyxl.utils import get_column_letter as L
         ws = self._create_sheet("7_Debt_Schedule")
-        self._proj_header(ws, "Debt Schedule (Rs mm) — Projected")
+        n = self._av_header(ws, "Debt Schedule (Rs mm) — Historical & Projected")
         p = self.results["proj"]
-        hbs = self.results.get("hist", {}).get("bs", {})
-        prev = ((hbs.get("borrowings") or [0.0])[-1] or 0.0) + ((hbs.get("lease_liabilities") or [0.0])[-1] or 0.0)
-        debt = p["debt"]
-        openings = [prev] + list(debt[:-1])
-        net = [cl - op for op, cl in zip(openings, debt)]
-        r = 3
-        r = self._row(ws, r, "Opening Debt (borrowings + leases)", openings)
-        r = self._row(ws, r, "Net Draw / (Paydown)", net)
-        r = self._row(ws, r, "Closing Debt", debt, bold=True)
-        if prev < 1.0 and (not debt or max(abs(x) for x in debt) < 1.0):
-            ws.cell(row=r + 1, column=2,
-                    value="(Company is effectively debt-free — schedule is nil.)").font = Formats.FONT_NORMAL
+        h = self.results.get("hist", {})
+        hbs = h.get("bs", {})
+        hcf = h.get("cf", {})
+        his = h.get("is", {})
+        ny = len(p["years"])
+        
+        R_RATIO = 3
+        R_OPEN = 4
+        R_PROC = 5
+        R_REP = 6
+        R_CLOSE = 7
+        R_RATE = 8
+        R_INT = 9
+        
+        for rr, lab in [(R_RATIO, "Debt / EBITDA ratio target"), (R_OPEN, "Opening Debt"), 
+                        (R_PROC, "Proceeds from Borrowings"), (R_REP, "Repayment of Borrowings"), 
+                        (R_CLOSE, "Closing Debt"), (R_RATE, "Effective Interest Rate %"), 
+                        (R_INT, "Interest Expense")]:
+            ws.cell(row=rr, column=2, value=lab).font = F.FONT_BOLD
+            
+        def _ln(a): return (a or [])[-n:] if n else []
+        def _g(a, i): return (a[i] if (i < len(a) and a[i] is not None) else 0.0)
+        
+        h_bor = _ln(hbs.get("borrowings"))
+        h_lea = _ln(hbs.get("lease_liabilities"))
+        h_proc = _ln(hcf.get("proceeds_from_borrowings"))
+        h_rep = _ln(hcf.get("repayment_of_borrowings"))
+        h_int = _ln(his.get("interest"))
+        
+        for i in range(n):
+            col = L(3 + i)
+            colp = L(3 + i - 1)
+            
+            c_close = ws.cell(row=R_CLOSE, column=3 + i, value=_g(h_bor, i) + _g(h_lea, i))
+            c_close.number_format = F.FMT_NUMBER; c_close.font = F.FONT_INPUT
+            
+            if _g(h_proc, i):
+                c_proc = ws.cell(row=R_PROC, column=3 + i, value=_g(h_proc, i))
+                c_proc.number_format = F.FMT_NUMBER; c_proc.font = F.FONT_INPUT
+                
+            if _g(h_rep, i):
+                c_rep = ws.cell(row=R_REP, column=3 + i, value=-abs(_g(h_rep, i)))
+                c_rep.number_format = F.FMT_NUMBER; c_rep.font = F.FONT_INPUT
+                
+            if _g(h_int, i):
+                c_int = ws.cell(row=R_INT, column=3 + i, value=_g(h_int, i))
+                c_int.number_format = F.FMT_NUMBER; c_int.font = F.FONT_INPUT
+                
+            if i > 0:
+                ws.cell(row=R_OPEN, column=3 + i, value=f"={colp}{R_CLOSE}").number_format = F.FMT_NUMBER
+                if _g(h_bor, i-1) + _g(h_lea, i-1) > 0:
+                    ws.cell(row=R_RATE, column=3 + i, value=f"={col}{R_INT}/{colp}{R_CLOSE}").number_format = F.FMT_PERCENT
+                
+        ISN = "'4_Income_Statement'"
+        ref = getattr(self, "_is_ref", {})
+        R_EBIT = ref.get("R_EBIT", 8); R_DA = ref.get("R_DA", 14)
+        
+        au = p.get("assumptions_used", {})
+        target_ratio = au.get("debt_ebitda_ratio")
+        eff_rate = au.get("effective_rate", 0.08)
+        
+        for j in range(ny):
+            cc = 3 + n + j
+            col = L(cc)
+            colp = L(cc - 1)
+            
+            if target_ratio is not None:
+                cr = ws.cell(row=R_RATIO, column=cc, value=target_ratio)
+                cr.number_format = F.FMT_NUMBER; cr.font = F.FONT_INPUT
+            
+            crate = ws.cell(row=R_RATE, column=cc, value=eff_rate)
+            crate.number_format = F.FMT_PERCENT; crate.font = F.FONT_INPUT
+            
+            ws.cell(row=R_OPEN, column=cc, value=f"={colp}{R_CLOSE}").number_format = F.FMT_NUMBER
+            
+            if target_ratio is not None:
+                ebitda_ref = f"({ISN}!{col}{R_EBIT}+{ISN}!{col}{R_DA})"
+                ws.cell(row=R_CLOSE, column=cc, value=f"=IF({ebitda_ref}>0, {col}{R_RATIO}*{ebitda_ref}, {colp}{R_CLOSE})").number_format = F.FMT_NUMBER
+                ws.cell(row=R_CLOSE, column=cc).font = F.FONT_BOLD
+            else:
+                ws.cell(row=R_CLOSE, column=cc, value=f"={colp}{R_CLOSE}").number_format = F.FMT_NUMBER
+                ws.cell(row=R_CLOSE, column=cc).font = F.FONT_BOLD
+                
+            ws.cell(row=R_PROC, column=cc, value=f"=MAX(0, {col}{R_CLOSE}-{col}{R_OPEN})").number_format = F.FMT_NUMBER
+            ws.cell(row=R_REP, column=cc, value=f"=MIN(0, {col}{R_CLOSE}-{col}{R_OPEN})").number_format = F.FMT_NUMBER
+            ws.cell(row=R_INT, column=cc, value=f"={col}{R_RATE}*{col}{R_OPEN}").number_format = F.FMT_NUMBER
 
     def render_fcf(self):
         """Live DCF: UFCF = NOPAT + D&A − CapEx − ΔNWC (NOPAT/D&A/CapEx linked from the

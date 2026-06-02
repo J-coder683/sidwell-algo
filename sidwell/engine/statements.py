@@ -53,6 +53,8 @@ class StatementsEngine:
             "equity_capital": convert_row(bs.get("equity capital", [])),
             "reserves": convert_row(bs.get("reserves", [])),
             "borrowings": convert_row(bs.get("borrowings", [])),
+            "short_term_borrowings": convert_row(bs.get("short term borrowings", [])),
+            "long_term_borrowings": convert_row(bs.get("long term borrowings", [])),
             "lease_liabilities": convert_row(bs.get("lease liabilities", [])),
             "non_controlling_int": convert_row(bs.get("non controlling int", [])),
             "trade_payables": convert_row(bs.get("trade payables", [])),
@@ -319,6 +321,32 @@ class StatementsEngine:
         tax_rate = get_val("tax_rate", default_tax)
         dep_rate = get_val("da_rate_on_block", default_dep_rate)
 
+        # Historical interest and borrowings
+        hist_interest = is_h.get("interest", [])
+        hist_borrowings = bs_h.get("borrowings", [])
+        
+        # Guard effective_rate against zero prior-year borrowings (skip those years; default ~8% if none usable)
+        eff_rates = []
+        for i in range(1, len(hist_borrowings)):
+            if hist_borrowings[i-1] and hist_borrowings[i-1] > 0:
+                # IS interest is an expense (positive in screener usually, but take abs to be sure)
+                eff_rates.append(abs(hist_interest[i] if i < len(hist_interest) else 0.0) / hist_borrowings[i-1])
+        
+        default_eff_rate = _clamp(_recency_weighted_avg(eff_rates) or 0.08, 0.04, 0.15)
+        effective_rate = get_val("pretax_cost_of_debt_override", default_eff_rate)
+
+        # Historical Debt/EBITDA
+        hist_ebitda = []
+        for ebit, da_ in zip(is_h.get("operating_profit", []), is_h.get("depreciation", [])):
+            hist_ebitda.append((ebit or 0.0) + (da_ or 0.0))
+            
+        debt_ebitda_ratios = []
+        for d, ebitda in zip(hist_borrowings, hist_ebitda):
+            if ebitda > 0 and d is not None:
+                debt_ebitda_ratios.append(d / ebitda)
+        
+        debt_ebitda_ratio = _recency_weighted_avg(debt_ebitda_ratios)
+
         # Dividend payout ratio: AJP overrides historical average.
         # Source: screener's "dividend payout %" (÷100 to get ratio).
         hist_payout = [p / 100.0 for p in is_h.get("dividend_payout_pct", []) if p]
@@ -365,6 +393,8 @@ class StatementsEngine:
             ),
             "freeze_working_capital": freeze_working_capital,
             "dividend_payout_ratio": dividend_payout,
+            "effective_rate": effective_rate,
+            "debt_ebitda_ratio": debt_ebitda_ratio,
         }
         
         # Initial values from hist
@@ -539,6 +569,10 @@ class StatementsEngine:
         
         proj["cash"] = []
         proj["debt"] = []
+        proj["debt_opening"] = []
+        proj["debt_proceeds"] = []
+        proj["debt_repayment"] = []
+        proj["interest"] = []
         proj["equity"] = []
         proj["net_fixed_assets"] = []
         proj["balance_check"] = []
@@ -546,12 +580,29 @@ class StatementsEngine:
         proj["net_income"] = []
         proj["dividends"] = []
         
-        # Simple interest rate assumed for schedule
-        interest_rate = get_val("pretax_cost_of_debt_override", 0.08)
-        
         for i in range(explicit_years):
+            # Deterministic Debt Forecast
+            ebitda = proj["ebit"][i] + proj["da"][i]
+            
+            proj["debt_opening"].append(debt_balance)
+            
+            if ebitda <= 0 or debt_ebitda_ratio is None:
+                closing_debt = debt_balance
+            else:
+                closing_debt = max(0.0, debt_ebitda_ratio * ebitda)
+            
+            net_borrowing = closing_debt - debt_balance
+            proceeds = max(0.0, net_borrowing)
+            repayments = max(0.0, -net_borrowing)
+            
+            proj["debt_proceeds"].append(proceeds)
+            proj["debt_repayment"].append(repayments)
+            
             # Interest based on beginning debt
-            interest_exp = debt_balance * interest_rate
+            interest_exp = debt_balance * effective_rate
+            proj["interest"].append(interest_exp)
+            
+            debt_balance = closing_debt
             
             # Recalculate Net Income (levered)
             ebit = proj["ebit"][i]
@@ -563,8 +614,6 @@ class StatementsEngine:
             proj["net_income"].append(net_income)
 
             # Dividends: financing outflow = NI × payout ratio.
-            # Subtracting from BOTH equity (retained earnings only) AND cash keeps
-            # the balance sheet tying:  ΔEquity + ΔCash from dividends cancel.
             dividends = net_income * dividend_payout
             proj["dividends"].append(dividends)
             
@@ -576,28 +625,9 @@ class StatementsEngine:
             equity_balance += net_income * (1.0 - dividend_payout)
             proj["equity"].append(equity_balance)
             
-            # Levered Free Cash Flow (for debt sweep)
-            cfo = net_income + proj["da"][i] - proj["nwc_change"][i]
-            cfi = -proj["capex"][i]
-            free_cash_flow = cfo + cfi
+            # Cash Roll: ADD net borrowing as a financing inflow
+            cash_balance = cash_balance + net_income + proj["da"][i] - proj["nwc_change"][i] - proj["capex"][i] - dividends + net_borrowing
             
-            # Minimum cash balance constraint (e.g. 5% of sales)
-            min_cash = proj["revenue"][i] * 0.05
-            
-            # Dividends are a financing outflow — deducted from available cash
-            cash_available_for_debt = cash_balance + free_cash_flow - dividends - min_cash
-            
-            if cash_available_for_debt > 0:
-                # Pay down debt
-                debt_paydown = min(debt_balance, cash_available_for_debt)
-                debt_balance -= debt_paydown
-                cash_balance = cash_balance + free_cash_flow - dividends - debt_paydown
-            else:
-                # Borrow from revolver
-                revolver_draw = -cash_available_for_debt
-                debt_balance += revolver_draw
-                cash_balance = min_cash
-                
             proj["cash"].append(cash_balance)
             proj["debt"].append(debt_balance)
             
