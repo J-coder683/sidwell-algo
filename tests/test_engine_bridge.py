@@ -300,3 +300,22 @@ def test_heuristic_financial_sub_caveat():
     assert res["valuation_method"] == "EV_bridge"
     assert res["valuation_caveat"] is not None
     assert "Consolidated debt is very large" in res["valuation_caveat"]
+
+
+# ---------------------------------------------------------------------------
+# Test 13: Holdco with empty segments fallback
+# 
+# is_holdco=True, but segments=[]
+# Should fall back to EV bridge.
+# ---------------------------------------------------------------------------
+def test_holdco_empty_segments_fallback():
+    ajp = _make_ajp([], is_holdco=True)
+    bs = _make_bs(cash=100.0)
+    
+    res = BridgeEngine.calculate(ev=1000.0, hist_bs=bs, ajp=ajp)
+    
+    assert res["sotp_used"] is False
+    assert res["valuation_method"] == "EV_bridge"
+    assert res["equity_value"] == 1100.0
+    assert res["valuation_caveat"] is not None
+    assert "missing or empty" in res["valuation_caveat"]
