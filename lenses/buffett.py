@@ -132,7 +132,11 @@ def evaluate_buffett_lens(
     # 4. Earnings predictability
     # Test: 0.05 < revenue_cagr_4y < 0.30 AND stdev(yoy_growth, ddof=1) < 0.10
     hist_revenue_cagr = dcf_results["assumptions"]["revenue_growth"]
-    hist_growth_rates = [(hist_revenue[i] / hist_revenue[i-1] - 1.0) for i in range(1, len(hist_revenue))]
+    hist_growth_rates = [
+        (hist_revenue[i] / hist_revenue[i - 1] - 1.0)
+        for i in range(1, len(hist_revenue))
+        if hist_revenue[i - 1]   # skip years where prior revenue is 0 or None
+    ]
     hist_growth_std = np.std(hist_growth_rates, ddof=1) if len(hist_growth_rates) > 1 else 0.0
     check_4_passed = (0.05 < hist_revenue_cagr < 0.30) and (hist_growth_std < 0.10)
     checks["4_predictability"] = {
