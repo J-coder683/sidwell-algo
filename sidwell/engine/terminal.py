@@ -5,7 +5,11 @@ from sidwell.ajp.loader import AJPLoader
 class TerminalEngine:
     @staticmethod
     def calculate(proj: Dict[str, Any], wacc: float, ajp: AJP) -> Dict[str, Any]:
-        term_g = float(AJPLoader.get_assumption_or_fallback(ajp, "terminal_growth", 0.02, "Nominal GDP").value)
+        _au = proj.get("assumptions_used", {})
+        if "terminal_growth" in _au:
+            term_g = float(_au["terminal_growth"])
+        else:
+            term_g = float(AJPLoader.get_assumption_or_fallback(ajp, "terminal_growth", 0.02, "Nominal GDP").value)
         exit_mult = float(AJPLoader.get_assumption_or_fallback(ajp, "exit_ev_ebitda_multiple", 10.0, "Peer median").value)
         
         final_ufcf = proj["ufcf"][-1]

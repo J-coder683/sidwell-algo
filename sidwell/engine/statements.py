@@ -2,6 +2,8 @@ from typing import Dict, Any, List, Optional
 from sidwell.ajp.schema import AJP, AJPAssumption
 from sidwell.ajp.loader import AJPLoader
 
+VOLUME_STAGNANT_THRESHOLD = 0.005   # 0.5% — below this, real volume growth ≈ 0
+
 class StatementsEngine:
     """Handles mapping historical data from fin['statements'] and projecting the 3-statement model."""
     
@@ -308,6 +310,28 @@ class StatementsEngine:
 
         rev_g_s1 = get_val("stage1_revenue_growth", default_growth)
         term_g = get_val("terminal_growth", 0.02)
+        
+        _s1_assumption = AJPLoader.get_assumption_or_fallback(ajp, "stage1_revenue_growth", None, "")
+        term_g_uncapped = term_g
+        term_g_volume_capped = False
+        term_g_caveat = ""
+        _split = getattr(_s1_assumption, "split", None)
+        if isinstance(_split, dict):
+            try:
+                _vol = float(_split.get("volume"))
+                _pri = float(_split.get("price"))
+            except (TypeError, ValueError):
+                _vol = _pri = None
+            if _vol is not None and _pri is not None and _vol <= VOLUME_STAGNANT_THRESHOLD:
+                _cap = max(_pri, 0.0)   # floor at 0; perpetual growth ≤ pricing pass-through
+                if _cap < term_g:
+                    term_g_volume_capped = True
+                    term_g_caveat = (
+                        f"Terminal growth capped from {term_g_uncapped:.3f} to {_cap:.3f}: "
+                        f"near-term volume growth ({_vol:.3f}) is stagnant, so perpetual growth "
+                        f"cannot exceed price growth ({_pri:.3f})."
+                    )
+                    term_g = _cap
         target_margin = get_val("ebit_margin_target", _margin)
 
         # normalized_ebit_margin: mid-cycle base margin for cyclical names (AI-supplied).
@@ -378,6 +402,9 @@ class StatementsEngine:
         proj["assumptions_used"] = {
             "stage1_revenue_growth": rev_g_s1, "hist_revenue_cagr": hist_cagr,
             "terminal_growth": term_g,
+            "terminal_growth_uncapped": term_g_uncapped,
+            "terminal_growth_volume_capped": term_g_volume_capped,
+            "terminal_growth_caveat": term_g_caveat,
             "ebit_margin_start": _norm_margin if _norm_margin is not None else _margin,
             "ebit_margin_target": target_margin,
             "normalized_ebit_margin": _norm_margin,

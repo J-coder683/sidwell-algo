@@ -361,3 +361,73 @@ def test_ajp_working_capital_days_overrides_screener():
         assert abs(nwc - implied) < 1.0, (
             f"year {i}: nwc {nwc:.1f} vs AJP-implied {implied:.1f}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Test: Stagnant volume terminal growth cap
+# ---------------------------------------------------------------------------
+def _make_ajp_with_split(volume: float, price: float, term_g: float) -> AJP:
+    ajp = _make_ajp({"terminal_growth": term_g})
+    # Overwrite the stage1_revenue_growth assumption
+    for a in ajp.assumptions:
+        if a.driver_id == "stage1_revenue_growth":
+            a.value = 0.10
+            a.split = {"volume": volume, "price": price}
+    return ajp
+
+def test_terminal_growth_cap_stagnant_volume():
+    """1. Stagnant volume caps terminal growth"""
+    hist = _make_hist()
+    ajp = _make_ajp_with_split(volume=0.0, price=0.03, term_g=0.06)
+    proj = StatementsEngine.run_projections(hist, ajp)
+    
+    au = proj["assumptions_used"]
+    assert au["terminal_growth"] == 0.03
+    assert au["terminal_growth_uncapped"] == 0.06
+    assert au["terminal_growth_volume_capped"] is True
+    assert "Terminal growth capped" in au["terminal_growth_caveat"]
+
+def test_terminal_growth_no_cap_healthy_volume():
+    """2. Healthy volume -> no cap"""
+    hist = _make_hist()
+    ajp = _make_ajp_with_split(volume=0.04, price=0.03, term_g=0.06)
+    proj = StatementsEngine.run_projections(hist, ajp)
+    
+    au = proj["assumptions_used"]
+    assert au["terminal_growth"] == 0.06
+    assert au["terminal_growth_uncapped"] == 0.06
+    assert au["terminal_growth_volume_capped"] is False
+    assert au["terminal_growth_caveat"] == ""
+
+def test_terminal_growth_no_split():
+    """3. No split -> no cap (backward compat)"""
+    hist = _make_hist()
+    ajp = _make_ajp({"terminal_growth": 0.05})
+    # Ensure no split
+    for a in ajp.assumptions:
+        if a.driver_id == "stage1_revenue_growth":
+            a.split = None
+    
+    proj = StatementsEngine.run_projections(hist, ajp)
+    
+    au = proj["assumptions_used"]
+    assert au["terminal_growth"] == 0.05
+    assert au["terminal_growth_uncapped"] == 0.05
+    assert au["terminal_growth_volume_capped"] is False
+    assert au["terminal_growth_caveat"] == ""
+
+def test_terminal_engine_consistency():
+    """4. Terminal engine consistency with capped growth"""
+    from sidwell.engine.terminal import TerminalEngine
+    hist = _make_hist()
+    ajp = _make_ajp_with_split(volume=0.0, price=0.03, term_g=0.06)
+    proj = StatementsEngine.run_projections(hist, ajp)
+    
+    wacc = 0.10
+    term_res = TerminalEngine.calculate(proj, wacc, ajp)
+    
+    # Assert gordon_tv uses the capped g (0.03) instead of uncapped (0.06)
+    # gordon_tv = final_ufcf * (1 + 0.03) / (wacc - 0.03)
+    final_ufcf = proj["ufcf"][-1]
+    expected_tv = final_ufcf * (1 + 0.03) / (wacc - 0.03)
+    assert abs(term_res["gordon_tv"] - expected_tv) < 1e-4
