@@ -167,12 +167,12 @@ def test_workbook_bs_mirrors_working_capital_days_model():
 
     from openpyxl.utils import get_column_letter as L
     col = L(c)
-    nwc_formula = str(bs.cell(row=17, column=c).value)   # R_NWC
-    owc_formula = str(bs.cell(row=9, column=c).value)    # R_OWC
-    ap_formula = str(bs.cell(row=13, column=c).value)    # R_AP
+    nwc_formula = str(bs.cell(row=19, column=c).value)   # R_NWC (shifted +2 after dividend rows 16,17)
+    owc_formula = str(bs.cell(row=9, column=c).value)    # R_OWC (unchanged)
+    ap_formula = str(bs.cell(row=13, column=c).value)    # R_AP (unchanged)
     
     assert "/365" in nwc_formula, f"NWC must use wc_days: {nwc_formula}"
-    assert f"{col}17-({col}7+{col}8-{col}13)" in owc_formula, f"OWC must be derived: {owc_formula}"
+    assert f"{col}19-({col}7+{col}8-{col}13)" in owc_formula, f"OWC must be derived: {owc_formula}"
     assert f"{col}5/365" in ap_formula, f"AP must be independent: {ap_formula}"
 
     # FCF sheet ΔNWC equals the engine's and is negative (cash released).

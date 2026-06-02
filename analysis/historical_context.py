@@ -65,6 +65,7 @@ def build_historical_context_md(financials: dict) -> str:
     tax   = is_h.get("tax") or []
     pbt   = is_h.get("profit_before_tax") or []
     cogs  = is_h.get("cogs") or []
+    divp  = is_h.get("dividend_payout_pct") or []   # screener's payout % (not ratio)
 
     ar_bs  = bs_h.get("trade_receivables") or []
     inv_bs = bs_h.get("inventories") or []
@@ -94,6 +95,9 @@ def build_historical_context_md(financials: dict) -> str:
     avg_cx   = _avg_ratio(capex, sales) if capex else None
     avg_tax  = _avg_ratio(tax, pbt) if pbt else None
 
+    avg_pay_vals = [p / 100.0 for p in divp if p]
+    avg_pay = sum(avg_pay_vals) / len(avg_pay_vals) if avg_pay_vals else None
+
     parts = []
     if cagr3 is not None:
         parts.append(f"3y rev CAGR {cagr3 * 100:.1f}%")
@@ -105,6 +109,8 @@ def build_historical_context_md(financials: dict) -> str:
         parts.append(f"avg CapEx/Sales {avg_cx * 100:.1f}%")
     if avg_tax is not None:
         parts.append(f"avg tax rate {avg_tax * 100:.1f}%")
+    if avg_pay is not None:
+        parts.append(f"avg payout {avg_pay * 100:.1f}%")
     summary = " | ".join(parts) if parts else "Insufficient data"
 
     # ── build output ──────────────────────────────────────────────────────────
@@ -114,8 +120,8 @@ def build_historical_context_md(financials: dict) -> str:
         f"**Summary**: {summary}",
         "",
         "### P&L",
-        "| FY | Revenue (INR mm) | YoY Growth % | EBIT margin % | CapEx/Sales % | Tax % |",
-        "|---|---|---|---|---|---|",
+        "| FY | Revenue (INR mm) | YoY Growth % | EBIT margin % | CapEx/Sales % | Tax % | Dividend payout % |",
+        "|---|---|---|---|---|---|---|",
     ]
 
     for i, fy in enumerate(years):
@@ -135,7 +141,10 @@ def build_historical_context_md(financials: dict) -> str:
         cx_s   = _pct1(cx_v  / rev_v  if (cx_v  is not None and rev_v)           else None)
         tax_p  = _pct1(tax_v / pbt_v  if (tax_v is not None and pbt_v and pbt_v > 0) else None)
 
-        lines.append(f"| {fy} | {_fmt(rev_v)} | {yoy} | {ebit_m} | {cx_s} | {tax_p} |")
+        dp_v = divp[i] if i < len(divp) else None
+        div_s = _pct1(dp_v / 100.0 if (dp_v is not None and dp_v) else None)
+
+        lines.append(f"| {fy} | {_fmt(rev_v)} | {yoy} | {ebit_m} | {cx_s} | {tax_p} | {div_s} |")
 
     lines += [
         "",

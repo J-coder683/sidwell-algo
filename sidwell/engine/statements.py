@@ -42,6 +42,7 @@ class StatementsEngine:
             "tax": convert_row(pl.get("tax", [])),
             "tax_pct": convert_ratio_row(pl.get("tax %", [])),  # screener's effective tax rate (%)
             "net_profit": convert_row(pl.get("net profit", [])),
+            "dividend_payout_pct": convert_ratio_row(pl.get("dividend payout %", [])),  # screener's payout %
             # Bank specific
             "revenue": convert_row(pl.get("revenue", [])),
             "financing_profit": convert_row(pl.get("financing profit", []))
@@ -317,6 +318,17 @@ class StatementsEngine:
         target_da_sales = 0.0  # retained for compatibility; D&A now uses a PP&E schedule
         tax_rate = get_val("tax_rate", default_tax)
         dep_rate = get_val("da_rate_on_block", default_dep_rate)
+
+        # Dividend payout ratio: AJP overrides historical average.
+        # Source: screener's "dividend payout %" (÷100 to get ratio).
+        hist_payout = [p / 100.0 for p in is_h.get("dividend_payout_pct", []) if p]
+        default_payout = _clamp(_recency_weighted_avg(hist_payout) or 0.0, 0.0, 1.0)
+        _ajp_pay = AJPLoader.get_assumption_or_fallback(ajp, "dividend_payout_ratio", None, "")
+        dividend_payout = (
+            _clamp(float(_ajp_pay.value), 0.0, 1.0)
+            if _ajp_pay.value is not None
+            else default_payout
+        )
         
         # Working capital fallbacks
         dso_days = get_val("dso_days", default_dso)
@@ -352,6 +364,7 @@ class StatementsEngine:
                 if nwc_ratio_caveat else None
             ),
             "freeze_working_capital": freeze_working_capital,
+            "dividend_payout_ratio": dividend_payout,
         }
         
         # Initial values from hist
@@ -531,6 +544,7 @@ class StatementsEngine:
         proj["balance_check"] = []
         proj["taxes"] = []
         proj["net_income"] = []
+        proj["dividends"] = []
         
         # Simple interest rate assumed for schedule
         interest_rate = get_val("pretax_cost_of_debt_override", 0.08)
@@ -547,13 +561,19 @@ class StatementsEngine:
             
             proj["taxes"].append(tax)
             proj["net_income"].append(net_income)
+
+            # Dividends: financing outflow = NI × payout ratio.
+            # Subtracting from BOTH equity (retained earnings only) AND cash keeps
+            # the balance sheet tying:  ΔEquity + ΔCash from dividends cancel.
+            dividends = net_income * dividend_payout
+            proj["dividends"].append(dividends)
             
             # Update Fixed Assets
             net_fixed_assets = net_fixed_assets + proj["capex"][i] - proj["da"][i]
             proj["net_fixed_assets"].append(net_fixed_assets)
             
-            # Update Equity
-            equity_balance += net_income
+            # Update Equity: only retained earnings (NI × (1 − payout))
+            equity_balance += net_income * (1.0 - dividend_payout)
             proj["equity"].append(equity_balance)
             
             # Levered Free Cash Flow (for debt sweep)
@@ -564,13 +584,14 @@ class StatementsEngine:
             # Minimum cash balance constraint (e.g. 5% of sales)
             min_cash = proj["revenue"][i] * 0.05
             
-            cash_available_for_debt = cash_balance + free_cash_flow - min_cash
+            # Dividends are a financing outflow — deducted from available cash
+            cash_available_for_debt = cash_balance + free_cash_flow - dividends - min_cash
             
             if cash_available_for_debt > 0:
                 # Pay down debt
                 debt_paydown = min(debt_balance, cash_available_for_debt)
                 debt_balance -= debt_paydown
-                cash_balance = cash_balance + free_cash_flow - debt_paydown
+                cash_balance = cash_balance + free_cash_flow - dividends - debt_paydown
             else:
                 # Borrow from revolver
                 revolver_draw = -cash_available_for_debt

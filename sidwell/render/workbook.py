@@ -201,6 +201,8 @@ class WorkbookRenderer:
         hist_np = h_is.get("net_profit") or []
         hist_da = h_is.get("depreciation") or []
         hist_capex = h_cf.get("derived_capex") or [abs(c) for c in (h_cf.get("fixed_assets_purchased") or [])]
+        hist_ppe = (hist.get("bs", {}) or {}).get("fixed_assets") or []
+        hpe = (hist_ppe or [])[-n:] if n else []   # last-n net block values for D&A formula
         years = proj["years"]
         ny = len(years)
 
@@ -233,39 +235,60 @@ class WorkbookRenderer:
         put_hist(R_REV, hist_rev); put_hist(R_COGS, hist_cogs); put_hist(R_EBIT, hist_ebit)
         put_hist(R_NP, hist_np); put_hist(R_DA, hist_da); put_hist(R_CX, hist_capex)
 
-        # Historical driver ratios (ACTUALS) — computed from the line items above so the
-        # past columns aren't blank: growth %, COGS %, EBIT margin %, tax %, NOPAT,
-        # CapEx %, D&A-rate-on-PP&E %.
-        htax = h_is.get("tax_pct") or []          # screener effective tax % (e.g. 25.4)
-        hist_ppe = (hist.get("bs", {}) or {}).get("fixed_assets") or []
-        def _ln(a):
-            return (a or [])[-n:] if n else []
-        hr, hco, heb, hda, hcx, htx, hpe = (_ln(hist_rev), _ln(hist_cogs), _ln(hist_ebit),
-                                            _ln(hist_da), _ln(hist_capex), _ln(htax), _ln(hist_ppe))
+        # Historical driver rows (ACTUALS) — LIVE Excel formulas referencing the
+        # line-item rows already in this sheet (same pattern as projection columns).
+        # Tax % stays a screener-input value (no Tax/PBT row exists on this sheet).
+        # D&A rate on PP&E cross-references the BS Net Fixed Assets row (R_PPE_BS=10).
+        BSN_IS = "'5_Balance_Sheet'"
+        R_PPE_BS = 10                       # Net Fixed Assets row on the BS sheet
 
-        def put_pct(row, fn):
-            for i in range(n):
-                v = fn(i)
-                if v is None:
-                    continue
-                c = ws.cell(row=row, column=3 + i, value=v)
+        htax = h_is.get("tax_pct") or []    # screener effective tax % (e.g. 25.4)
+        def _g_val(a, i):
+            return (a[i] if (i < len(a) and a[i]) else None)
+
+        for i in range(n):
+            col_i = get_column_letter(3 + i)    # this column (current actual year)
+            col_p = get_column_letter(3 + i - 1)  # prior column (previous actual year)
+
+            # Revenue growth %: blank for first column (no prior year)
+            if i > 0:
+                f = ws.cell(row=R_G, column=3 + i,
+                            value=f"={col_i}{R_REV}/{col_p}{R_REV}-1")
+                f.number_format = F.FMT_PERCENT; f.font = F.FONT_INPUT
+
+            # COGS % sales
+            f = ws.cell(row=R_COGSP, column=3 + i,
+                        value=f"={col_i}{R_COGS}/{col_i}{R_REV}")
+            f.number_format = F.FMT_PERCENT; f.font = F.FONT_INPUT
+
+            # EBIT margin %
+            f = ws.cell(row=R_MG, column=3 + i,
+                        value=f"={col_i}{R_EBIT}/{col_i}{R_REV}")
+            f.number_format = F.FMT_PERCENT; f.font = F.FONT_INPUT
+
+            # Tax % — keep as screener-input value (no Tax/PBT rows on IS sheet)
+            tx = _g_val(htax, i)
+            if tx:
+                c = ws.cell(row=R_TAX, column=3 + i, value=tx / 100.0)
                 c.number_format = F.FMT_PERCENT; c.font = F.FONT_INPUT
 
-        def _g(a, i):
-            return a[i] if (i < len(a) and a[i]) else None
-        put_pct(R_G, lambda i: (hr[i] / hr[i - 1] - 1.0) if (i > 0 and _g(hr, i) and _g(hr, i - 1)) else None)
-        put_pct(R_COGSP, lambda i: (hco[i] / hr[i]) if (_g(hco, i) and _g(hr, i)) else None)
-        put_pct(R_MG, lambda i: (heb[i] / hr[i]) if (_g(heb, i) and _g(hr, i)) else None)
-        put_pct(R_TAX, lambda i: (htx[i] / 100.0) if _g(htx, i) else None)
-        put_pct(R_CXP, lambda i: (hcx[i] / hr[i]) if (_g(hcx, i) and _g(hr, i)) else None)
-        # D&A rate is on the PRIOR-year net block (PP&E schedule), not on sales.
-        put_pct(R_DAP, lambda i: (hda[i] / hpe[i - 1]) if (i > 0 and _g(hda, i) and _g(hpe, i - 1)) else None)
-        # NOPAT actual = EBIT × (1 − effective tax)
-        for i in range(n):
-            if _g(heb, i):
-                tr = (htx[i] / 100.0) if _g(htx, i) else au.get("tax_rate", 0.25)
-                c = ws.cell(row=R_NOP, column=3 + i, value=heb[i] * (1 - tr))
-                c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
+            # NOPAT = EBIT × (1 − Tax %) — formula refs same-column cells
+            f = ws.cell(row=R_NOP, column=3 + i,
+                        value=f"={col_i}{R_EBIT}*(1-{col_i}{R_TAX})")
+            f.number_format = F.FMT_NUMBER; f.font = F.FONT_INPUT
+
+            # CapEx % sales
+            f = ws.cell(row=R_CXP, column=3 + i,
+                        value=f"={col_i}{R_CX}/{col_i}{R_REV}")
+            f.number_format = F.FMT_PERCENT; f.font = F.FONT_INPUT
+
+            # D&A rate on PP&E: D&A[i] / Net Fixed Assets[i-1] — cross-sheet BS ref.
+            # First actual year has no prior-year PPE column on BS → leave blank.
+            if i > 0:
+                f = ws.cell(row=R_DAP, column=3 + i,
+                            value=f"={col_i}{R_DA}/{BSN_IS}!{col_p}{R_PPE_BS}")
+                f.number_format = F.FMT_PERCENT; f.font = F.FONT_INPUT
+
         # Projected Net Profit (formula). Pre-financing (= NOPAT) so the integrated
         # balance sheet stays live and balances without debt-schedule circularity.
         for j in range(ny):
@@ -310,10 +333,11 @@ class WorkbookRenderer:
         """Integrated, balancing Balance Sheet. Projections are LIVE formulas that
         link to the Income Statement (Revenue, CapEx, D&A, Net Profit): AR/Inv/AP
         from DSO/DIO/DPO × revenue, PP&E rolls (prior + CapEx − D&A), Equity rolls
-        (prior + Net Profit), Cash rolls (prior + NP + D&A − ΔNWC − CapEx), debt is
-        held flat and a constant 'other net assets' plug makes year-0 tie. Net income
-        is pre-financing (≈ NOPAT) so there is NO circular reference — opens clean —
-        yet the Balance Check is 0 every year. Edit any driver and it re-balances."""
+        (prior + Net Profit × (1−payout)), Cash rolls (prior + NP + D&A − ΔNWC − CapEx
+        − Dividends), debt is held flat and a constant 'other net assets' plug makes
+        year-0 tie. Net income is pre-financing (≈ NOPAT) so there is NO circular
+        reference — opens clean — yet the Balance Check is 0 every year. Edit any
+        driver and it re-balances."""
         from openpyxl.utils import get_column_letter as L
         F = Formats
         ws = self._create_sheet("5_Balance_Sheet")
@@ -337,15 +361,9 @@ class WorkbookRenderer:
         other = (last_ap + last_debt + last_eq) - (last_cash + last_ar + last_inv + last_ppe)
         dso, dio, dpo = au.get("dso_days", 45.0), au.get("dio_days", 30.0), au.get("dpo_days", 45.0)
         # Financials freeze operating working capital flat at the historical anchor
-        # (their AR/AP are settlement float, not WC), so the live formulas hold
-        # AR/Inv/AP constant and ΔNWC = 0 — mirroring the engine exactly.
         frozen_wc = self.results["proj"].get("freeze_working_capital", False)
 
-        # Working Capital Days model (non-financial): NWC is pinned to screener's
-        # signed Working Capital Days, with AP derived so AR+Inv−AP = the net. The
-        # Year-0 anchor and plug use the same WC-days basis the engine does, so the
-        # live BS reproduces the engine and balances. The DPO row is repurposed to
-        # hold the signed "WC Days (net)" input.
+        # Working Capital Days model
         wc_days = au.get("working_capital_days", None)
         his = self.results.get("hist", {}).get("is", {})
         _sales = his.get("sales") or his.get("revenue") or []
@@ -357,77 +375,184 @@ class WorkbookRenderer:
             last_owc = nwc_net_0 - (last_ar + last_inv - last_ap)
             other = (last_ap + last_debt + last_eq) - (last_cash + last_ar + last_inv + last_owc + last_ppe)
 
-        R_DSO, R_DIO, R_DPO, R_CASH, R_AR, R_INV, R_OWC, R_PPE, R_OTH, R_TA = 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
-        R_AP, R_DEBT, R_EQ, R_TLE, R_NWC, R_BC = 13, 14, 15, 16, 17, 18
-        _dpo_label = "DPO (days)"
-        for rr, lab in [(R_DSO, "DSO (days)"), (R_DIO, "DIO (days)"), (R_DPO, _dpo_label),
+        # Dividend payout
+        div_payout = au.get("dividend_payout_ratio", 0.0) or 0.0
+
+        # Row layout
+        R_DSO, R_DIO, R_DPO = 3, 4, 5
+        R_CASH, R_AR, R_INV, R_OWC, R_PPE, R_OTH, R_TA = 6, 7, 8, 9, 10, 11, 12
+        R_AP, R_DEBT, R_EQ = 13, 14, 15
+        R_PAYP, R_DIV = 16, 17          # new: payout % driver + dividends outflow
+        R_TLE, R_NWC, R_BC = 18, 19, 20
+
+        for rr, lab in [(R_DSO, "DSO (days)"), (R_DIO, "DIO (days)"), (R_DPO, "DPO (days)"),
                         (R_CASH, "Cash"), (R_AR, "Trade Receivables"), (R_INV, "Inventories"),
-                        (R_OWC, "Other net working capital"), (R_PPE, "Net Fixed Assets"), 
+                        (R_OWC, "Other net working capital"), (R_PPE, "Net Fixed Assets"),
                         (R_OTH, "Other net assets (plug)"), (R_TA, "Total Assets"),
                         (R_AP, "Trade Payables"), (R_DEBT, "Debt"), (R_EQ, "Equity"),
-                        (R_TLE, "Total Liab + Equity"), (R_NWC, "Net Working Capital"), (R_BC, "Balance Check")]:
+                        (R_PAYP, "Dividend payout %"), (R_DIV, "Dividends"),
+                        (R_TLE, "Total Liab + Equity"), (R_NWC, "Net Working Capital"),
+                        (R_BC, "Balance Check")]:
             ws.cell(row=rr, column=2, value=lab).font = F.FONT_BOLD
 
+        # ── Historical input rows (blue values) ──────────────────────────────
         def hist(row, key):
             for i, v in enumerate((hb.get(key) or [])[-n:] if n else []):
                 if v:
-                    c = ws.cell(row=row, column=3 + i, value=v); c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
+                    c = ws.cell(row=row, column=3 + i, value=v)
+                    c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
         hist(R_CASH, "cash_equivalents"); hist(R_AR, "trade_receivables")
         hist(R_INV, "inventories"); hist(R_PPE, "fixed_assets"); hist(R_AP, "trade_payables")
 
-        # Historical DERIVED rows (ACTUALS): days, net WC, plug, Debt/Equity, totals,
-        # balance check — computed per year so the past columns aren't blank and tie.
+        # Historical Equity (capital + reserves)
+        h_eq_c = (hb.get("equity_capital") or [])[-n:] if n else []
+        h_res  = (hb.get("reserves")       or [])[-n:] if n else []
+        for i in range(n):
+            eq_v = (h_eq_c[i] if i < len(h_eq_c) else 0.0) + (h_res[i] if i < len(h_res) else 0.0)
+            if eq_v:
+                c = ws.cell(row=R_EQ, column=3 + i, value=eq_v)
+                c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
+
+        # Historical Debt
+        h_bor = (hb.get("borrowings")        or [])[-n:] if n else []
+        h_lea = (hb.get("lease_liabilities") or [])[-n:] if n else []
+        for i in range(n):
+            debt_v = (h_bor[i] if i < len(h_bor) else 0.0) + (h_lea[i] if i < len(h_lea) else 0.0)
+            if debt_v:
+                c = ws.cell(row=R_DEBT, column=3 + i, value=debt_v)
+                c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
+
+        # Historical Dividend payout % (screener value)
+        h_pay = (self.results.get("hist", {}).get("is", {}).get("dividend_payout_pct") or [])[-n:] if n else []
+        for i in range(n):
+            pv = h_pay[i] if i < len(h_pay) else 0.0
+            if pv:
+                c = ws.cell(row=R_PAYP, column=3 + i, value=pv / 100.0)
+                c.number_format = F.FMT_PERCENT; c.font = F.FONT_INPUT
+
+        # ── Historical DERIVED rows — LIVE Excel formulas (same pattern as projection) ──
+        # DSO = AR / IS.Revenue × 365
+        # DIO = INV / IS.COGS × 365
+        # DPO = AP / IS.COGS × 365
+        # OWC = NWC − (AR+INV−AP)       (or 0 when no wc_days in actuals)
+        # OTH = stays a Python-computed plug (it IS the balancing item)
+        # TA  = CASH+AR+INV+OWC+PPE+OTH
+        # TLE = AP+DEBT+EQ
+        # NWC = AR+INV−AP+OWC
+        # BC  = TA−TLE
+        # Dividends (historical) = NI (from IS) × payout %
         _ratios_h = self.results.get("hist", {}).get("ratios", {}) or {}
         _rev_h = his.get("sales") or his.get("revenue") or []
+
         def _g(a, i):
             return (a[i] if (i < len(a) and a[i] is not None) else 0.0)
         def _ln(a):
             return (a or [])[-n:] if n else []
-        _ar, _inv, _ap, _cash, _ppe = (_ln(hb.get("trade_receivables")), _ln(hb.get("inventories")),
-                                       _ln(hb.get("trade_payables")), _ln(hb.get("cash_equivalents")),
-                                       _ln(hb.get("fixed_assets")))
-        _bor, _lea, _eqc, _res = (_ln(hb.get("borrowings")), _ln(hb.get("lease_liabilities")),
-                                  _ln(hb.get("equity_capital")), _ln(hb.get("reserves")))
-        _dso_h, _dio_h, _dpo_h, _wcd_h = (_ln(_ratios_h.get("debtor_days")), _ln(_ratios_h.get("inventory_days")),
-                                          _ln(_ratios_h.get("days_payable")), _ln(_ratios_h.get("working_capital_days")))
-        _revh = _ln(_rev_h)
+
+        _ar_h  = _ln(hb.get("trade_receivables"))
+        _inv_h = _ln(hb.get("inventories"))
+        _ap_h  = _ln(hb.get("trade_payables"))
+        _bor_h = _ln(hb.get("borrowings"))
+        _lea_h = _ln(hb.get("lease_liabilities"))
+        _eqc_h = _ln(hb.get("equity_capital"))
+        _res_h = _ln(hb.get("reserves"))
+        _wcd_h = _ln(_ratios_h.get("working_capital_days"))
+        _revh  = _ln(_rev_h)
+        _ppe_h = _ln(hb.get("fixed_assets"))
+        _cash_h = _ln(hb.get("cash_equivalents"))
         _last_nwc_hist = last_nwc
+
         for i in range(n):
-            ar, inv, ap = _g(_ar, i), _g(_inv, i), _g(_ap, i)
-            cash, ppe = _g(_cash, i), _g(_ppe, i)
-            debt, eq, rev = _g(_bor, i) + _g(_lea, i), _g(_eqc, i) + _g(_res, i), _g(_revh, i)
-            wcd = _g(_wcd_h, i)
-            trade = ar + inv - ap
-            nwc = (wcd / 365.0) * rev if (wcd and rev) else trade
-            owc = nwc - trade
-            plug = (ap + debt + eq) - (cash + ar + inv + owc + ppe)
-            ta, tle = cash + ar + inv + owc + ppe + plug, ap + debt + eq
-            def _w(row, val, fmt=F.FMT_NUMBER):
-                c = ws.cell(row=row, column=3 + i, value=val); c.number_format = fmt; c.font = F.FONT_INPUT
-            if _g(_dso_h, i): _w(R_DSO, _g(_dso_h, i), '0.0')
-            if _g(_dio_h, i): _w(R_DIO, _g(_dio_h, i), '0.0')
-            if _g(_dpo_h, i): _w(R_DPO, _g(_dpo_h, i), '0.0')
-            _w(R_OWC, owc); _w(R_OTH, plug); _w(R_TA, ta)
-            _w(R_DEBT, debt); _w(R_EQ, eq); _w(R_TLE, tle)
-            _w(R_NWC, nwc); _w(R_BC, ta - tle)
+            col = L(3 + i)
+            ar_v   = _g(_ar_h,  i)
+            inv_v  = _g(_inv_h, i)
+            ap_v   = _g(_ap_h,  i)
+            cash_v = _g(_cash_h, i)
+            ppe_v  = _g(_ppe_h,  i)
+            debt_v = _g(_bor_h, i) + _g(_lea_h, i)
+            eq_v   = _g(_eqc_h, i) + _g(_res_h, i)
+            rev_v  = _g(_revh,  i)
+            wcd_v  = _g(_wcd_h, i)
+
+            # OWC and plug (Python values — OTH is the plug, not a formula)
+            trade = ar_v + inv_v - ap_v
+            nwc_v = (wcd_v / 365.0) * rev_v if (wcd_v and rev_v) else trade
+            owc_v = nwc_v - trade
+            plug  = (ap_v + debt_v + eq_v) - (cash_v + ar_v + inv_v + owc_v + ppe_v)
+
+            def _fw(row, val, fmt=F.FMT_NUMBER):
+                c = ws.cell(row=row, column=3 + i, value=val)
+                c.number_format = fmt; c.font = F.FONT_INPUT
+
+            # DSO/DIO/DPO: formula when balance is non-zero; else blank
+            if ar_v and rev_v:
+                f = ws.cell(row=R_DSO, column=3 + i,
+                            value=f"={col}{R_AR}/{ISN}!{col}{R_REV}*365")
+                f.number_format = '0.0'; f.font = F.FONT_INPUT
+            if inv_v and rev_v:
+                f = ws.cell(row=R_DIO, column=3 + i,
+                            value=f"={col}{R_INV}/{ISN}!{col}{R_COGS}*365")
+                f.number_format = '0.0'; f.font = F.FONT_INPUT
+            if ap_v and rev_v:
+                f = ws.cell(row=R_DPO, column=3 + i,
+                            value=f"={col}{R_AP}/{ISN}!{col}{R_COGS}*365")
+                f.number_format = '0.0'; f.font = F.FONT_INPUT
+
+            # OWC: formula
+            ws.cell(row=R_OWC, column=3 + i,
+                    value=f"={col}{R_NWC}-({col}{R_AR}+{col}{R_INV}-{col}{R_AP})"
+                    ).number_format = F.FMT_NUMBER
+
+            # Plug (OTH): Python value — it IS the balancing residual
+            _fw(R_OTH, plug)
+
+            # Total Assets: formula
+            ws.cell(row=R_TA, column=3 + i,
+                    value=f"={col}{R_CASH}+{col}{R_AR}+{col}{R_INV}+{col}{R_OWC}+{col}{R_PPE}+{col}{R_OTH}"
+                    ).number_format = F.FMT_NUMBER
+
+            # Total Liab + Equity: formula
+            ws.cell(row=R_TLE, column=3 + i,
+                    value=f"={col}{R_AP}+{col}{R_DEBT}+{col}{R_EQ}"
+                    ).number_format = F.FMT_NUMBER
+
+            # NWC: formula
+            if wcd_v and rev_v:
+                ws.cell(row=R_NWC, column=3 + i,
+                        value=f"={ISN}!{col}{R_REV}*{wcd_v}/365"
+                        ).number_format = F.FMT_NUMBER
+            else:
+                ws.cell(row=R_NWC, column=3 + i,
+                        value=f"={col}{R_AR}+{col}{R_INV}-{col}{R_AP}+{col}{R_OWC}"
+                        ).number_format = F.FMT_NUMBER
+
+            # Balance Check: formula
+            ws.cell(row=R_BC, column=3 + i,
+                    value=f"={col}{R_TA}-{col}{R_TLE}"
+                    ).number_format = F.FMT_NUMBER
+
+            # Dividends (historical): IS NP × payout %
+            ws.cell(row=R_DIV, column=3 + i,
+                    value=f"={ISN}!{col}{R_NP}*{col}{R_PAYP}"
+                    ).number_format = F.FMT_NUMBER
+
             if i == n - 1:
-                _last_nwc_hist = nwc
+                _last_nwc_hist = nwc_v
+
         # Stash NWC anchor for the Cash Flow sheet's live ΔNWC formula.
         self._bs_nwc = {"row": R_NWC, "anchor": last_nwc, "pc0": 3 + n}
 
+        # ── Projection columns ────────────────────────────────────────────────
         for j in range(ny):
             cc = 3 + n + j
             col, colp = L(cc), L(cc - 1)
             if frozen_wc:
-                # WC held flat at the historical anchor; days rows left blank
-                # (not used), AR/Inv/AP are constants, so ΔNWC is identically 0.
                 for rr, val in [(R_AR, last_ar), (R_INV, last_inv), (R_AP, last_ap), (R_OWC, last_owc)]:
                     c = ws.cell(row=rr, column=cc, value=val)
                     c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
                 ws.cell(row=R_NWC, column=cc, value=repr(last_nwc)).number_format = F.FMT_NUMBER
                 dnwc = "0"
             elif use_wc_days:
-                # AR/Inv from real days; NWC pinned to WC Days; OWC explicit line
                 for rr, val in [(R_DSO, dso), (R_DIO, dio), (R_DPO, dpo)]:
                     c = ws.cell(row=rr, column=cc, value=val); c.number_format = '0.0'; c.font = F.FONT_INPUT
                 ws.cell(row=R_AR, column=cc, value=f"={ISN}!{col}{R_REV}*{col}{R_DSO}/365").number_format = F.FMT_NUMBER
@@ -445,13 +570,31 @@ class WorkbookRenderer:
                 ws.cell(row=R_OWC, column=cc, value=0.0).number_format = F.FMT_NUMBER
                 ws.cell(row=R_NWC, column=cc, value=f"={col}{R_AR}+{col}{R_INV}-{col}{R_AP}+{col}{R_OWC}").number_format = F.FMT_NUMBER
                 dnwc = f"({col}{R_NWC}-{colp}{R_NWC})" if j else f"({col}{R_NWC}-{repr(last_nwc)})"
+
             ppe_prev = f"{colp}{R_PPE}" if j else repr(last_ppe)
             ws.cell(row=R_PPE, column=cc, value=f"={ppe_prev}+{ISN}!{col}{R_CX}-{ISN}!{col}{R_DA}").number_format = F.FMT_NUMBER
+
+            # Dividend payout % driver row (projected — blue editable input)
+            c_pay = ws.cell(row=R_PAYP, column=cc, value=div_payout)
+            c_pay.number_format = F.FMT_PERCENT; c_pay.font = F.FONT_INPUT
+
+            # Dividends = NP × payout %
+            ws.cell(row=R_DIV, column=cc,
+                    value=f"={ISN}!{col}{R_NP}*{col}{R_PAYP}"
+                    ).number_format = F.FMT_NUMBER
+
             eq_prev = f"{colp}{R_EQ}" if j else repr(last_eq)
-            ws.cell(row=R_EQ, column=cc, value=f"={eq_prev}+{ISN}!{col}{R_NP}").number_format = F.FMT_NUMBER
+            # Equity roll: prior + NP × (1 − payout)
+            ws.cell(row=R_EQ, column=cc,
+                    value=f"={eq_prev}+{ISN}!{col}{R_NP}*(1-{col}{R_PAYP})"
+                    ).number_format = F.FMT_NUMBER
+
             cash_prev = f"{colp}{R_CASH}" if j else repr(last_cash)
+            # Cash roll: prior + NP + D&A − ΔNWC − CapEx − Dividends
             ws.cell(row=R_CASH, column=cc,
-                    value=f"={cash_prev}+{ISN}!{col}{R_NP}+{ISN}!{col}{R_DA}-{dnwc}-{ISN}!{col}{R_CX}").number_format = F.FMT_NUMBER
+                    value=f"={cash_prev}+{ISN}!{col}{R_NP}+{ISN}!{col}{R_DA}-{dnwc}-{ISN}!{col}{R_CX}-{col}{R_DIV}"
+                    ).number_format = F.FMT_NUMBER
+
             dcell = ws.cell(row=R_DEBT, column=cc, value=last_debt); dcell.number_format = F.FMT_NUMBER
             ocell = ws.cell(row=R_OTH, column=cc, value=other); ocell.number_format = F.FMT_NUMBER
             ws.cell(row=R_TA, column=cc, value=f"={col}{R_CASH}+{col}{R_AR}+{col}{R_INV}+{col}{R_OWC}+{col}{R_PPE}+{col}{R_OTH}").number_format = F.FMT_NUMBER
@@ -496,7 +639,7 @@ class WorkbookRenderer:
         # Capital Days). First projection year anchors on the engine's Year-0 NWC.
         BSN = "'5_Balance_Sheet'"
         bsref = getattr(self, "_bs_nwc", {})
-        R_NWC_BS = bsref.get("row", 17)
+        R_NWC_BS = bsref.get("row", 19)  # NWC row is 19 after dividend rows added
         nwc_anchor = bsref.get("anchor", 0.0)
 
         # Historical Change in NWC (row 5): −Δ of the historical NWC on the BS sheet.

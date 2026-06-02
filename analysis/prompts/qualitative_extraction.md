@@ -182,6 +182,13 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
       //                           company's quality and sector (do not leave it at a generic 10x).
       //   target_debt_to_cap      unit "ratio" — management's intended long-run debt / (debt + equity), if stated.
       //   pretax_cost_of_debt_override  unit "ratio" — only if they disclose their actual borrowing rate.
+      //   dividend_payout_ratio   unit "ratio" — FORECAST dividend payout (dividends / net income), clamped [0,1].
+      //                           Anchor to the historical "Dividend payout %" column in the Historical
+      //                           Financials table. If the company has raised or cut its payout policy
+      //                           (e.g. a new capital-allocation framework, a one-off special dividend, or
+      //                           a move from high-growth ploughback to mature shareholder-return mode),
+      //                           set this explicitly and cite the evidence. Omit if no payout history
+      //                           and no forward guidance exists.
       //
       // --- EV -> EQUITY BRIDGE (only if the filings DISCLOSE these; values in INR_MM, source_type FILING) ---
       //   preferred_stock, unfunded_pension, nols
@@ -216,10 +223,11 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
 
 A "Historical Financials" section (Markdown tables, INR mm) is prepended before these
 documents when available. ANCHOR your forward assumptions (revenue growth, EBIT margin,
-CapEx/Sales, tax rate, working-capital days) to these historical averages. Only deviate
-when the documents give EXPLICIT, STRUCTURAL evidence (a divestiture, a named cost
-program, a capacity expansion) — never on generic management optimism. If you deviate,
-name the evidence in the driver's rationale field.
+CapEx/Sales, tax rate, working-capital days, dividend payout ratio) to these historical
+averages. Only deviate when the documents give EXPLICIT, STRUCTURAL evidence (a
+divestiture, a named cost program, a capacity expansion, a new capital-return policy) —
+never on generic management optimism. If you deviate, name the evidence in the driver's
+rationale field.
 
 ## Rules
 
