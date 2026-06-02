@@ -156,6 +156,12 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
       //                           (The engine fades this to terminal_growth over years 4-10.)
       //   ebit_margin_target      unit "ratio" — the operating-margin level they are steering to, the
       //                           DRIVER (mix / operating leverage / cost programme) and the timeline.
+      //   normalized_ebit_margin  unit "ratio" — the mid-cycle EBIT margin when the latest actual
+      //                           year is a cyclical peak or trough (e.g. commodity, semiconductor,
+      //                           shipping). Output ONLY when cycle_position signals trough or peak
+      //                           and you have clear historical evidence of the normal range.
+      //                           The engine uses this as the STARTING base margin (replacing the
+      //                           last-actual peak/trough value) and fades to ebit_margin_target.
       //   da_rate_on_block        unit "ratio" — depreciation as a % of the net fixed-asset base, if guided.
       //   tax_rate                unit "ratio" — guided / normalized effective tax rate.
       //
@@ -163,6 +169,11 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
       //   capex_pct_sales_target  unit "ratio" — forward capex % of sales. If they signalled EXPANSION
       //                           (new plants/factories, capacity, a large project/order pipeline), set it
       //                           ABOVE the historical ratio and cite the plan, amount and timeline.
+      //   working_capital_days    unit "days" — FORECAST net working capital days (screener's signed
+      //                           measure, capturing advances/accruals/deferred revenue — NOT simply
+      //                           DSO+DIO−DPO). Anchor to the historical Working Capital Days column in
+      //                           the Historical Financials table. Overrides the screener historical
+      //                           average when provided. Negative = net cash advance from customers.
       //   dso_days / dio_days / dpo_days   unit "days" — receivable / inventory / payable terms, if discussed.
       //
       // --- TERMINAL VALUE & CAPITAL STRUCTURE ---
@@ -182,12 +193,33 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
       //   rsus_psus_outstanding unit "shares" — "value" = count of unvested RSUs/PSUs.
       //
       // --- HOLDCO / SUM-OF-THE-PARTS (only when meta.is_holdco = true) ---
-      //   segments         add field "segments": [{ "name": "...", "valuation_method": "stake|consol",
-      //                    "stake_pct": 0.51, "value_mm": <INR_MM> }, ...] for each listed/material stake.
-      //   holdco_discount  unit "ratio" — the conglomerate discount management/analysts reference.
+      //   Trigger: set meta.is_holdco = true when EITHER (a) a financial subsidiary (NBFC/bank/insurer/lending arm)
+      //            is CONSOLIDATED into the parent, OR (b) the parent holds material stakes in separately listed
+      //            subsidiaries. Examples: L&T, Bajaj Finserv/Holdings, M&M.
+      //   Important: When a financial subsidiary is consolidated, DO NOT rely on the consolidated FCF-DCF or the
+      //              consolidated debt — the consolidated borrowings are offset by the subsidiary's own assets and
+      //              double-count in the bridge. Value via SOTP.
+      //   segments         add field "segments": [{ "name": "...", "valuation_method": "core|stake|consol",
+      //                    "stake_pct": 1.0, "value_mm": <INR_MM> }, ...]
+      //                    Require a COMPLETE segment set that sums to the WHOLE company. It MUST include the
+      //                    operating CORE as its own segment (valuation_method "core", stake_pct 1.0, value_mm =
+      //                    standalone equity value via its own segment economics/peers), PLUS each material subsidiary.
+      //                    Listed sub: value_mm = full market equity, stake_pct = ownership. Consolidated financial
+      //                    sub: value_mm = standalone book/market equity, stake_pct = ownership. Values in INR_MM,
+      //                    cite sources/AR, tag [VERIFY: UNVERIFIED] if estimated.
+      //   holdco_discount  unit "ratio" — the conglomerate discount (typically 0.10-0.20) management/analysts reference.
     ]
   }
 }
+
+## Historical Anchor
+
+A "Historical Financials" section (Markdown tables, INR mm) is prepended before these
+documents when available. ANCHOR your forward assumptions (revenue growth, EBIT margin,
+CapEx/Sales, tax rate, working-capital days) to these historical averages. Only deviate
+when the documents give EXPLICIT, STRUCTURAL evidence (a divestiture, a named cost
+program, a capacity expansion) — never on generic management optimism. If you deviate,
+name the evidence in the driver's rationale field.
 
 ## Rules
 

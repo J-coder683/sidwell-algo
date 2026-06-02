@@ -59,18 +59,23 @@ def test_discover_documents_returns_url_list(mock_get, mock_resolve):
     mock_get.return_value = mock_resp
 
     docs = fetch_screener_documents('MOCKTICKER')
-    
-    assert len(docs) == 4
+
+    # Policy: 1 annual report + 3 concalls + 1 credit rating = 5
+    assert len(docs) == 5
     assert docs[0]['url'] == 'https://bseindia.com/ar2025.pdf'
     assert docs[0]['type'] == 'annual_report'
-    
+
     assert docs[1]['url'] == 'https://bseindia.com/q4.pdf'
     assert docs[1]['type'] == 'concall_transcript'
     assert docs[1]['date'] == 'Apr 2025'
-    
+
     assert docs[2]['url'] == 'https://bseindia.com/q3.pdf'
     assert docs[3]['url'] == 'https://bseindia.com/q2.pdf'
     assert docs[3]['type'] == 'concall_transcript'
+
+    # Credit rating rationale is now included (feeds the cynical-auditor cross-check)
+    assert docs[4]['url'] == 'https://crisil.com/r1.pdf'
+    assert docs[4]['type'] == 'credit_rating'
 
 @patch('data.scrapers.screener._resolve_screener_slug')
 @patch('requests.get')
@@ -83,12 +88,12 @@ def test_discover_documents_caches_urls(mock_get, mock_resolve):
 
     # First call
     docs1 = fetch_screener_documents('MOCKTICKER')
-    assert len(docs1) == 4
+    assert len(docs1) == 5
     assert mock_get.call_count == 1
-    
+
     # Second call
     docs2 = fetch_screener_documents('MOCKTICKER')
-    assert len(docs2) == 4
+    assert len(docs2) == 5
     assert mock_get.call_count == 1  # Should not increase
 
 @patch('data.scrapers.screener._resolve_screener_slug')
@@ -113,9 +118,9 @@ def test_document_selection_policy(mock_get, mock_resolve):
     mock_get.return_value = mock_resp
 
     docs = fetch_screener_documents('MOCKTICKER')
-    # Policy: 1 annual + 3 concalls = 4 total; credit ratings excluded
-    assert len(docs) == 4
+    # Policy: 1 annual + 3 concalls + 1 credit rating = 5 total
+    assert len(docs) == 5
     types = [d['type'] for d in docs]
     assert types.count('annual_report') == 1
     assert types.count('concall_transcript') == 3
-    assert types.count('credit_rating') == 0
+    assert types.count('credit_rating') == 1

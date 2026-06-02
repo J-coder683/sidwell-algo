@@ -90,7 +90,9 @@ def analyze(ticker: str, lenses_to_run: list | None = None) -> dict:
     # Step 4: Discover documents and run qualitative analysis (graceful degrade)
     # DCF Engine now requires the Assumption Justification Pack (AJP) built from docs
     docs = doc_module.discover_documents(ticker)
-    qualitative_results = qualitative.extract_qualitative(ticker, docs)
+    from analysis.historical_context import build_historical_context_md
+    hist_ctx = build_historical_context_md(financials)
+    qualitative_results = qualitative.extract_qualitative(ticker, docs, historical_context=hist_ctx)
 
     # Step 5: Run DCF Valuation Engine
     dcf_results = dcf.run_dcf_valuation(financials, damodaran_data, rf_rate, qualitative_results)

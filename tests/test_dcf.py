@@ -260,3 +260,101 @@ def test_math_reconciliation():
     ev_reconstructed = res["pv_fcf"] + res["pv_terminal_value"]
     assert abs(ev_reconstructed - res["enterprise_value"]) < 1_000, \
         f"EV tie-out failed: {ev_reconstructed:.0f} vs {res['enterprise_value']:.0f}"
+
+
+# ---------------------------------------------------------------------------
+# Test: cyclical abort is skipped when normalized_ebit_margin is supplied
+# ---------------------------------------------------------------------------
+
+def test_cyclical_no_abort_when_normalized_margin_supplied():
+    """normalized_ebit_margin in qualitative_results.ajp prevents the cyclical
+    ValueError even when FCF is sign-flipping (cyclical signal) and the engine
+    returns a non-positive intrinsic.
+    """
+    from unittest.mock import patch
+
+    fin = get_base_mock_financials()
+    # Inject sign-flipping FCF so is_likely_cyclical = True
+    fin["fcf"] = [1_000_000, -5_000_000, 3_000_000, -2_000_000]
+
+    qual = {
+        "status": "available",
+        "ajp": {
+            "meta": {
+                "ticker": "TEST", "as_of": "2026-01-01", "currency": "INR_MM",
+                "sources_ingested": [], "fiscal_year_end_month": 3,
+                "last_actual_fy": "FY2025", "is_holdco": False,
+                "scenario_active": "BASE"
+            },
+            "assumptions": [{
+                "driver_id":   "normalized_ebit_margin",
+                "value":       0.12,
+                "unit":        "ratio",
+                "source_type": "ANALYST",
+                "confidence":  "MEDIUM",
+                "rationale":   "Mid-cycle estimate from 10-year average",
+                "interrogation_refs": []
+            }]
+        }
+    }
+
+    # Build a minimal but complete engine result dict with negative intrinsic.
+    # All required keys are present so the adapter doesn't crash before the check.
+    _years = [f"FY{2026 + i}" for i in range(10)]
+    _rev   = [150.0 * 1.05 ** i for i in range(10)]
+    _ebit  = [r * 0.12 for r in _rev]
+    _nopat = [e * 0.75 for e in _ebit]
+    _da    = [r * 0.02 for r in _rev]
+    _capex = [r * 0.05 for r in _rev]
+    _ufcf  = [n + d - c for n, d, c in zip(_nopat, _da, _capex)]
+    _wt    = [(1 / 1.12 ** (i + 1)) for i in range(10)]
+    _pv    = [u * w for u, w in zip(_ufcf, _wt)]
+    _cum   = sum(_pv)
+    _pv_tv = -60.0  # deliberately negative so intrinsic < 0
+
+    _eng = {
+        "intrinsic_value_per_share": -1.0,
+        "proj": {
+            "years": _years, "revenue": _rev, "ebit": _ebit,
+            "taxes": [e * 0.25 for e in _ebit],
+            "nopat": _nopat, "da": _da, "capex": _capex,
+            "nwc_change": [0.0] * 10, "ufcf": _ufcf,
+            "assumptions_used": {
+                "stage1_revenue_growth": 0.05,
+                "ebit_margin_start":     0.12,
+                "ebit_margin_target":    0.12,
+                "tax_rate":              0.25,
+            },
+        },
+        "hist": {
+            "is": {"sales": [100.0, 110.0, 121.0, 133.1]},
+            "bs": {
+                "cash_equivalents": [20.0], "borrowings": [0.0],
+                "lease_liabilities": [], "non_controlling_int": [],
+                "investments": [],
+            },
+        },
+        "wacc": {
+            "avg_wacc": 0.12, "current_ke": 0.12, "after_tax_kd": 0.06,
+            "current_levered_beta": 1.0, "median_asset_beta": 1.0,
+            "rf": 0.07, "total_erp": 0.05,
+        },
+        "fcf": {
+            "cum_pv_ufcf": _cum,
+            "pv_tv": _pv_tv,
+            "enterprise_value": _cum + _pv_tv,
+            "pv_ufcf_list": _pv,
+            "discount_factor_list": _wt,
+        },
+        "terminal": {"avg_tv": _pv_tv, "terminal_growth": 0.02},
+        "bridge": {"equity_value": _cum + _pv_tv + 20.0},
+        "shares": {"diluted_shares": 10.0},
+    }
+
+    with patch("valuation.dcf.run_engine", return_value=_eng):
+        # Must NOT raise ValueError for the cyclical path
+        result = run_dcf_valuation(fin, {}, 0.04, qual)
+
+    assert result["intrinsic_value_per_share"] == -1.0, (
+        "Engine result should be returned as-is when normalized_ebit_margin is supplied"
+    )

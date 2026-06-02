@@ -75,19 +75,37 @@ def _broker_hist() -> dict:
 
 
 def test_unfrozen_projection_exhibits_year1_phantom():
-    """Documents the bug: without the financial freeze, Year-1 ΔNWC is a phantom
-    larger than revenue, concentrated entirely in the first projected year."""
+    """Regression: the old code produced a phantom ΔNWC > revenue in Year-1 for
+    brokers because it anchored on last-actual trade-only NWC (80,570 mm) while
+    projecting forward from a near-zero days × revenue basis.
+
+    With Priority-3 (NWC/Revenue ratio), the engine now anchors Year-0 on the
+    same ratio as the projection, so the phantom is ELIMINATED for the unfrozen
+    path.  The financial-freeze path remains the production fix; this test
+    verifies the improved unfrozen behaviour too."""
     hist = _broker_hist()
     proj = StatementsEngine.run_projections(hist, _make_ajp_blank())
 
     fy1_rev = proj["revenue"][0]
     fy1_dnwc = proj["nwc_change"][0]
-    # Phantom: Year-1 ΔNWC exceeds total Year-1 revenue (the pathology).
-    assert fy1_dnwc > fy1_rev, (
-        f"expected the documented phantom (ΔNWC>{fy1_rev:.0f}); got {fy1_dnwc:.0f}"
+
+    # Priority-3 ensures |ΔNWC[0]| is proportional to revenue growth, not a
+    # one-off anchor discontinuity (old phantom was > total revenue = 60,385mm).
+    # The broker's explosive growth means even a proportional NWC step looks large;
+    # 50% of revenue is still far better than the old phantom (>100% of revenue).
+    assert abs(fy1_dnwc) < 0.50 * fy1_rev, (
+        f"Priority-3 should eliminate the phantom: |ΔNWC|={abs(fy1_dnwc):.0f} "
+        f"should be < 50% of revenue={fy1_rev:.0f}"
     )
-    # And it is a one-time Year-1 jump: later years are orders of magnitude smaller.
-    assert abs(proj["nwc_change"][1]) < 0.01 * fy1_dnwc
+
+    # ΔNWC should stay roughly proportional across years (no one-time spike).
+    # Old phantom: nwc_change[0] >> nwc_change[1]; new: roughly equal.
+    if abs(proj["nwc_change"][1]) > 1.0:
+        ratio = abs(fy1_dnwc) / abs(proj["nwc_change"][1])
+        assert ratio < 10, (
+            f"Year-1 ΔNWC ({fy1_dnwc:.0f}) is {ratio:.1f}× Year-2 "
+            f"({proj['nwc_change'][1]:.0f}) — phantom still present"
+        )
 
 
 def test_frozen_financial_has_no_nwc_phantom():

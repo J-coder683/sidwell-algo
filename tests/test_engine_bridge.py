@@ -190,7 +190,7 @@ def test_holdco_sotp_path():
     ajp = _make_ajp([segments_assumption, discount_assumption], is_holdco=True)
 
     bs = _make_bs(cash=500.0, borrowings=200.0)  # irrelevant in holdco path
-    res = BridgeEngine.calculate(ev=99999.0, hist_bs=bs, ajp=ajp)
+    res = BridgeEngine.calculate(ev=10000.0, hist_bs=bs, ajp=ajp)
 
     expected_sotp = 10000.0 * 0.51 + 4000.0 * 1.0
     expected_equity = expected_sotp * (1 - 0.20)
@@ -222,3 +222,81 @@ def test_holdco_zero_discount():
 
     expected_sotp = 8000.0 * 0.75
     assert abs(res["equity_value"] - expected_sotp) < 1e-6
+
+
+# ---------------------------------------------------------------------------
+# Test 10: L&T-like conglomerate with huge financial subsidiary debt
+# 
+# EV=5000, cash=500, borrowings=10000 (huge due to NBFC), leases=0
+# Core EV bridge equity = 5000 + 500 - 10000 = -4500 (Crushed!)
+# SOTP segments: Core (5000), NBFC sub (3000 * 1.0), IT sub (4000 * 0.7)
+# Total SOTP = 5000 + 3000 + 2800 = 10800. Discount = 0.1
+# Equity = 10800 * 0.9 = 9720
+# ---------------------------------------------------------------------------
+def test_lt_sotp_ignores_huge_debt():
+    from sidwell.ajp.schema import AJPAssumption, AJPSegment
+    
+    seg_core = AJPSegment(name="Core", valuation_method="core", stake_pct=1.0, value_mm=5000.0)
+    seg_nbfc = AJPSegment(name="NBFC", valuation_method="consol", stake_pct=1.0, value_mm=3000.0)
+    seg_it = AJPSegment(name="IT_Sub", valuation_method="stake", stake_pct=0.7, value_mm=4000.0)
+    
+    seg_assump = AJPAssumption(
+        driver_id="segments", value=[], unit="mm", source_type="TEST",
+        confidence="HIGH", rationale="test", interrogation_refs=[],
+        segments=[seg_core, seg_nbfc, seg_it]
+    )
+    ajp = _make_ajp([seg_assump, _make_assumption("holdco_discount", 0.1)], is_holdco=True)
+    bs = _make_bs(cash=500.0, borrowings=10000.0)
+    
+    res = BridgeEngine.calculate(ev=5000.0, hist_bs=bs, ajp=ajp)
+    
+    assert res["sotp_used"] is True
+    assert res["valuation_method"] == "SOTP"
+    assert res["equity_value_core"] == -4500.0 # Proves standard bridge crushes it
+    assert abs(res["sotp_value"] - 10800.0) < 1e-6
+    assert abs(res["equity_value"] - 9720.0) < 1e-6
+    assert res["valuation_caveat"] is None
+
+
+# ---------------------------------------------------------------------------
+# Test 11: Sanity fallback when SOTP total is implausibly low
+# 
+# EV=5000, core equity=5000. SOTP segments sum to 1000 (< 25% of 5000)
+# Should fall back to EV bridge and flag caveat.
+# ---------------------------------------------------------------------------
+def test_sotp_sanity_fallback_implausible_value():
+    from sidwell.ajp.schema import AJPAssumption, AJPSegment
+    
+    seg_partial = AJPSegment(name="Small_Sub", valuation_method="stake", stake_pct=0.5, value_mm=2000.0) # stake value 1000
+    
+    seg_assump = AJPAssumption(
+        driver_id="segments", value=[], unit="mm", source_type="TEST",
+        confidence="HIGH", rationale="test", interrogation_refs=[],
+        segments=[seg_partial]
+    )
+    ajp = _make_ajp([seg_assump], is_holdco=True)
+    bs = _make_bs()
+    
+    res = BridgeEngine.calculate(ev=5000.0, hist_bs=bs, ajp=ajp)
+    
+    assert res["sotp_used"] is False
+    assert res["valuation_method"] == "EV_bridge"
+    assert res["equity_value"] == res["equity_value_core"] # Fails back
+    assert res["valuation_caveat"] is not None
+    assert "implausibly low" in res["valuation_caveat"]
+
+
+# ---------------------------------------------------------------------------
+# Test 12: Heuristic flag for massive debt / financial sub
+# ---------------------------------------------------------------------------
+def test_heuristic_financial_sub_caveat():
+    ajp = _make_ajp([], is_holdco=False)
+    # EV=1000, debt=600 (>50% of EV), investments=150 (>10% of EV)
+    bs = _make_bs(borrowings=600.0, investments=150.0)
+    
+    res = BridgeEngine.calculate(ev=1000.0, hist_bs=bs, ajp=ajp)
+    
+    assert res["sotp_used"] is False
+    assert res["valuation_method"] == "EV_bridge"
+    assert res["valuation_caveat"] is not None
+    assert "Consolidated debt is very large" in res["valuation_caveat"]

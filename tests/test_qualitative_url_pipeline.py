@@ -42,30 +42,16 @@ def mock_cache(monkeypatch):
     monkeypatch.setattr(cache, "set_json", fake_set)
 
 
-def _make_mock_gemini_response(json_text: str = '{"forward_guidance": []}'):
-    """Helper: build a mock Gemini response object."""
-    mock_resp = MagicMock()
-    mock_resp.text = json_text
-    return mock_resp
-
-
-def _make_mock_gemini_client(json_text: str = '{"forward_guidance": []}'):
-    """Mock genai.Client whose models.generate_content returns the JSON text."""
-    mock_client = MagicMock()
-    mock_client.models.generate_content.return_value = _make_mock_gemini_response(json_text)
-    return mock_client
-
-
 # ─── Core pipeline tests ──────────────────────────────────────────────────────
+# Pipeline tests mock analysis.qualitative._call_deepseek directly, so no LLM/
+# network call is made (the DeepSeek client internals are covered in test_qualitative.py).
 
-@patch("analysis.qualitative.genai.Client")
+@patch("analysis.qualitative._call_deepseek")
 @patch("analysis.qualitative.pdfplumber.open")
 @patch("analysis.qualitative.requests.get")
 def test_qualitative_fetches_pdf_in_memory_only(
-    mock_get, mock_pdfplumber_open, mock_genai_client, monkeypatch
+    mock_get, mock_pdfplumber_open, mock_call, monkeypatch
 ):
-    monkeypatch.setenv("GEMINI_API_KEY", "fake")
-
     mock_resp = MagicMock()
     mock_resp.content = b"fake pdf bytes"
     mock_get.return_value = mock_resp
@@ -76,7 +62,7 @@ def test_qualitative_fetches_pdf_in_memory_only(
     mock_pdf.pages = [mock_page]
     mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-    mock_genai_client.return_value = _make_mock_gemini_client()
+    mock_call.return_value = {"forward_guidance": []}
 
     result = extract_qualitative("MOCK", MOCK_DOCUMENTS[:1])
 
@@ -86,14 +72,12 @@ def test_qualitative_fetches_pdf_in_memory_only(
     mock_get.assert_called_with("https://fake.com/doc1.pdf", timeout=30, headers=ANY)
 
 
-@patch("analysis.qualitative.genai.Client")
+@patch("analysis.qualitative._call_deepseek")
 @patch("analysis.qualitative.pdfplumber.open")
 @patch("analysis.qualitative.requests.get")
 def test_qualitative_handles_individual_pdf_failure(
-    mock_get, mock_pdfplumber_open, mock_genai_client, monkeypatch
+    mock_get, mock_pdfplumber_open, mock_call, monkeypatch
 ):
-    monkeypatch.setenv("GEMINI_API_KEY", "fake")
-
     def side_effect_get(*args, **kwargs):
         if "doc2" in args[0]:
             raise Exception("Mock timeout")
@@ -109,7 +93,7 @@ def test_qualitative_handles_individual_pdf_failure(
     mock_pdf.pages = [mock_page]
     mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-    mock_genai_client.return_value = _make_mock_gemini_client()
+    mock_call.return_value = {"forward_guidance": []}
 
     result = extract_qualitative("MOCK", MOCK_DOCUMENTS)
 
@@ -130,14 +114,12 @@ def test_qualitative_all_pdfs_fail_returns_unavailable(mock_get, monkeypatch):
     assert result.get("forward_guidance") == []
 
 
-@patch("analysis.qualitative.genai.Client")
+@patch("analysis.qualitative._call_deepseek")
 @patch("analysis.qualitative.pdfplumber.open")
 @patch("analysis.qualitative.requests.get")
 def test_qualitative_url_hash_cache_key_stable_under_url_reorder(
-    mock_get, mock_pdfplumber_open, mock_genai_client, monkeypatch
+    mock_get, mock_pdfplumber_open, mock_call, monkeypatch
 ):
-    monkeypatch.setenv("GEMINI_API_KEY", "fake")
-
     mock_resp = MagicMock()
     mock_resp.content = b"fake bytes"
     mock_get.return_value = mock_resp
@@ -148,22 +130,21 @@ def test_qualitative_url_hash_cache_key_stable_under_url_reorder(
     mock_pdf.pages = [mock_page]
     mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-    mock_client = _make_mock_gemini_client()
-    mock_genai_client.return_value = mock_client
+    mock_call.return_value = {"forward_guidance": []}
 
     extract_qualitative("MOCK", [MOCK_DOCUMENTS[0], MOCK_DOCUMENTS[1]])
     extract_qualitative("MOCK", [MOCK_DOCUMENTS[1], MOCK_DOCUMENTS[0]])
 
-    # Should only invoke Gemini once; second call hits the cache
-    assert mock_client.models.generate_content.call_count == 1
+    # Should only invoke the LLM once; second call (same URLs, reordered) hits cache
+    assert mock_call.call_count == 1
 
 
-def test_missing_gemini_key_returns_unavailable(monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+def test_missing_deepseek_key_returns_unavailable(monkeypatch):
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 
     result = extract_qualitative("MOCK", MOCK_DOCUMENTS[:1])
-    # Will fail at PDF fetch stage before Gemini since requests.get isn't mocked,
-    # but the credentials check fires if we mock requests out too
+    # requests.get isn't mocked, so PDF fetch fails first → unavailable regardless;
+    # the explicit no-key path is covered hermetically in test_qualitative.py.
     assert result["status"] == "unavailable"
 
 
@@ -268,24 +249,21 @@ def test_concall_uses_full_text_path(mock_pdfplumber_open):
 
 # ─── MODEL_NAME constraint ──────────────────────────────────────────────────
 
-def test_model_name_is_gemini_flash():
-    """v0.7.6.3: reverted from Bedrock/Haiku to Gemini Flash.
-    Verify MODEL_NAME is a Gemini Flash variant (cheapest tier; not Pro)."""
-    assert MODEL_NAME.startswith("gemini-") and "flash" in MODEL_NAME.lower(), (
-        f"MODEL_NAME should be a Gemini Flash variant for cost control; got {MODEL_NAME}"
+def test_model_name_is_deepseek():
+    """v0.7.6.4: swapped Gemini → DeepSeek V4 Pro. Verify MODEL_NAME is a DeepSeek model."""
+    assert "deepseek" in MODEL_NAME.lower(), (
+        f"MODEL_NAME should be a DeepSeek model; got {MODEL_NAME}"
     )
 
 
 # ─── extraction_metadata in output ───────────────────────────────────────────
 
-@patch("analysis.qualitative.genai.Client")
+@patch("analysis.qualitative._call_deepseek")
 @patch("analysis.qualitative.pdfplumber.open")
 @patch("analysis.qualitative.requests.get")
 def test_extraction_metadata_present_in_result(
-    mock_get, mock_pdfplumber_open, mock_genai_client, monkeypatch
+    mock_get, mock_pdfplumber_open, mock_call, monkeypatch
 ):
-    monkeypatch.setenv("GEMINI_API_KEY", "fake")
-
     mock_resp = MagicMock()
     mock_resp.content = b"fake bytes"
     mock_get.return_value = mock_resp
@@ -296,7 +274,7 @@ def test_extraction_metadata_present_in_result(
     mock_pdf.pages = [mock_page]
     mock_pdfplumber_open.return_value.__enter__.return_value = mock_pdf
 
-    mock_genai_client.return_value = _make_mock_gemini_client()
+    mock_call.return_value = {"forward_guidance": []}
 
     result = extract_qualitative("MOCK", MOCK_DOCUMENTS[1:2])  # concall only
 

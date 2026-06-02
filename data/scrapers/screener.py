@@ -661,9 +661,10 @@ def fetch_screener_financials(ticker: str) -> dict:
 
 def fetch_screener_documents(ticker: str) -> list[dict]:
     """
-    Returns up to 4 most-recent documents per ticker, no PDFs downloaded.
-    Selection policy: Latest 1 annual report + 3 concall transcripts.
-    Credit ratings and investor presentations are excluded (low signal-to-noise).
+    Returns up to 5 most-recent documents per ticker, no PDFs downloaded.
+    Selection policy: latest 1 annual report + 3 concall transcripts + 1 credit
+    rating rationale (the rating doc feeds the "cynical auditor" cross-check).
+    Investor presentations are excluded (low signal-to-noise).
     """
     base = _to_screener_ticker(ticker)
     cache_key = f"docs_screener_{base}.json"

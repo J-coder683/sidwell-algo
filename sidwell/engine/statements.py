@@ -245,15 +245,74 @@ class StatementsEngine:
         default_dio = _recency_weighted_avg(r_h.get("inventory_days", [])) or 0.0
         default_dpo = _recency_weighted_avg(r_h.get("days_payable", [])) or 0.0
 
+        # Per-leg balance fallback: when screener left a ratio blank (0.0 after
+        # convert_ratio_row) but the actual balance is non-zero, derive the days
+        # from the balance sheet.  Receivables indexed to Revenue; Inv/AP to COGS.
+        # This ensures a non-zero Inventory projects non-zero inv even without a
+        # screener ratio — it never fabricates days when the balance is truly zero.
+        if default_dso == 0.0 and nz_sales:
+            _last_ar = (bs_h.get("trade_receivables") or [0.0])[-1] or 0.0
+            if _last_ar > 0:
+                default_dso = (_last_ar / nz_sales[-1]) * 365.0
+        _last_cogs_nz = next((c for c in reversed(cogs_series) if c), None)
+        if default_dio == 0.0:
+            _last_inv = (bs_h.get("inventories") or [0.0])[-1] or 0.0
+            if _last_inv > 0 and _last_cogs_nz:
+                default_dio = (_last_inv / _last_cogs_nz) * 365.0
+        if default_dpo == 0.0:
+            _last_ap = (bs_h.get("trade_payables") or [0.0])[-1] or 0.0
+            if _last_ap > 0 and _last_cogs_nz:
+                default_dpo = (_last_ap / _last_cogs_nz) * 365.0
+
         # Working Capital Days: screener's signed net measure (captures "other"
         # current items the trade legs miss). Use the recency-weighted average as the
         # forward net-WC ratio; None when screener doesn't report it.
         _wc_avg = _recency_weighted_avg(r_h.get("working_capital_days", []))
         wc_days_target = _clamp(_wc_avg, -270.0, 270.0) if _wc_avg is not None else None
 
+        # AJP working_capital_days (Priority 1) overrides screener average (Priority 2).
+        # Gate: value is not None (fallback's value=None distinguishes missing from set).
+        _ajp_wcd = AJPLoader.get_assumption_or_fallback(ajp, "working_capital_days", None, "")
+        if _ajp_wcd.value is not None:
+            wc_days_target = _clamp(float(_ajp_wcd.value), -270.0, 270.0)
+
+        # Priority 3: NWC/Revenue ratio when no WC-days basis (AJP or screener).
+        # Uses the broad BS net WC (AR + Inv + Loans&Adv + OCA − AP − OCL).
+        # NOTE: screener's other_asset_items / other_liability_items can mix current
+        # and non-current — a caveat is recorded in assumptions_used when this path fires.
+        nwc_ratio_target = None
+        nwc_ratio_caveat = False
+        if wc_days_target is None:
+            _ar_s  = bs_h.get("trade_receivables")    or []
+            _inv_s = bs_h.get("inventories")           or []
+            _la_s  = bs_h.get("loans_n_advances")      or []
+            _oca_s = bs_h.get("other_asset_items")     or []
+            _ap_s  = bs_h.get("trade_payables")        or []
+            _ocl_s = bs_h.get("other_liability_items") or []
+            _nwc_hist = [
+                (_ar_s[i]  if i < len(_ar_s)  else 0.0)
+                + (_inv_s[i] if i < len(_inv_s) else 0.0)
+                + (_la_s[i]  if i < len(_la_s)  else 0.0)
+                + (_oca_s[i] if i < len(_oca_s) else 0.0)
+                - (_ap_s[i]  if i < len(_ap_s)  else 0.0)
+                - (_ocl_s[i] if i < len(_ocl_s) else 0.0)
+                for i in range(len(sales_series))
+            ]
+            _nwc_rev = [nw / s for nw, s in zip(_nwc_hist, sales_series) if s and s > 0]
+            if _nwc_rev:
+                nwc_ratio_target = _recency_weighted_avg(_nwc_rev)
+                nwc_ratio_caveat = True
+
         rev_g_s1 = get_val("stage1_revenue_growth", default_growth)
         term_g = get_val("terminal_growth", 0.02)
         target_margin = get_val("ebit_margin_target", _margin)
+
+        # normalized_ebit_margin: mid-cycle base margin for cyclical names (AI-supplied).
+        # When present, overrides last-actual peak/trough as the fade start.
+        # Gate: value is not None (AJPLoader fallback returns value=None when driver absent).
+        _norm_a = AJPLoader.get_assumption_or_fallback(ajp, "normalized_ebit_margin", None, "")
+        _norm_margin = _clamp(float(_norm_a.value), 0.02, 0.50) if _norm_a.value is not None else None
+
         target_capex_sales = get_val("capex_pct_sales_target", default_capex_sales)
         target_da_sales = 0.0  # retained for compatibility; D&A now uses a PP&E schedule
         tax_rate = get_val("tax_rate", default_tax)
@@ -278,11 +337,20 @@ class StatementsEngine:
         proj["freeze_working_capital"] = freeze_working_capital
         proj["assumptions_used"] = {
             "stage1_revenue_growth": rev_g_s1, "hist_revenue_cagr": hist_cagr,
-            "terminal_growth": term_g, "ebit_margin_start": _margin,
-            "ebit_margin_target": target_margin, "tax_rate": tax_rate,
+            "terminal_growth": term_g,
+            "ebit_margin_start": _norm_margin if _norm_margin is not None else _margin,
+            "ebit_margin_target": target_margin,
+            "normalized_ebit_margin": _norm_margin,
+            "tax_rate": tax_rate,
             "capex_pct_sales": target_capex_sales, "da_rate_on_block": dep_rate,
             "dso_days": dso_days, "dio_days": dio_days, "dpo_days": dpo_days,
             "working_capital_days": wc_days_target,
+            "nwc_ratio_target": nwc_ratio_target,
+            "nwc_caveat": (
+                "Net WC estimated from mixed current/non-current balance sheet items "
+                "(screener reported no Working Capital Days)."
+                if nwc_ratio_caveat else None
+            ),
             "freeze_working_capital": freeze_working_capital,
         }
         
@@ -294,6 +362,9 @@ class StatementsEngine:
 
         last_ebit = hist["is"]["operating_profit"][-1] if hist["is"]["operating_profit"] else 0.0
         last_margin = last_ebit / last_sales if last_sales > 0 else target_margin
+        # Apply normalized_ebit_margin: replaces peak/trough last-actual as the fade start.
+        if _norm_margin is not None:
+            last_margin = _norm_margin
         
         last_capex = hist["cf"].get("derived_capex", [0.0])[-1]
         last_capex_sales = last_capex / last_sales if last_sales > 0 else target_capex_sales
@@ -315,12 +386,15 @@ class StatementsEngine:
         prev_inv = hist_inv_0
         prev_ap = hist_ap_0
 
-        # Comprehensive net-WC anchor. When screener reports Working Capital Days,
-        # the net WC (including "other" current items the trade legs miss) is pinned
-        # to it; otherwise it's the trade-only AR+Inv−AP. Anchoring Year-0 on the
-        # same basis the projection uses keeps ΔNWC continuous (no Year-1 phantom).
-        if wc_days_target is not None and not freeze_working_capital:
+        # Comprehensive net-WC anchor — SAME 4-way precedence as the projection loop
+        # below so ΔNWC is continuous (no Year-1 phantom jump).
+        #   P1/2: wc_days_target (AJP or screener WC-Days)
+        #   P3:   nwc_ratio_target (broad BS NWC / Revenue; skipped when freeze)
+        #   P4:   trade-only AR+Inv−AP (last resort)
+        if (not freeze_working_capital) and wc_days_target is not None:
             nwc_net_0 = (wc_days_target / 365.0) * prev_sales
+        elif (not freeze_working_capital) and nwc_ratio_target is not None:
+            nwc_net_0 = nwc_ratio_target * prev_sales
         else:
             nwc_net_0 = hist_ar_0 + hist_inv_0 - hist_ap_0
         other_wc_0 = nwc_net_0 - (hist_ar_0 + hist_inv_0 - hist_ap_0)
@@ -399,13 +473,14 @@ class StatementsEngine:
             proj["inv"].append(inv)
             proj["ap"].append(ap)
             
-            # Comprehensive net working capital. With Working Capital Days, pin the
-            # net to it (capturing "other" current items beyond the AR/Inv/AP trade
-            # legs); the reconciling residual is surfaced as other_wc so the trade
-            # lines stay screener-faithful. ΔNWC (the cash-flow term) uses this net.
+            # Comprehensive net working capital — same 4-way precedence as the anchor:
+            #   P1/2 wc_days_target (AJP / screener) → P3 nwc_ratio_target → P4 trade-only.
+            # ALL priority-1/2/3 paths are skipped when freeze_working_capital (financials).
             trade_nwc = ar + inv - ap
-            if wc_days_target is not None and not freeze_working_capital:
+            if (not freeze_working_capital) and wc_days_target is not None:
                 nwc = (wc_days_target / 365.0) * sales
+            elif (not freeze_working_capital) and nwc_ratio_target is not None:
+                nwc = nwc_ratio_target * sales
             else:
                 nwc = trade_nwc
             other_wc = nwc - trade_nwc

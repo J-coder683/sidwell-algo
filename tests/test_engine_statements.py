@@ -222,29 +222,36 @@ def test_ufcf_equals_nopat_plus_da_minus_capex_minus_nwc():
 # Year 0 NWC_change = NWC_0 - NWC_hist
 # ---------------------------------------------------------------------------
 def test_nwc_change_is_delta_not_level():
+    """
+    ΔNWC must be computed as the delta of NWC levels, not the level itself.
+    This holds regardless of which NWC precedence tier is active (wc_days,
+    nwc_ratio, or trade-only).
+    """
     hist = _make_hist()
     ajp = _make_ajp({"dso_days": 45.0, "dio_days": 30.0, "dpo_days": 45.0})
     proj = StatementsEngine.run_projections(hist, ajp)
 
-    # In the refactored engine, NWC (when wc_days_target is not set)
-    # is AR + Inv - AP, where Inv and AP use COGS.
-    # Since _make_hist doesn't provide 'cogs', cogs_margin defaults to 0.50.
-    rev_y0 = proj["revenue"][0]
-    cogs_y0 = proj["cogs"][0]
-    expected_ar = rev_y0 * 45.0 / 365.0
-    expected_inv = cogs_y0 * 30.0 / 365.0
-    expected_ap = cogs_y0 * 45.0 / 365.0
-    expected_nwc_y0 = expected_ar + expected_inv - expected_ap
+    # Years 1–9: nwc_change[i] == nwc[i] - nwc[i-1]
+    for i in range(1, len(proj["nwc"])):
+        expected = proj["nwc"][i] - proj["nwc"][i - 1]
+        assert abs(proj["nwc_change"][i] - expected) < 1e-6, (
+            f"year {i}: nwc_change {proj['nwc_change'][i]:.4f} ≠ delta {expected:.4f}"
+        )
 
-    # Hist NWC from the hist BS arrays
-    hist_nwc = (
-        hist["bs"]["trade_receivables"][-1]
-        + hist["bs"]["inventories"][-1]
-        - hist["bs"]["trade_payables"][-1]
-    )
-    expected_change_y0 = expected_nwc_y0 - hist_nwc
-
-    assert abs(proj["nwc_change"][0] - expected_change_y0) < 1e-6
+    # Year 0: nwc_change[0] == nwc[0] - anchor, where anchor uses same precedence.
+    au = proj["assumptions_used"]
+    last_s = hist["is"]["sales"][-1]  # 1000 mm
+    if au.get("working_capital_days") is not None:
+        anchor = (au["working_capital_days"] / 365.0) * last_s
+    elif au.get("nwc_ratio_target") is not None:
+        anchor = au["nwc_ratio_target"] * last_s
+    else:
+        anchor = (
+            hist["bs"]["trade_receivables"][-1]
+            + hist["bs"]["inventories"][-1]
+            - hist["bs"]["trade_payables"][-1]
+        )
+    assert abs(proj["nwc_change"][0] - (proj["nwc"][0] - anchor)) < 1e-6
 
 
 # ---------------------------------------------------------------------------
@@ -293,3 +300,64 @@ def test_balance_check_raises_value_error_not_assertion_error():
     assert "raise ValueError" in src, (
         "StatementsEngine.run_projections must raise ValueError on balance check failure"
     )
+
+
+# ---------------------------------------------------------------------------
+# Test: normalized_ebit_margin overrides last-actual peak/trough
+# ---------------------------------------------------------------------------
+def test_normalized_ebit_margin_overrides_base():
+    """When AJP supplies normalized_ebit_margin, it replaces last-actual as
+    the fade-start margin, not the peak/trough actual."""
+    hist = _make_hist()
+    # Simulate a cyclical peak: last EBIT = 30% of 1000mm
+    hist["is"]["operating_profit"] = [300.0]
+
+    # With normalized_ebit_margin=0.15, the engine should start fading from
+    # 15%, not from the 30% peak.
+    ajp_norm = _make_ajp({"ebit_margin_target": 0.15, "normalized_ebit_margin": 0.15})
+    proj_norm = StatementsEngine.run_projections(hist, ajp_norm)
+
+    # margin_step = (0.15 − 0.15) / 10 = 0 → all margins exactly 0.15
+    margins_norm = [e / r for e, r in zip(proj_norm["ebit"], proj_norm["revenue"])]
+    for i, m in enumerate(margins_norm):
+        assert abs(m - 0.15) < 1e-9, f"year {i}: expected 15% margin, got {m:.4f}"
+
+    # Contrast: without normalized_ebit_margin, fade starts from 30%
+    ajp_peak = _make_ajp({"ebit_margin_target": 0.15})
+    proj_peak = StatementsEngine.run_projections(hist, ajp_peak)
+    margins_peak = [e / r for e, r in zip(proj_peak["ebit"], proj_peak["revenue"])]
+    # Year 1 margin = 30% + step (fading DOWN to 15%)
+    assert margins_peak[0] > 0.20, (
+        f"Without normalized margin, Year-1 should be > 20% (fading from 30%), "
+        f"got {margins_peak[0]:.4f}"
+    )
+
+    # assumptions_used should record the normalized margin
+    assert proj_norm["assumptions_used"]["normalized_ebit_margin"] == 0.15
+    assert proj_peak["assumptions_used"]["normalized_ebit_margin"] is None
+
+
+# ---------------------------------------------------------------------------
+# Test: AJP working_capital_days (Priority 1) overrides screener average (P2)
+# ---------------------------------------------------------------------------
+def test_ajp_working_capital_days_overrides_screener():
+    """AJP working_capital_days beats the screener's historical WC-days average."""
+    hist = _make_hist()
+    # Screener says +50 days (positive WC)
+    hist["ratios"]["working_capital_days"] = [50.0, 50.0, 50.0]
+
+    # AJP forecasts −30 days (negative WC, e.g. after a mix-shift)
+    ajp = _make_ajp({"working_capital_days": -30.0})
+    proj = StatementsEngine.run_projections(hist, ajp)
+
+    au = proj["assumptions_used"]
+    assert abs(au["working_capital_days"] - (-30.0)) < 1e-6, (
+        f"AJP WC days should override screener average: got {au['working_capital_days']}"
+    )
+
+    # All projected NWC ≈ (−30/365) × revenue
+    for i, (nwc, rev) in enumerate(zip(proj["nwc"], proj["revenue"])):
+        implied = (-30.0 / 365.0) * rev
+        assert abs(nwc - implied) < 1.0, (
+            f"year {i}: nwc {nwc:.1f} vs AJP-implied {implied:.1f}"
+        )

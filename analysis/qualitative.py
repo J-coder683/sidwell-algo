@@ -14,6 +14,7 @@ couldn't complete without a credit/debit card on file. Gemini spend cap raised
 work preserved — only the LLM client layer reverts.
 """
 import os
+import time
 import json
 import logging
 import hashlib
@@ -32,7 +33,7 @@ QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
 # v0.7.6.4: Swapped Gemini 3.5 Flash → DeepSeek V4 Pro.
 # DeepSeek provides superior reasoning for qualitative metrics with a 1M token window.
 MODEL_NAME = "deepseek-v4-pro"
-PROMPT_VERSION = "v0.10"  # v0.10: enriched AJP drivers (exit multiple, capital structure, bridge, dilution, holdco segments, volume/price split)
+PROMPT_VERSION = "v0.11"  # v0.11: historical-context Markdown anchor + normalized_ebit_margin + working_capital_days drivers
 
 # Maximum characters sent to Gemini for annual reports (smart-extracted).
 # Concalls use full-text — they are typically short (20-60 pages).
@@ -252,8 +253,11 @@ def _extract_generic(pdf_bytes: bytes) -> tuple[str, dict]:
 
 # ─── DeepSeek client ──────────────────────────────────────────────────────────
 
-def _call_deepseek(documents_text: str, ticker: str) -> dict:
+def _call_deepseek(documents_text: str, ticker: str, historical_context: str = "") -> dict:
     """Invoke DeepSeek V4 Pro for structured qualitative extraction.
+
+    historical_context: optional Markdown block (from build_historical_context_md)
+    prepended before the prompt template so the model sees real numbers first.
     """
     try:
         import streamlit as st
@@ -269,14 +273,18 @@ def _call_deepseek(documents_text: str, ticker: str) -> dict:
 
     prompt_path = Path(__file__).parent / "prompts" / "qualitative_extraction.md"
     prompt_template = prompt_path.read_text(encoding="utf-8")
-    prompt = f"{prompt_template}\n\n## Documents for {ticker}\n\n{documents_text}"
+    # Prepend the historical-financials block (if any) before the prompt so the
+    # model anchors its forward assumptions before reading management documents.
+    hist_prefix = f"{historical_context}\n\n" if historical_context else ""
+    prompt = f"{hist_prefix}{prompt_template}\n\n## Documents for {ticker}\n\n{documents_text}"
 
     try:
         client = OpenAI(
             api_key=api_key,
             base_url="https://api.deepseek.com",
-            timeout=600.0,
+            timeout=600.0,  # 10 min — DeepSeek V4 Pro can be slow on large multi-doc payloads
         )
+        _t0 = time.perf_counter()
         resp = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
@@ -284,7 +292,13 @@ def _call_deepseek(documents_text: str, ticker: str) -> dict:
                 {"role": "user", "content": prompt}
             ]
         )
-        
+        _elapsed = time.perf_counter() - _t0
+        # Duration logging so the timeout can be sized from real data (not a guess).
+        logger.info(
+            f"DeepSeek call for {ticker} completed in {_elapsed:.1f}s "
+            f"(model={MODEL_NAME}, prompt_chars={len(prompt)})"
+        )
+
         content = resp.choices[0].message.content.strip()
         if content.startswith("```json"):
             content = content.split("```json")[1].rsplit("```", 1)[0].strip()
@@ -303,9 +317,9 @@ def _call_deepseek(documents_text: str, ticker: str) -> dict:
 
 MIN_USABLE_DOCS = 1
 
-def extract_qualitative(ticker: str, documents: list) -> dict:
+def extract_qualitative(ticker: str, documents: list, historical_context: str = "") -> dict:
     """
-    Run Gemini 3.5 Flash extraction across the documents.
+    Run DeepSeek V4 Pro extraction across the documents.
 
     Returns a dict matching the schema in qualitative_extraction.md plus:
       - status: "available" | "unavailable"
@@ -383,7 +397,7 @@ def extract_qualitative(ticker: str, documents: list) -> dict:
     )
 
     logger.info(f"Sending {len(documents_text)} chars to DeepSeek for analysis. This may take a few minutes...")
-    result = _call_deepseek(documents_text, ticker)
+    result = _call_deepseek(documents_text, ticker, historical_context=historical_context)
     if result.get("status") == "unavailable":
         return result
 

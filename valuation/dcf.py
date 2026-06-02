@@ -114,6 +114,18 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float,
 
         fcf_display = [f"${v/1e9:.2f}B" for v in fcf_4y]
 
+        # When the AI supplied a normalized mid-cycle margin, trust the engine output
+        # rather than aborting on cyclicality — the normalization was its answer to the
+        # cycle. Only abort for structurally cash-burning pre-revenue names regardless.
+        _has_norm_margin = bool(
+            qualitative_results is not None
+            and isinstance(qualitative_results.get("ajp"), dict)
+            and any(
+                a.get("driver_id") == "normalized_ebit_margin"
+                for a in (qualitative_results["ajp"].get("assumptions") or [])
+            )
+        )
+
         if is_structurally_cash_burning:
             raise ValueError(
                 f"DCF cannot value {ticker}: this company is structurally cash-burning.\n"
@@ -128,7 +140,7 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float,
                 f"for this ticker. Affected sectors: clinical-stage biotech (NVAX, MRNA pre-2020), "
                 f"pre-profit growth SaaS, capital-burn EV/AV plays."
             )
-        elif is_likely_cyclical:
+        elif is_likely_cyclical and not _has_norm_margin:
             raise ValueError(
                 f"DCF cannot value {ticker}: this company appears to be cyclical.\n"
                 f"4-year FCF window: {fcf_display} \u2014 straddles or includes a trough.\n"
@@ -145,11 +157,17 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float,
                 f"Affected sectors include: Semiconductors (MU, AMAT, WDC), Memory/DRAM, Steel, "
                 f"Mining, Oil & Gas E&P, Shipping, Commodity chemicals."
             )
-        else:
+        elif not _has_norm_margin:
             raise ValueError(
                 f"DCF produced non-positive intrinsic value ({intrinsic_value_per_share:.2f}) for {ticker}. "
                 f"Likely causes: terminal_growth >= WACC; corrupted CRP/beta inputs; "
                 f"projected FCF negative across forecast horizon."
+            )
+        else:
+            # normalized_ebit_margin supplied — trust the model result even if negative.
+            logger.warning(
+                f"Non-positive intrinsic ({intrinsic_value_per_share:.2f}) for {ticker} "
+                f"despite normalized_ebit_margin — returning model output without aborting."
             )
             
     margin_of_safety = (intrinsic_value_per_share - current_price) / current_price if current_price > 0 else 0.0

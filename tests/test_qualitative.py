@@ -4,13 +4,52 @@ from unittest.mock import patch, MagicMock
 
 from analysis.qualitative import extract_qualitative, MODEL_NAME, PROMPT_VERSION
 
-# --- OLD TESTS RESTORED AND ADAPTED ---
+# All tests are OFFLINE: the OpenAI/DeepSeek client, PDF fetch (requests) and
+# pdfplumber are mocked so the suite never makes a network or LLM call.
+
+
+def _mock_openai(content: str):
+    """Build (OpenAI_class_mock, client_mock) whose
+    client.chat.completions.create(...) returns a response carrying `content`
+    at choices[0].message.content — the shape _call_deepseek reads."""
+    msg = MagicMock(); msg.content = content
+    choice = MagicMock(); choice.message = msg
+    resp = MagicMock(); resp.choices = [choice]
+    client = MagicMock()
+    client.chat.completions.create.return_value = resp
+    return MagicMock(return_value=client), client
+
+
+_VALID_PAYLOAD = {
+    "forward_guidance": [{"period": "FY27", "metric": "revenue",
+                          "statement": "10% growth expected.", "source_doc": "test.pdf"}],
+    "risk_callouts": [],
+    "strategic_themes": [],
+    "tone_assessment": {"current": "confident", "trajectory": "stable", "notes": "All good."},
+    "coherence_assessment": {"verdict": "coherent", "reasoning": "Consistent story."},
+}
+
+
+def _mock_pdf(mock_pdfplumber, mock_get):
+    """Wire requests.get + pdfplumber.open so document extraction succeeds."""
+    mock_resp = MagicMock(); mock_resp.content = b"fake"
+    mock_resp.raise_for_status.return_value = None
+    mock_get.return_value = mock_resp
+    mock_pdf = MagicMock()
+    mock_page = MagicMock(); mock_page.extract_text.return_value = "hello"
+    mock_pdf.pages = [mock_page]
+    mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
+
+
+_DOCS = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "concall_transcript"}]
+
+
+# --- gating / no-call paths -------------------------------------------------
 
 def test_no_documents_returns_unavailable():
     result = extract_qualitative("TEST.NS", [])
     assert result["status"] == "unavailable"
     assert "No documents" in result["reason"]
-    assert "forward_guidance" in result
     assert result["forward_guidance"] == []
     assert "coherence_assessment" in result
 
@@ -18,97 +57,46 @@ def test_no_documents_returns_unavailable():
 @patch("analysis.qualitative.requests.get")
 @patch("analysis.qualitative.pdfplumber.open")
 def test_no_api_key_returns_unavailable(mock_pdfplumber, mock_get, monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-
-    mock_resp = MagicMock()
-    mock_resp.content = b"fake"
-    mock_get.return_value = mock_resp
-
-    mock_pdf = MagicMock()
-    mock_page = MagicMock()
-    mock_page.extract_text.return_value = "hello"
-    mock_pdf.pages = [mock_page]
-    mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
-
-    docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "concall_transcript"}]
-
+    # Block BOTH key sources so the test is hermetic even on a dev box that has a
+    # real DEEPSEEK_API_KEY in env or .streamlit/secrets.toml.
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    import streamlit as st
+    monkeypatch.setattr(st, "secrets", {}, raising=False)  # {}.get(...) -> None
+    _mock_pdf(mock_pdfplumber, mock_get)
     with patch("data.cache.get_json", return_value=None):
-        result = extract_qualitative("TEST.NS", docs)
-
+        result = extract_qualitative("TEST.NS", _DOCS)
     assert result["status"] == "unavailable"
-    assert "GEMINI" in result["reason"] or "Gemini" in result["reason"]
+    assert "DEEPSEEK" in result["reason"].upper()
 
+
+# --- _call_deepseek internals (OpenAI client mocked) ------------------------
 
 @patch("analysis.qualitative.requests.get")
 @patch("analysis.qualitative.pdfplumber.open")
-def test_gemini_exception_returns_unavailable(mock_pdfplumber, mock_get, monkeypatch):
-    monkeypatch.setenv("GEMINI_API_KEY", "fake")
-    
-    docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "concall_transcript"}]
-
-    mock_resp = MagicMock()
-    mock_resp.content = b"fake"
-    mock_get.return_value = mock_resp
-
-    mock_pdf = MagicMock()
-    mock_page = MagicMock()
-    mock_page.extract_text.return_value = "hello"
-    mock_pdf.pages = [mock_page]
-    mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
-
-    mock_client = MagicMock()
-    mock_client.models.generate_content.side_effect = RuntimeError("Gemini quota exceeded")
-
+def test_deepseek_exception_returns_unavailable(mock_pdfplumber, mock_get, monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "fake")
+    _mock_pdf(mock_pdfplumber, mock_get)
+    cls, client = _mock_openai("")
+    client.chat.completions.create.side_effect = RuntimeError("DeepSeek quota exceeded")
     with patch("data.cache.get_json", return_value=None), \
-         patch("analysis.qualitative.genai.Client", return_value=mock_client):
-        result = extract_qualitative("TEST.NS", docs)
-
+         patch("analysis.qualitative.OpenAI", cls):
+        result = extract_qualitative("TEST.NS", _DOCS)
     assert result["status"] == "unavailable"
-    assert "Gemini error" in result["reason"]
+    assert "DeepSeek error" in result["reason"]
 
 
 @patch("analysis.qualitative.requests.get")
 @patch("analysis.qualitative.pdfplumber.open")
-def test_gemini_valid_response_is_parsed_and_cached(mock_pdfplumber, mock_get, monkeypatch):
-    monkeypatch.setenv("GEMINI_API_KEY", "fake")
-    
-    docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "concall_transcript"}]
-
-    mock_resp = MagicMock()
-    mock_resp.content = b"fake"
-    mock_get.return_value = mock_resp
-
-    mock_pdf = MagicMock()
-    mock_page = MagicMock()
-    mock_page.extract_text.return_value = "hello"
-    mock_pdf.pages = [mock_page]
-    mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
-
-    bedrock_payload = {
-        "status": "available",
-        "forward_guidance": [{"period": "FY27", "metric": "revenue",
-                               "statement": "10% growth expected.", "source_doc": "test.pdf"}],
-        "risk_callouts": [],
-        "strategic_themes": [],
-        "tone_assessment": {"current": "confident", "trajectory": "stable", "notes": "All good."},
-        "coherence_assessment": {"verdict": "coherent", "reasoning": "Consistent story."}
-    }
-
-    mock_client = MagicMock()
-    # Mock the return value for Gemini response.text
-    mock_resp_obj = MagicMock()
-    mock_resp_obj.text = json.dumps(bedrock_payload)
-    mock_client.models.generate_content.return_value = mock_resp_obj
+def test_deepseek_valid_response_is_parsed_and_cached(mock_pdfplumber, mock_get, monkeypatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "fake")
+    _mock_pdf(mock_pdfplumber, mock_get)
+    cls, client = _mock_openai(json.dumps(_VALID_PAYLOAD))
 
     written_cache = {}
-
-    def fake_set_json(key, val):
-        written_cache[key] = val
-
     with patch("data.cache.get_json", return_value=None), \
-         patch("analysis.qualitative.genai.Client", return_value=mock_client), \
-         patch("data.cache.set_json", side_effect=fake_set_json):
-        result = extract_qualitative("TEST.NS", docs)
+         patch("analysis.qualitative.OpenAI", cls), \
+         patch("data.cache.set_json", side_effect=lambda k, v: written_cache.__setitem__(k, v)):
+        result = extract_qualitative("TEST.NS", _DOCS)
 
     assert result["status"] == "available"
     assert result["model"] == MODEL_NAME
@@ -119,91 +107,61 @@ def test_gemini_valid_response_is_parsed_and_cached(mock_pdfplumber, mock_get, m
     assert len(written_cache) == 1
 
 
-def test_cache_hit_skips_gemini_call(monkeypatch):
-    docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "concall_transcript"}]
-
+def test_cache_hit_skips_deepseek_call(monkeypatch):
     cached_result = {
-        "status": "available",
-        "model": MODEL_NAME,
-        "documents_used": ["test.pdf"],
-        "forward_guidance": [],
-        "risk_callouts": [],
-        "strategic_themes": [],
+        "status": "available", "model": MODEL_NAME, "documents_used": ["test.pdf"],
+        "forward_guidance": [], "risk_callouts": [], "strategic_themes": [],
         "tone_assessment": {"current": "cautious", "trajectory": "stable", "notes": "Fine."},
-        "coherence_assessment": {"verdict": "coherent", "reasoning": "OK."}
+        "coherence_assessment": {"verdict": "coherent", "reasoning": "OK."},
     }
-
-    mock_client = MagicMock()
-
+    cls, client = _mock_openai("{}")
     with patch("data.cache.get_json", return_value=cached_result), \
-         patch("analysis.qualitative.genai.Client", return_value=mock_client):
-        result = extract_qualitative("TEST.NS", docs)
-
+         patch("analysis.qualitative.OpenAI", cls):
+        result = extract_qualitative("TEST.NS", _DOCS)
     assert result["status"] == "available"
     assert result["tone_assessment"]["current"] == "cautious"
-    mock_client.models.generate_content.assert_not_called()
+    client.chat.completions.create.assert_not_called()
 
 
 @patch("analysis.qualitative.requests.get")
 @patch("analysis.qualitative.pdfplumber.open")
 def test_cache_key_includes_prompt_version(mock_pdfplumber, mock_get, monkeypatch):
     """Cache key must include PROMPT_VERSION so schema changes invalidate old cache."""
-    monkeypatch.setenv("GEMINI_API_KEY", "fake")
-    
-    docs = [{"url": "https://fake.com/test.pdf", "label": "test.pdf", "type": "concall_transcript"}]
-
-    mock_resp = MagicMock()
-    mock_resp.content = b"fake"
-    mock_get.return_value = mock_resp
-
-    mock_pdf = MagicMock()
-    mock_page = MagicMock()
-    mock_page.extract_text.return_value = "hello"
-    mock_pdf.pages = [mock_page]
-    mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "fake")
+    _mock_pdf(mock_pdfplumber, mock_get)
+    cls, client = _mock_openai(json.dumps(_VALID_PAYLOAD))
 
     recorded_keys = []
-
     def fake_get_json(key, ttl):
         recorded_keys.append(key)
-        return None  # cache miss
-
-    bedrock_payload = {"status": "available", "forward_guidance": [], "risk_callouts": [], "strategic_themes": [],
-                       "tone_assessment": {"current": "confident", "trajectory": "stable", "notes": "OK."},
-                       "coherence_assessment": {"verdict": "coherent", "reasoning": "Fine."}}
-    mock_client = MagicMock()
-    mock_resp_obj = MagicMock()
-    mock_resp_obj.text = json.dumps(bedrock_payload)
-    mock_client.models.generate_content.return_value = mock_resp_obj
+        return None
 
     with patch("data.cache.get_json", side_effect=fake_get_json), \
-         patch("analysis.qualitative.genai.Client", return_value=mock_client), \
+         patch("analysis.qualitative.OpenAI", cls), \
          patch("data.cache.set_json"):
-        extract_qualitative("TEST.NS", docs)
+        extract_qualitative("TEST.NS", _DOCS)
 
     assert len(recorded_keys) == 1
-    cache_key = recorded_keys[0]
-    assert PROMPT_VERSION in cache_key, (
-        f"Cache key '{cache_key}' does not include PROMPT_VERSION '{PROMPT_VERSION}'"
+    assert PROMPT_VERSION in recorded_keys[0], (
+        f"Cache key '{recorded_keys[0]}' does not include PROMPT_VERSION '{PROMPT_VERSION}'"
     )
 
-# --- NEW TESTS ---
 
-@patch("analysis.qualitative._call_gemini")
+# --- doc-gating (mock the LLM call directly) --------------------------------
+
+@patch("analysis.qualitative._call_deepseek")
 @patch("analysis.qualitative.requests.get")
 @patch("analysis.qualitative._extract_annual_report_sections")
-def test_extract_qualitative_skips_when_empty(mock_extract, mock_get, mock_call_gemini):
-    # 1. documents == []
+def test_extract_qualitative_skips_when_empty(mock_extract, mock_get, mock_call):
     res = extract_qualitative("TEST", [])
     assert res["status"] == "unavailable"
     assert "No documents found" in res["reason"]
-    mock_call_gemini.assert_not_called()
+    mock_call.assert_not_called()
 
 
-@patch("analysis.qualitative._call_gemini")
+@patch("analysis.qualitative._call_deepseek")
 @patch("analysis.qualitative.requests.get")
-def test_extract_qualitative_skips_no_high_value(mock_get, mock_call_gemini):
-    # 2. Only low-value documents
+def test_extract_qualitative_skips_no_high_value(mock_get, mock_call):
     docs = [
         {"url": "http://test.com/1", "type": "credit_rating", "label": "Credit Rating"},
         {"url": "http://test.com/2", "type": "unknown", "label": "Unknown"},
@@ -211,32 +169,65 @@ def test_extract_qualitative_skips_no_high_value(mock_get, mock_call_gemini):
     res = extract_qualitative("TEST", docs)
     assert res["status"] == "unavailable"
     assert "Fewer than 1 high-value" in res["reason"]
-    mock_call_gemini.assert_not_called()
+    mock_call.assert_not_called()
 
 
-@patch("analysis.qualitative._call_gemini")
+@patch("analysis.qualitative._call_deepseek")
 @patch("analysis.qualitative.requests.get")
 @patch("analysis.qualitative._extract_annual_report_sections")
-def test_extract_qualitative_proceeds(mock_extract, mock_get, mock_call_gemini):
-    # 3. Proceeds with high value doc
-    docs = [
-        {"url": "http://test.com/ar", "type": "annual_report", "label": "AR"},
-    ]
-    
-    # Mock download success
+def test_extract_qualitative_proceeds(mock_extract, mock_get, mock_call):
+    docs = [{"url": "http://test.com/ar", "type": "annual_report", "label": "AR"}]
     mock_resp = mock_get.return_value
     mock_resp.content = b"fake pdf content"
     mock_resp.raise_for_status.return_value = None
-    
     mock_extract.return_value = ("Extracted text", {"sections_found": ["MD&A"]})
-    
-    # Mock gemini response
-    mock_call_gemini.return_value = {"status": "available", "mock_field": "test"}
-    
-    # Also need to bypass cache
-    with patch("data.cache.get_json", return_value=None):
-        with patch("data.cache.set_json"):
-            res = extract_qualitative("TEST", docs)
-            
-            assert res["status"] == "available"
-            mock_call_gemini.assert_called_once()
+    mock_call.return_value = {"status": "available", "mock_field": "test"}
+
+    with patch("data.cache.get_json", return_value=None), patch("data.cache.set_json"):
+        res = extract_qualitative("TEST", docs)
+    assert res["status"] == "available"
+    mock_call.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Historical-context injection tests
+# ---------------------------------------------------------------------------
+
+@patch("analysis.qualitative.requests.get")
+@patch("analysis.qualitative.pdfplumber.open")
+def test_historical_context_prepended_in_prompt(mock_pdfplumber, mock_get, monkeypatch):
+    """The historical_context block must appear in the prompt BEFORE the documents."""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "fake")
+    _mock_pdf(mock_pdfplumber, mock_get)
+
+    captured_prompts = []
+
+    cls, client = _mock_openai(json.dumps(_VALID_PAYLOAD))
+    # Intercept the prompt arg passed to client.chat.completions.create
+    orig_create = client.chat.completions.create
+
+    def _capture(*args, **kwargs):
+        msgs = kwargs.get("messages", [])
+        for m in msgs:
+            if m.get("role") == "user":
+                captured_prompts.append(m["content"])
+        return orig_create(*args, **kwargs)
+
+    client.chat.completions.create = _capture
+
+    hist_block = "## Historical Financials (anchor your forecasts to these)\n| FY | Revenue |\n| Mar 2025 | 10,000 |"
+
+    with patch("data.cache.get_json", return_value=None), \
+         patch("analysis.qualitative.OpenAI", cls), \
+         patch("data.cache.set_json"):
+        extract_qualitative("TEST.NS", _DOCS, historical_context=hist_block)
+
+    assert captured_prompts, "No user prompt was captured"
+    prompt = captured_prompts[0]
+    hist_pos = prompt.find("## Historical Financials")
+    docs_pos = prompt.find("## Documents for")
+    assert hist_pos != -1, "Historical context block not found in prompt"
+    assert docs_pos != -1, "Documents section not found in prompt"
+    assert hist_pos < docs_pos, (
+        "Historical context must appear BEFORE the documents section in the prompt"
+    )
