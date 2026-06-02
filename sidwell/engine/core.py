@@ -6,6 +6,7 @@ from sidwell.engine.terminal import TerminalEngine
 from sidwell.engine.fcf import FCFEngine
 from sidwell.engine.bridge import BridgeEngine
 from sidwell.engine.shares import SharesEngine
+from sidwell.engine.ddm import DDMEngine
 
 def run_engine(financials: Dict[str, Any], ajp: AJP) -> Dict[str, Any]:
     """
@@ -46,7 +47,10 @@ def run_engine(financials: Dict[str, Any], ajp: AJP) -> Dict[str, Any]:
     shares_results = SharesEngine.calculate(financials, ajp)
     diluted_shares = shares_results["diluted_shares"]
     
-    # 8. Intrinsic Value Per Share
+    # 8. DDM Cross-Check
+    ddm_results = DDMEngine.calculate(proj, wacc_results, terminal_results, shares_results)
+    
+    # 9. Intrinsic Value Per Share
     # Equity value is in standard scale (millions). Shares are raw.
     intrinsic_value_per_share = (equity_value * 1e6 / diluted_shares) if diluted_shares > 0 else 0.0
     
@@ -58,5 +62,6 @@ def run_engine(financials: Dict[str, Any], ajp: AJP) -> Dict[str, Any]:
         "fcf": fcf_results,
         "bridge": bridge_results,
         "shares": shares_results,
+        "ddm": ddm_results,
         "intrinsic_value_per_share": intrinsic_value_per_share
     }

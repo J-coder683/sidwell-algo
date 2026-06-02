@@ -813,6 +813,17 @@ class WorkbookRenderer:
         ws.cell(row=13, column=2, value="Intrinsic Value / Share (Rs)").font = F.FONT_BOLD
         iv = ws.cell(row=13, column=3, value="=C11*1000000/C12")
         iv.number_format = '#,##0.00'; iv.font = F.FONT_BOLD
+        
+        # DDM Cross check
+        ws.cell(row=15, column=2, value="DDM Cross-Check (dividend-sensitive)").font = F.FONT_BOLD
+        ddm = self.results.get("ddm", {})
+        if ddm.get("applicable"):
+            ddm_val = ddm["ddm_intrinsic_per_share"]
+            dc = ws.cell(row=15, column=3, value=ddm_val)
+            dc.number_format = '#,##0.00'
+            dc.font = F.FONT_BOLD
+        else:
+            ws.cell(row=15, column=3, value=f"N/A ({ddm.get('reason', '')})")
             
     def render_sensitivity(self):
         ws = self._create_sheet("12_Sensitivity")
