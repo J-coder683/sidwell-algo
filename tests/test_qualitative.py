@@ -2,7 +2,7 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 
-from analysis.qualitative import extract_qualitative, MODEL_NAME, PROMPT_VERSION
+from analysis.qualitative import extract_qualitative, MODEL_NAME, PROMPT_VERSION, _extract_html
 
 # All tests are OFFLINE: the OpenAI/DeepSeek client, PDF fetch (requests) and
 # pdfplumber are mocked so the suite never makes a network or LLM call.
@@ -187,6 +187,42 @@ def test_extract_qualitative_proceeds(mock_extract, mock_get, mock_call):
         res = extract_qualitative("TEST", docs)
     assert res["status"] == "available"
     mock_call.assert_called_once()
+
+
+# --- HTML documents (credit ratings are HTML, not PDF) ----------------------
+
+def test_extract_html_returns_visible_text():
+    html = (b"<html><head><style>x{}</style></head><body>"
+            b"<nav>menu</nav><p>Rated AAA / Stable by CRISIL.</p>"
+            b"<script>bad()</script></body></html>")
+    text, meta = _extract_html(html)
+    assert "Rated AAA" in text
+    assert "menu" not in text and "bad()" not in text   # nav + script stripped
+    assert meta["sections_found"] == ["html_full"]
+
+
+@patch("analysis.qualitative._call_deepseek")
+@patch("analysis.qualitative._extract_annual_report_sections")
+@patch("analysis.qualitative.requests.get")
+def test_html_credit_rating_not_dropped(mock_get, mock_ar, mock_call):
+    """An HTML credit-rating page must reach the model, not be dropped by pdfplumber."""
+    def _get(url, **kw):
+        r = MagicMock()
+        r.content = (b"<html><body><p>Rating AAA stable</p></body></html>"
+                     if "rating" in url else b"%PDF-1.4 fake annual report")
+        r.raise_for_status.return_value = None
+        return r
+    mock_get.side_effect = _get
+    mock_ar.return_value = ("AR text", {"sections_found": ["MD&A"]})
+    mock_call.return_value = {"status": "available"}
+    docs = [
+        {"url": "http://x/ar.pdf", "type": "annual_report", "label": "AR"},
+        {"url": "http://x/rating.html", "type": "credit_rating", "label": "Credit Rating"},
+    ]
+    with patch("data.cache.get_json", return_value=None), patch("data.cache.set_json"):
+        res = extract_qualitative("TEST", docs)
+    assert res["status"] == "available"
+    assert "AR" in res["documents_used"] and "Credit Rating" in res["documents_used"]
 
 
 # ---------------------------------------------------------------------------

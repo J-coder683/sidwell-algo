@@ -220,7 +220,7 @@ class WorkbookRenderer:
         R_G, R_REV, R_COGSP, R_COGS, R_MG, R_EBIT, R_TAX, R_NOP, R_CXP, R_CX, R_DAP, R_DA, R_NP = 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
         for rr, lab in [(R_G, "Revenue growth %"), (R_REV, "Revenue"), (R_COGSP, "COGS % sales"), (R_COGS, "COGS"), 
                         (R_MG, "EBIT margin %"), (R_EBIT, "EBIT"), (R_TAX, "Tax rate %"), (R_NOP, "NOPAT"),
-                        (R_CXP, "CapEx % sales"), (R_CX, "CapEx"), (R_DAP, "D&A % sales"),
+                        (R_CXP, "CapEx % sales"), (R_CX, "CapEx"), (R_DAP, "D&A rate on PP&E %"),
                         (R_DA, "D&A"), (R_NP, "Net Profit")]:
             ws.cell(row=rr, column=2, value=lab).font = F.FONT_BOLD
 
@@ -232,6 +232,40 @@ class WorkbookRenderer:
                 c.number_format = fmt; c.font = F.FONT_INPUT
         put_hist(R_REV, hist_rev); put_hist(R_COGS, hist_cogs); put_hist(R_EBIT, hist_ebit)
         put_hist(R_NP, hist_np); put_hist(R_DA, hist_da); put_hist(R_CX, hist_capex)
+
+        # Historical driver ratios (ACTUALS) — computed from the line items above so the
+        # past columns aren't blank: growth %, COGS %, EBIT margin %, tax %, NOPAT,
+        # CapEx %, D&A-rate-on-PP&E %.
+        htax = h_is.get("tax_pct") or []          # screener effective tax % (e.g. 25.4)
+        hist_ppe = (hist.get("bs", {}) or {}).get("fixed_assets") or []
+        def _ln(a):
+            return (a or [])[-n:] if n else []
+        hr, hco, heb, hda, hcx, htx, hpe = (_ln(hist_rev), _ln(hist_cogs), _ln(hist_ebit),
+                                            _ln(hist_da), _ln(hist_capex), _ln(htax), _ln(hist_ppe))
+
+        def put_pct(row, fn):
+            for i in range(n):
+                v = fn(i)
+                if v is None:
+                    continue
+                c = ws.cell(row=row, column=3 + i, value=v)
+                c.number_format = F.FMT_PERCENT; c.font = F.FONT_INPUT
+
+        def _g(a, i):
+            return a[i] if (i < len(a) and a[i]) else None
+        put_pct(R_G, lambda i: (hr[i] / hr[i - 1] - 1.0) if (i > 0 and _g(hr, i) and _g(hr, i - 1)) else None)
+        put_pct(R_COGSP, lambda i: (hco[i] / hr[i]) if (_g(hco, i) and _g(hr, i)) else None)
+        put_pct(R_MG, lambda i: (heb[i] / hr[i]) if (_g(heb, i) and _g(hr, i)) else None)
+        put_pct(R_TAX, lambda i: (htx[i] / 100.0) if _g(htx, i) else None)
+        put_pct(R_CXP, lambda i: (hcx[i] / hr[i]) if (_g(hcx, i) and _g(hr, i)) else None)
+        # D&A rate is on the PRIOR-year net block (PP&E schedule), not on sales.
+        put_pct(R_DAP, lambda i: (hda[i] / hpe[i - 1]) if (i > 0 and _g(hda, i) and _g(hpe, i - 1)) else None)
+        # NOPAT actual = EBIT × (1 − effective tax)
+        for i in range(n):
+            if _g(heb, i):
+                tr = (htx[i] / 100.0) if _g(htx, i) else au.get("tax_rate", 0.25)
+                c = ws.cell(row=R_NOP, column=3 + i, value=heb[i] * (1 - tr))
+                c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
         # Projected Net Profit (formula). Pre-financing (= NOPAT) so the integrated
         # balance sheet stays live and balances without debt-schedule circularity.
         for j in range(ny):
@@ -250,13 +284,16 @@ class WorkbookRenderer:
         cogsp = [(c / r if r else 0.0) for c, r in zip(proj["cogs"], proj["revenue"])]
         mg = [(e / r if r else 0.0) for e, r in zip(proj["ebit"], proj["revenue"])]
         cxp = [(c / r if r else 0.0) for c, r in zip(proj["capex"], proj["revenue"])]
-        dap = [(d / r if r else 0.0) for d, r in zip(proj["da"], proj["revenue"])]
         tax = au.get("tax_rate", 0.25)
+        dep_rate = au.get("da_rate_on_block", 0.08)   # D&A as % of opening net block (PP&E schedule)
+        BSN = "'5_Balance_Sheet'"
+        R_PPE_BS = 10                                  # Net Fixed Assets row on the BS sheet
+        last_ppe_is = hpe[-1] if hpe else 0.0          # last actual net block
 
         for j in range(ny):
             cc = pc0 + j
             Lc, Lp = L(cc), L(cc - 1)
-            for row, val in [(R_G, gr[j]), (R_COGSP, cogsp[j]), (R_MG, mg[j]), (R_TAX, tax), (R_CXP, cxp[j]), (R_DAP, dap[j])]:
+            for row, val in [(R_G, gr[j]), (R_COGSP, cogsp[j]), (R_MG, mg[j]), (R_TAX, tax), (R_CXP, cxp[j]), (R_DAP, dep_rate)]:
                 c = ws.cell(row=row, column=cc, value=val)
                 c.number_format = F.FMT_PERCENT; c.font = F.FONT_INPUT  # blue editable driver
             ws.cell(row=R_REV, column=cc, value=f"={Lp}{R_REV}*(1+{Lc}{R_G})").number_format = F.FMT_NUMBER
@@ -264,7 +301,10 @@ class WorkbookRenderer:
             ws.cell(row=R_EBIT, column=cc, value=f"={Lc}{R_REV}*{Lc}{R_MG}").number_format = F.FMT_NUMBER
             ws.cell(row=R_NOP, column=cc, value=f"={Lc}{R_EBIT}*(1-{Lc}{R_TAX})").number_format = F.FMT_NUMBER
             ws.cell(row=R_CX, column=cc, value=f"={Lc}{R_REV}*{Lc}{R_CXP}").number_format = F.FMT_NUMBER
-            ws.cell(row=R_DA, column=cc, value=f"={Lc}{R_REV}*{Lc}{R_DAP}").number_format = F.FMT_NUMBER
+            # D&A from the PP&E schedule: opening (prior-year) net block × dep rate.
+            # First projection year's opening block = last actual net block (static).
+            ppe_open = f"{BSN}!{Lp}{R_PPE_BS}" if j else repr(last_ppe_is)
+            ws.cell(row=R_DA, column=cc, value=f"={ppe_open}*{Lc}{R_DAP}").number_format = F.FMT_NUMBER
 
     def render_bs(self):
         """Integrated, balancing Balance Sheet. Projections are LIVE formulas that
@@ -334,6 +374,46 @@ class WorkbookRenderer:
                     c = ws.cell(row=row, column=3 + i, value=v); c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
         hist(R_CASH, "cash_equivalents"); hist(R_AR, "trade_receivables")
         hist(R_INV, "inventories"); hist(R_PPE, "fixed_assets"); hist(R_AP, "trade_payables")
+
+        # Historical DERIVED rows (ACTUALS): days, net WC, plug, Debt/Equity, totals,
+        # balance check — computed per year so the past columns aren't blank and tie.
+        _ratios_h = self.results.get("hist", {}).get("ratios", {}) or {}
+        _rev_h = his.get("sales") or his.get("revenue") or []
+        def _g(a, i):
+            return (a[i] if (i < len(a) and a[i] is not None) else 0.0)
+        def _ln(a):
+            return (a or [])[-n:] if n else []
+        _ar, _inv, _ap, _cash, _ppe = (_ln(hb.get("trade_receivables")), _ln(hb.get("inventories")),
+                                       _ln(hb.get("trade_payables")), _ln(hb.get("cash_equivalents")),
+                                       _ln(hb.get("fixed_assets")))
+        _bor, _lea, _eqc, _res = (_ln(hb.get("borrowings")), _ln(hb.get("lease_liabilities")),
+                                  _ln(hb.get("equity_capital")), _ln(hb.get("reserves")))
+        _dso_h, _dio_h, _dpo_h, _wcd_h = (_ln(_ratios_h.get("debtor_days")), _ln(_ratios_h.get("inventory_days")),
+                                          _ln(_ratios_h.get("days_payable")), _ln(_ratios_h.get("working_capital_days")))
+        _revh = _ln(_rev_h)
+        _last_nwc_hist = last_nwc
+        for i in range(n):
+            ar, inv, ap = _g(_ar, i), _g(_inv, i), _g(_ap, i)
+            cash, ppe = _g(_cash, i), _g(_ppe, i)
+            debt, eq, rev = _g(_bor, i) + _g(_lea, i), _g(_eqc, i) + _g(_res, i), _g(_revh, i)
+            wcd = _g(_wcd_h, i)
+            trade = ar + inv - ap
+            nwc = (wcd / 365.0) * rev if (wcd and rev) else trade
+            owc = nwc - trade
+            plug = (ap + debt + eq) - (cash + ar + inv + owc + ppe)
+            ta, tle = cash + ar + inv + owc + ppe + plug, ap + debt + eq
+            def _w(row, val, fmt=F.FMT_NUMBER):
+                c = ws.cell(row=row, column=3 + i, value=val); c.number_format = fmt; c.font = F.FONT_INPUT
+            if _g(_dso_h, i): _w(R_DSO, _g(_dso_h, i), '0.0')
+            if _g(_dio_h, i): _w(R_DIO, _g(_dio_h, i), '0.0')
+            if _g(_dpo_h, i): _w(R_DPO, _g(_dpo_h, i), '0.0')
+            _w(R_OWC, owc); _w(R_OTH, plug); _w(R_TA, ta)
+            _w(R_DEBT, debt); _w(R_EQ, eq); _w(R_TLE, tle)
+            _w(R_NWC, nwc); _w(R_BC, ta - tle)
+            if i == n - 1:
+                _last_nwc_hist = nwc
+        # Stash NWC anchor for the Cash Flow sheet's live ΔNWC formula.
+        self._bs_nwc = {"row": R_NWC, "anchor": last_nwc, "pc0": 3 + n}
 
         for j in range(ny):
             cc = 3 + n + j
@@ -411,12 +491,26 @@ class WorkbookRenderer:
                     c.number_format = F.FMT_NUMBER; c.font = F.FONT_INPUT
         hist(3, hist_ni); hist(4, hist_da); hist(6, hist_cfo); hist(7, hist_capex); hist(8, hist_fcf)
 
-        nwc = p.get("nwc_change", [0.0] * ny)
+        # ΔNWC is no longer hardcoded — it is computed live as −(NWC_t − NWC_{t-1})
+        # off the Balance Sheet's Net Working Capital row (which is driven by Working
+        # Capital Days). First projection year anchors on the engine's Year-0 NWC.
+        BSN = "'5_Balance_Sheet'"
+        bsref = getattr(self, "_bs_nwc", {})
+        R_NWC_BS = bsref.get("row", 17)
+        nwc_anchor = bsref.get("anchor", 0.0)
+
+        # Historical Change in NWC (row 5): −Δ of the historical NWC on the BS sheet.
+        for i in range(1, n):
+            cprev, ccur = L(3 + i - 1), L(3 + i)
+            ch = ws.cell(row=5, column=3 + i, value=f"=-({BSN}!{ccur}{R_NWC_BS}-{BSN}!{cprev}{R_NWC_BS})")
+            ch.number_format = F.FMT_NUMBER; ch.font = F.FONT_LINK
+
         for j in range(ny):
-            cc = 3 + n + j            # projection column (aligns to the IS projection column)
-            col = L(cc)
-            nv = ws.cell(row=5, column=cc, value=-(nwc[j] if j < len(nwc) else 0.0))
-            nv.number_format = F.FMT_NUMBER; nv.font = F.FONT_INPUT
+            cc = 3 + n + j            # projection column (aligns to the IS/BS projection column)
+            col, colp = L(cc), L(cc - 1)
+            prevref = repr(nwc_anchor) if j == 0 else f"{BSN}!{colp}{R_NWC_BS}"
+            c5 = ws.cell(row=5, column=cc, value=f"=-({BSN}!{col}{R_NWC_BS}-{prevref})")
+            c5.number_format = F.FMT_NUMBER; c5.font = F.FONT_LINK
             l1 = ws.cell(row=3, column=cc, value=f"={ISN}!{col}{R_NP}"); l1.number_format = F.FMT_NUMBER; l1.font = F.FONT_LINK
             l2 = ws.cell(row=4, column=cc, value=f"={ISN}!{col}{R_DA}"); l2.number_format = F.FMT_NUMBER; l2.font = F.FONT_LINK
             ws.cell(row=6, column=cc, value=f"={col}3+{col}4+{col}5").number_format = F.FMT_NUMBER

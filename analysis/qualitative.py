@@ -251,6 +251,21 @@ def _extract_generic(pdf_bytes: bytes) -> tuple[str, dict]:
     return text, {"sections_found": [], "fallback_used": True, "pages_extracted": min(80, total_pages) + 30}
 
 
+def _extract_html(html_bytes: bytes) -> tuple[str, dict]:
+    """Extract readable text from an HTML document. Screener's credit-rating links
+    are HTML rationale pages (CRISIL/ICRA), not PDFs — so they can't go through
+    pdfplumber. Strips scripts/styles/nav, returns the visible text."""
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html_bytes, "html.parser")
+    for tag in soup(["script", "style", "nav", "header", "footer", "noscript"]):
+        tag.decompose()
+    text = soup.get_text(separator="\n", strip=True)
+    if len(text) > MAX_DOC_CHARS:
+        text = text[:MAX_DOC_CHARS]
+    logger.info(f"HTML document extracted: ~{len(text)} chars")
+    return text, {"sections_found": ["html_full"], "fallback_used": False, "pages_extracted": 0}
+
+
 # ─── DeepSeek client ──────────────────────────────────────────────────────────
 
 def _call_deepseek(documents_text: str, ticker: str, historical_context: str = "") -> dict:
@@ -364,7 +379,12 @@ def extract_qualitative(ticker: str, documents: list, historical_context: str = 
                 logger.warning(f"Skipping {url}: file too large ({len(pdf_bytes)/1024/1024:.1f} MB). Prevents OOM.")
                 continue
 
-            if doc_type == "annual_report":
+            # Detect format by magic bytes: real PDFs start with "%PDF". Non-PDFs
+            # (screener credit-rating links are HTML rationale pages) go to the HTML
+            # extractor so they aren't silently dropped by pdfplumber.
+            if not pdf_bytes[:5].startswith(b"%PDF"):
+                text, meta = _extract_html(pdf_bytes)
+            elif doc_type == "annual_report":
                 text, meta = _extract_annual_report_sections(pdf_bytes)
             elif doc_type == "concall_transcript":
                 text, meta = _extract_concall(pdf_bytes)
