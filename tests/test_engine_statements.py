@@ -431,3 +431,57 @@ def test_terminal_engine_consistency():
     final_ufcf = proj["ufcf"][-1]
     expected_tv = final_ufcf * (1 + 0.03) / (wacc - 0.03)
     assert abs(term_res["gordon_tv"] - expected_tv) < 1e-4
+
+
+# ---------------------------------------------------------------------------
+# Test: Peak margin guardrail backstop
+# ---------------------------------------------------------------------------
+def test_peak_margin_guardrail_fires():
+    """1. PEAK normalized: last year 28%, AJP has NO normalized_ebit_margin."""
+    hist = _make_hist()
+    hist["years_annual"] = ["2020", "2021", "2022", "2023", "2024"]
+    hist["is"]["sales"] = [100.0, 110.0, 120.0, 130.0, 140.0]
+    hist["is"]["revenue"] = [100.0, 110.0, 120.0, 130.0, 140.0]
+    # margins ~10% for first 4, then peak ~28% (40/140)
+    hist["is"]["operating_profit"] = [10.0, 11.0, 12.0, 13.0, 40.0]
+    
+    ajp = _make_ajp() # no normalized_ebit_margin
+    proj = StatementsEngine.run_projections(hist, ajp)
+    au = proj["assumptions_used"]
+    
+    assert au["ebit_margin_peak_normalized"] is True
+    assert au["ebit_margin_peak_caveat"] != ""
+    assert abs(au["ebit_margin_start"] - 0.10) < 1e-4
+
+
+def test_peak_margin_guardrail_no_peak():
+    """2. NO peak: roughly flat ~10% margins"""
+    hist = _make_hist()
+    hist["years_annual"] = ["2020", "2021", "2022", "2023", "2024"]
+    hist["is"]["sales"] = [100.0, 110.0, 120.0, 130.0, 140.0]
+    hist["is"]["revenue"] = [100.0, 110.0, 120.0, 130.0, 140.0]
+    hist["is"]["operating_profit"] = [10.0, 11.0, 12.0, 13.0, 14.0]
+    
+    ajp = _make_ajp()
+    proj = StatementsEngine.run_projections(hist, ajp)
+    au = proj["assumptions_used"]
+    
+    assert au["ebit_margin_peak_normalized"] is False
+    assert abs(au["ebit_margin_start"] - 0.10) < 1e-4
+
+
+def test_peak_margin_guardrail_ai_wins():
+    """3. AI WINS: same peak data as test 1 but AJP supplies normalized_ebit_margin=0.12"""
+    hist = _make_hist()
+    hist["years_annual"] = ["2020", "2021", "2022", "2023", "2024"]
+    hist["is"]["sales"] = [100.0, 110.0, 120.0, 130.0, 140.0]
+    hist["is"]["revenue"] = [100.0, 110.0, 120.0, 130.0, 140.0]
+    hist["is"]["operating_profit"] = [10.0, 11.0, 12.0, 13.0, 40.0]
+    
+    ajp = _make_ajp({"normalized_ebit_margin": 0.12})
+    proj = StatementsEngine.run_projections(hist, ajp)
+    au = proj["assumptions_used"]
+    
+    assert au["ebit_margin_peak_normalized"] is False
+    assert au.get("ebit_margin_peak_caveat") == ""
+    assert abs(au["ebit_margin_start"] - 0.12) < 1e-4

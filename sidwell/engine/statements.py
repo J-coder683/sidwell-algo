@@ -1,8 +1,11 @@
 from typing import Dict, Any, List, Optional
 from sidwell.ajp.schema import AJP, AJPAssumption
 from sidwell.ajp.loader import AJPLoader
+import statistics
 
 VOLUME_STAGNANT_THRESHOLD = 0.005   # 0.5% — below this, real volume growth ≈ 0
+EBIT_PEAK_MULTIPLE = 1.5              # latest margin > 1.5x historical median => treat as peak
+EBIT_MIN_HIST_YEARS = 4              # need at least this many margin points to judge a "norm"
 
 class StatementsEngine:
     """Handles mapping historical data from fin['statements'] and projecting the 3-statement model."""
@@ -340,6 +343,29 @@ class StatementsEngine:
         _norm_a = AJPLoader.get_assumption_or_fallback(ajp, "normalized_ebit_margin", None, "")
         _norm_margin = _clamp(float(_norm_a.value), 0.02, 0.50) if _norm_a.value is not None else None
 
+        # Cyclical-peak guardrail: if the latest actual EBIT margin is well above the company's own
+        # historical median, the last-actual anchor is probably a peak. Normalize the fade start to the
+        # median — but only as a BACKSTOP when the AI did not supply normalized_ebit_margin.
+        _sales_hist = is_h.get("sales") or is_h.get("revenue") or []
+        _op_hist = is_h.get("operating_profit") or []
+        _hist_ebit_margins = [o / s for o, s in zip(_op_hist, _sales_hist)
+                              if o is not None and s and s > 0]
+        _last_actual_margin = _margin   # = last EBIT / last sales (computed above)
+        _engine_normalized_margin = None
+        ebit_margin_peak_normalized = False
+        ebit_margin_peak_caveat = ""
+        if _norm_margin is None and len(_hist_ebit_margins) >= EBIT_MIN_HIST_YEARS:
+            _med_margin = statistics.median(_hist_ebit_margins)
+            if _med_margin > 0 and _last_actual_margin > EBIT_PEAK_MULTIPLE * _med_margin:
+                _engine_normalized_margin = _clamp(_med_margin, 0.02, 0.50)
+                ebit_margin_peak_normalized = True
+                ebit_margin_peak_caveat = (
+                    f"Latest EBIT margin ({_last_actual_margin:.1%}) is over {EBIT_PEAK_MULTIPLE:.1f}x the "
+                    f"historical median ({_med_margin:.1%}) — likely a cyclical peak. Fade start normalized "
+                    f"to the median ({_engine_normalized_margin:.1%}). Engine guardrail; AI supplied no "
+                    f"normalized_ebit_margin."
+                )
+
         target_capex_sales = get_val("capex_pct_sales_target", default_capex_sales)
         target_da_sales = 0.0  # retained for compatibility; D&A now uses a PP&E schedule
         tax_rate = get_val("tax_rate", default_tax)
@@ -405,9 +431,14 @@ class StatementsEngine:
             "terminal_growth_uncapped": term_g_uncapped,
             "terminal_growth_volume_capped": term_g_volume_capped,
             "terminal_growth_caveat": term_g_caveat,
-            "ebit_margin_start": _norm_margin if _norm_margin is not None else _margin,
+            "ebit_margin_start": (_norm_margin if _norm_margin is not None
+                                  else _engine_normalized_margin if _engine_normalized_margin is not None
+                                  else _margin),
             "ebit_margin_target": target_margin,
             "normalized_ebit_margin": _norm_margin,
+            "ebit_margin_peak_normalized": ebit_margin_peak_normalized,
+            "ebit_margin_peak_caveat": ebit_margin_peak_caveat,
+            "ebit_margin_last_actual": _last_actual_margin,
             "tax_rate": tax_rate,
             "capex_pct_sales": target_capex_sales, "da_rate_on_block": dep_rate,
             "dso_days": dso_days, "dio_days": dio_days, "dpo_days": dpo_days,
@@ -435,6 +466,8 @@ class StatementsEngine:
         # Apply normalized_ebit_margin: replaces peak/trough last-actual as the fade start.
         if _norm_margin is not None:
             last_margin = _norm_margin
+        elif _engine_normalized_margin is not None:
+            last_margin = _engine_normalized_margin
         
         last_capex = hist["cf"].get("derived_capex", [0.0])[-1]
         last_capex_sales = last_capex / last_sales if last_sales > 0 else target_capex_sales
