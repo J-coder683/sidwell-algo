@@ -237,6 +237,26 @@ def _render_check(check_id: str, check_dict: dict):
             )
 
 
+def _ajp_val(ajp, driver_id, default):
+    """Return the scenario-active float value for driver_id from the AJP, or default.
+    Mirrors sidwell/engine/statements.py get_val so slider defaults match engine inputs.
+    """
+    try:
+        active = getattr(getattr(ajp, "meta", None), "scenario_active", "BASE") or "BASE"
+        for a in ajp.assumptions:
+            if a.driver_id == driver_id:
+                sc = getattr(a, "scenario", None)
+                if sc is not None:
+                    if active == "BEAR" and sc.BEAR is not None: return float(sc.BEAR)
+                    if active == "BULL" and sc.BULL is not None: return float(sc.BULL)
+                    if sc.BASE is not None: return float(sc.BASE)
+                if a.value is not None:
+                    return float(a.value)
+    except Exception:
+        pass
+    return default
+
+
 def _render_lens_tab(lens_results: dict, lens_key: str, financials: dict,
                      dcf_results: dict):
     """Render one lens tab: score summary + part-grouped check expanders + export button."""
@@ -307,7 +327,9 @@ def _render_lens_tab(lens_results: dict, lens_key: str, financials: dict,
 # DCF tab
 # ---------------------------------------------------------------------------
 
-def _render_dcf_tab(dcf_results: dict, financials: dict):
+def _render_dcf_tab(results: dict):
+    financials = results["financials"]
+    dcf_results = results["dcf_results"]
     ticker = financials["ticker"]
     price = dcf_results["current_price"]
     assumptions = dcf_results["assumptions"]
@@ -382,6 +404,106 @@ def _render_dcf_tab(dcf_results: dict, financials: dict):
         else:
             st.caption("Projection data unavailable.")
 
+    # ---- Live sensitivity sliders (offline re-run via overrides hook) ----
+    from valuation import dcf as _dcf
+
+    base_ajp = dcf_results.get("ajp")
+    base_wacc = float(dcf_results.get("wacc") or 0.10)
+    base_intrinsic = dcf_results["intrinsic_value_per_share"]
+    macro_data = results["damodaran_data"]
+    rf = results["rf_rate"]
+    qual = results["qualitative_results"]
+
+    def _snap(v, lo, step):
+        """Snap v to the nearest grid point lo + n*step."""
+        return round(lo + round((v - lo) / step) * step, 6)
+
+    # Scenario-aware, grid-snapped base defaults (match what the engine used)
+    d = {
+        "g1":    _snap(_ajp_val(base_ajp, "stage1_revenue_growth",    0.10), 0.0,  0.01),
+        "ebit":  _snap(_ajp_val(base_ajp, "ebit_margin_target",        0.15), 0.02, 0.01),
+        "capex": _snap(_ajp_val(base_ajp, "capex_pct_sales_target",    0.05), 0.0,  0.01),
+        "tax":   _snap(_ajp_val(base_ajp, "tax_rate",                  0.25), 0.10, 0.01),
+        "wacc":  _snap(base_wacc,                                              0.06, 0.0025),
+        "wc":    int(_ajp_val(base_ajp, "working_capital_days",         0)),
+        "exit":  _snap(_ajp_val(base_ajp, "exit_ev_ebitda_multiple",   10.0), 4.0,  0.5),
+    }
+    _tg_max0 = max(0.0, round(d["wacc"] - 0.005, 4))
+    d["tg"] = min(_snap(_ajp_val(base_ajp, "terminal_growth", 0.02), 0.0, 0.0025), _tg_max0)
+
+    # Ticker-scoped keys so switching companies resets slider state automatically
+    sk = {name: f"sl_{name}_{ticker}" for name in d}
+    for name, val in d.items():
+        st.session_state.setdefault(sk[name], val)
+
+    st.divider()
+    with st.expander(
+        "\U0001f39b\ufe0f Live Sensitivity (what-if) \u2014 adjust assumptions, value updates live",
+        expanded=False,
+    ):
+        if st.button("Reset to base case", key=f"sens_reset_{ticker}"):
+            for name, val in d.items():
+                st.session_state[sk[name]] = val
+            st.rerun()
+
+        c1, c2 = st.columns(2)
+        with c1:
+            g1    = st.slider("Stage-1 revenue growth",   0.00, 0.40, step=0.01,   key=sk["g1"])
+            ebit  = st.slider("EBIT margin target",        0.02, 0.50, step=0.01,   key=sk["ebit"])
+            capex = st.slider("CapEx % sales (target)",    0.00, 0.40, step=0.01,   key=sk["capex"])
+            tax   = st.slider("Tax rate",                  0.10, 0.40, step=0.01,   key=sk["tax"])
+        with c2:
+            wacc_eff = st.slider("WACC",                   0.06, 0.20, step=0.0025, key=sk["wacc"])
+            tg_max = max(0.0, round(wacc_eff - 0.005, 4))
+            # Clamp stored terminal-g if WACC was lowered below it
+            if st.session_state[sk["tg"]] > tg_max:
+                st.session_state[sk["tg"]] = tg_max
+            tg    = st.slider("Terminal growth (< WACC)",  0.00, tg_max, step=0.0025, key=sk["tg"])
+            wc    = st.slider("Working-capital days",       -60,  180,   step=1,      key=sk["wc"])
+            exitm = st.slider("Exit EV/EBITDA",             4.0,  30.0,  step=0.5,    key=sk["exit"])
+
+        # Only pass drivers that actually differ from the grid-snapped base
+        overrides: dict = {}
+        if abs(g1    - d["g1"])    > 1e-9: overrides["stage1_revenue_growth"]  = g1
+        if abs(tg    - d["tg"])    > 1e-9: overrides["terminal_growth"]        = tg
+        if abs(ebit  - d["ebit"])  > 1e-9: overrides["ebit_margin_target"]     = ebit
+        if abs(capex - d["capex"]) > 1e-9: overrides["capex_pct_sales_target"] = capex
+        if abs(tax   - d["tax"])   > 1e-9: overrides["tax_rate"]               = tax
+        if wc != d["wc"]:                  overrides["working_capital_days"]   = wc
+        if abs(exitm - d["exit"])  > 1e-9: overrides["exit_ev_ebitda_multiple"] = exitm
+        if abs(wacc_eff - d["wacc"]) > 1e-9: overrides["wacc_override"]        = wacc_eff
+
+        try:
+            adj = _dcf.run_dcf_valuation(
+                financials, macro_data, rf, qual, overrides=overrides
+            )
+            adj_intrinsic = adj["intrinsic_value_per_share"]
+        except Exception as e:
+            st.warning(f"Could not recompute with these inputs: {e}")
+            adj_intrinsic = None
+
+        if adj_intrinsic is not None:
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Base intrinsic", f"{currency}{base_intrinsic:,.2f}")
+            if adj_intrinsic <= 0:
+                m2.metric("Adjusted intrinsic", "\u2264 0")
+                m3.metric("\u0394 vs base", "n/m")
+            else:
+                delta = (
+                    (adj_intrinsic - base_intrinsic) / base_intrinsic
+                    if base_intrinsic else 0.0
+                )
+                adj_upside = (adj_intrinsic - price) / price if price > 0 else 0.0
+                m2.metric(
+                    "Adjusted intrinsic",
+                    f"{currency}{adj_intrinsic:,.2f}",
+                    f"{delta:+.1%} vs base",
+                )
+                m3.metric("Adjusted upside vs price", f"{adj_upside:+.1%}")
+            st.caption(
+                "Live what-if only \u2014 does not change the committed base case or the Excel workbook."
+            )
+
     # ---- Excel download (new 13-sheet, 3-statement AJP engine workbook) ----
     st.divider()
     st.markdown("**Export DCF as Excel workbook** (13-sheet, 3-statement model)")
@@ -389,7 +511,7 @@ def _render_dcf_tab(dcf_results: dict, financials: dict):
     if not eng:
         st.caption("Workbook unavailable for this ticker (DCF not applicable).")
     elif st.button("Generate DCF Excel", key="btn_excel"):
-        with st.spinner("Building workbook…"):
+        with st.spinner("Building workbook\u2026"):
             import tempfile, os
             from sidwell.render.workbook import create_workbook
             tmp = os.path.join(tempfile.gettempdir(), f"{ticker}_DCF_v0.7.xlsx")
@@ -452,8 +574,30 @@ with st.sidebar:
             )
 
     st.divider()
+
+    with st.expander("Advanced (optional): your own assumptions", expanded=False):
+        st.caption("Leave any field blank to let Sidwell/DeepSeek decide. Filled fields override ours.")
+        _uo: dict = {}
+
+        def _opt(label, lo, hi, step, key, drv):
+            v = st.number_input(label, min_value=lo, max_value=hi, value=None,
+                                step=step, key=key, placeholder="auto")
+            if v is not None:
+                _uo[drv] = v
+
+        _opt("Stage-1 revenue growth", 0.0,  0.40, 0.01,   "pre_g1",   "stage1_revenue_growth")
+        _opt("Terminal growth",        0.0,  0.10, 0.0025, "pre_tg",   "terminal_growth")
+        _opt("EBIT margin target",     0.02, 0.50, 0.01,   "pre_ebit", "ebit_margin_target")
+        _opt("CapEx % sales target",   0.0,  0.40, 0.01,   "pre_capex","capex_pct_sales_target")
+        _opt("Tax rate",               0.10, 0.40, 0.01,   "pre_tax",  "tax_rate")
+        _opt("Working-capital days",   -60,  180,  1,      "pre_wc",   "working_capital_days")
+        _opt("Exit EV/EBITDA",         4.0,  30.0, 0.5,    "pre_exit", "exit_ev_ebitda_multiple")
+        _opt("WACC (override)",        0.06, 0.20, 0.0025, "pre_wacc", "wacc_override")
+        st.session_state["user_overrides"] = _uo
+
+    st.divider()
     st.caption(
-        "Data sources: Yahoo Finance · Damodaran (Jan 2026) · FRED\n\n"
+        "Data sources: Yahoo Finance \u00b7 Damodaran (Jan 2026) \u00b7 FRED\n\n"
         "Qualitative analysis: Gemini (when API key configured)\n\n"
         "This app is for personal research only. Not financial advice."
     )
@@ -503,6 +647,20 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
 
     financials = results["financials"]
     dcf_results = results["dcf_results"]
+
+    # ---- Apply pre-run user overrides (offline; no re-scrape) ----
+    user_overrides = st.session_state.get("user_overrides", {})
+    if user_overrides:
+        from valuation import dcf as _dcf
+        try:
+            dcf_results = _dcf.run_dcf_valuation(
+                results["financials"], results["damodaran_data"], results["rf_rate"],
+                results["qualitative_results"], overrides=user_overrides,
+            )
+            results["dcf_results"] = dcf_results
+            st.info("Using your assumptions for: " + ", ".join(user_overrides.keys()))
+        except Exception as e:
+            st.warning(f"Could not apply your assumptions ({e}); showing Sidwell's base case.")
     qualitative_results = results["qualitative_results"]
     buffett_results = results["buffett_results"]
     marks_results = results["marks_results"]
@@ -539,7 +697,7 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
     ])
 
     with tabs[0]:
-        _render_dcf_tab(dcf_results, financials)
+        _render_dcf_tab(results)
 
     with tabs[1]:
         _render_lens_tab(buffett_results, "buffett", financials, dcf_results)
