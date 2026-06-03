@@ -611,12 +611,12 @@ def _render_dcf_tab(results: dict):
                     if data.get("errs"):
                         st.caption(f"{len(data['errs'])} of {len(data['xs'])} points failed and were dropped.")
                     line = (alt.Chart(dfc).mark_line(point=True).encode(
-                                x=alt.X("Driver:Q", title=data["label"]),
+                                x=alt.X("Driver:Q", title=data["label"], scale=alt.Scale(zero=False)),
                                 y=alt.Y("Intrinsic:Q", title=f"Intrinsic ({currency})"),
                                 tooltip=[alt.Tooltip("Driver:Q", format=".4f"),
                                          alt.Tooltip("Intrinsic:Q", format=",.2f")]))
                     rule = (alt.Chart(pd.DataFrame({"price": [price]}))
-                            .mark_rule(color="red", strokeDash=[4, 4]).encode(x="price:Q"))
+                            .mark_rule(color="red", strokeDash=[4, 4]).encode(y="price:Q"))
                     st.altair_chart((line + rule), width="stretch")
                     st.caption("Red dashed line = current price. Each point re-runs the engine (offline).")
 
