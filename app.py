@@ -394,7 +394,7 @@ def _render_dcf_tab(results: dict):
             rows = []
             for i, p in enumerate(projs[:10], start=1):
                 rows.append({
-                    "Year": i,
+                    "Year": p.get("year", i),
                     "Revenue": f"{currency}{p.get('revenue', 0):,.0f}",
                     "FCF": f"{currency}{p.get('fcf', 0):,.0f}",
                     "PV FCF": f"{currency}{p.get('pv_fcf', 0):,.2f}",
@@ -503,6 +503,221 @@ def _render_dcf_tab(results: dict):
             st.caption(
                 "Live what-if only \u2014 does not change the committed base case or the Excel workbook."
             )
+
+    # ---- Charts (history vs forecast + valuation curve) ----
+    import altair as alt
+    import pandas as pd
+
+    _eng = dcf_results.get("engine_results")
+    if _eng:
+        st.divider()
+        st.markdown("### \U0001f4c8 Charts")
+
+        h   = _eng.get("hist", {})
+        pj  = _eng.get("proj", {})
+        his = h.get("is", {})
+        hy  = h.get("years_annual", [])
+        hrev  = his.get("sales") or his.get("revenue") or []
+        hebit = his.get("operating_profit") or []
+        hnp   = his.get("net_profit") or []
+        py   = pj.get("years", [])
+        prev  = pj.get("revenue", [])
+        pebit = pj.get("ebit", [])
+        pnp   = pj.get("net_income", [])
+
+        def _mk_chart(title, hyrs, hvals, pyrs, pvals):
+            nh  = min(len(hyrs), len(hvals))
+            npj = min(len(pyrs), len(pvals))
+            if nh + npj == 0:
+                return None
+            years  = [str(y) for y in hyrs[:nh]]  + [str(y) for y in pyrs[:npj]]
+            vals   = list(hvals[:nh])              + list(pvals[:npj])
+            phase  = ["Actual"] * nh               + ["Forecast"] * npj
+            df = pd.DataFrame({"Year": years, "Value": vals, "Phase": phase})
+            return (
+                alt.Chart(df).mark_bar().encode(
+                    x=alt.X("Year:N", sort=years, title=None),
+                    y=alt.Y("Value:Q", title="Rs mm"),
+                    color=alt.Color("Phase:N", scale=alt.Scale(
+                        domain=["Actual", "Forecast"],
+                        range=["#3b6ca8", "#c08a1c"])),
+                    tooltip=["Year", "Phase",
+                             alt.Tooltip("Value:Q", format=",.0f")],
+                ).properties(height=220, title=title)
+            )
+
+        with st.expander(
+            "History vs forecast \u2014 Revenue, EBIT, Net profit", expanded=True
+        ):
+            for ttl, hv, pvv in [
+                ("Revenue",     hrev,  prev),
+                ("EBIT",        hebit, pebit),
+                ("Net profit",  hnp,   pnp),
+            ]:
+                ch = _mk_chart(ttl, hy, hv, py, pvv)
+                if ch is not None:
+                    st.altair_chart(ch, use_container_width=True)
+            st.caption("Blue = actuals, gold = Sidwell\u2019s forecast. Rs mm.")
+
+        with st.expander("Valuation vs a single driver", expanded=False):
+            sweep_opts = {
+                "Stage-1 revenue growth": (
+                    "stage1_revenue_growth", 0.0,
+                    0.40,
+                ),
+                "Terminal growth": (
+                    "terminal_growth", 0.0,
+                    max(0.005, round(base_wacc - 0.01, 4)),
+                ),
+                "EBIT margin target": (
+                    "ebit_margin_target", 0.05, 0.40,
+                ),
+                "WACC": (
+                    "wacc_override",
+                    max(0.06, round(base_wacc - 0.05, 4)),
+                    round(base_wacc + 0.05, 4),
+                ),
+                "Exit EV/EBITDA": (
+                    "exit_ev_ebitda_multiple", 5.0, 25.0,
+                ),
+            }
+            sel = st.selectbox(
+                "Driver to sweep", list(sweep_opts.keys()),
+                key=f"sweep_sel_{ticker}",
+            )
+            if st.button("Plot valuation curve", key=f"sweep_btn_{ticker}"):
+                drv, lo, hi = sweep_opts[sel]
+                xs = [round(lo + (hi - lo) * k / 12.0, 6) for k in range(13)]
+                ys = []
+                for xv in xs:
+                    try:
+                        r = _dcf.run_dcf_valuation(
+                            financials, macro_data, rf, qual,
+                            overrides={drv: xv},
+                        )
+                        ys.append(r["intrinsic_value_per_share"])
+                    except Exception:
+                        ys.append(None)
+                st.session_state[f"sweep_data_{ticker}"] = {
+                    "label": sel, "xs": xs, "ys": ys,
+                }
+            data = st.session_state.get(f"sweep_data_{ticker}")
+            if data:
+                dfc = pd.DataFrame({
+                    data["label"]: data["xs"],
+                    "Intrinsic":   data["ys"],
+                }).dropna()
+                if not dfc.empty:
+                    line = (
+                        alt.Chart(dfc)
+                        .mark_line(point=True)
+                        .encode(
+                            x=alt.X(f"{data['label']}:Q"),
+                            y=alt.Y("Intrinsic:Q",
+                                    title=f"Intrinsic ({currency})"),
+                            tooltip=[
+                                alt.Tooltip(f"{data['label']}:Q", format=".4f"),
+                                alt.Tooltip("Intrinsic:Q",         format=",.2f"),
+                            ],
+                        )
+                    )
+                    rule = (
+                        alt.Chart(pd.DataFrame({"price": [price]}))
+                        .mark_rule(color="red", strokeDash=[4, 4])
+                        .encode(y="price:Q")
+                    )
+                    st.altair_chart(line + rule, use_container_width=True)
+                    st.caption(
+                        "Red dashed line = current price. "
+                        "Each point re-runs the engine (offline)."
+                    )
+
+    st.divider()
+    st.markdown("### \U0001f3df\ufe0f Comps & Football Field")
+    with st.expander("Comparable companies (you choose the peers)", expanded=False):
+        st.caption("Enter 2\u20135 peers (tickers or names), comma-separated, e.g. "
+                   "BRITANNIA.NS, NESTLEIND.NS. You pick the peers; multiples are computed from screener.")
+        peers_raw = st.text_input("Peers", key=f"comps_peers_{ticker}",
+                                  placeholder="BRITANNIA.NS, NESTLEIND.NS")
+        if st.button("Run comps", key=f"comps_btn_{ticker}"):
+            from data.ticker_resolver import resolve_ticker_from_input
+            from valuation.comps import run_comps_valuation
+            raw = [x.strip() for x in (peers_raw or "").split(",") if x.strip()]
+            resolved = []
+            for r in raw:
+                try:
+                    t, _ = resolve_ticker_from_input(r)
+                except Exception:
+                    t = r.upper()
+                resolved.append(t)
+            if len(resolved) < 2:
+                st.warning("Enter at least 2 peers.")
+            else:
+                with st.spinner("Fetching peers and computing multiples\u2026"):
+                    try:
+                        st.session_state[f"comps_data_{ticker}"] = run_comps_valuation(financials, resolved[:5])
+                    except Exception as e:
+                        st.session_state[f"comps_data_{ticker}"] = {"error": f"Comps failed: {e}"}
+
+        comps = st.session_state.get(f"comps_data_{ticker}")
+        if comps:
+            if comps.get("error"):
+                st.warning(comps["error"])
+            else:
+                pm = comps.get("peer_multiples", [])
+                if pm:
+                    st.dataframe(pd.DataFrame([{
+                        "Peer": r.get("ticker"),
+                        "EV/EBITDA": r.get("ev_ebitda"),
+                        "EV/Sales": r.get("ev_sales"),
+                        "P/E": r.get("pe"),
+                    } for r in pm]), hide_index=True, use_container_width=True)
+
+                med = comps.get("medians", {})
+                def _fm(m): return (f"{m['med']:.1f}\u00d7 (min {m['min']:.1f} / max {m['max']:.1f})"
+                                    if m else "\u2014")
+                st.markdown(f"**Median multiples** \u2014 EV/EBITDA: {_fm(med.get('ev_ebitda'))} \u00b7 "
+                            f"EV/Sales: {_fm(med.get('ev_sales'))} \u00b7 P/E: {_fm(med.get('pe'))}")
+
+                imp = comps.get("implied_per_share", {})
+                c_a, c_b, c_c = st.columns(3)
+                c_a.metric("Implied (EV/EBITDA)", f"{currency}{imp['ev_ebitda']:,.0f}" if imp.get("ev_ebitda") else "\u2014")
+                c_b.metric("Implied (EV/Sales)",  f"{currency}{imp['ev_sales']:,.0f}"  if imp.get("ev_sales")  else "\u2014")
+                c_c.metric("Implied (P/E)",       f"{currency}{imp['pe']:,.0f}"        if imp.get("pe")        else "\u2014")
+
+                if comps.get("caveat"):
+                    st.caption("\u26a0\ufe0f " + comps["caveat"])
+                if comps.get("excluded"):
+                    with st.expander("Excluded legs"):
+                        for t, reason in comps["excluded"]:
+                            st.caption(f"{t}: {reason}")
+
+                # ---- Football field ----
+                st.markdown("**Football field**")
+                intrinsic = dcf_results["intrinsic_value_per_share"]
+                rows = [{"Method": "DCF (base)", "low": intrinsic, "high": intrinsic, "mid": intrinsic}]
+                for lbl, key in [("Comps EV/EBITDA", "ev_ebitda"),
+                                 ("Comps EV/Sales", "ev_sales"), ("Comps P/E", "pe")]:
+                    v = imp.get(key)
+                    if v:
+                        rows.append({"Method": lbl, "low": v, "high": v, "mid": v})
+                cr = comps.get("comps_range")
+                if cr and cr.get("low") is not None:
+                    rows.append({"Method": "Comps blended", "low": cr["low"], "high": cr["high"],
+                                 "mid": (cr["low"] + cr["high"]) / 2.0})
+                dff = pd.DataFrame(rows)
+                order = list(dff["Method"])
+                bars = alt.Chart(dff).mark_bar(height=14, color="#9ec5e8").encode(
+                    x=alt.X("low:Q", title=f"Value per share ({currency})"), x2="high:Q",
+                    y=alt.Y("Method:N", sort=order, title=None))
+                pts = alt.Chart(dff).mark_point(size=90, filled=True, color="#1f3a5f").encode(
+                    x="mid:Q", y=alt.Y("Method:N", sort=order),
+                    tooltip=["Method", alt.Tooltip("mid:Q", format=",.0f")])
+                rule = alt.Chart(pd.DataFrame({"price": [price]})).mark_rule(
+                    color="red", strokeDash=[4, 4]).encode(x="price:Q")
+                st.altair_chart((bars + pts + rule).properties(height=28 * len(rows) + 40),
+                                use_container_width=True)
+                st.caption("Dots = point estimates, bars = ranges, red dashed line = current price.")
 
     # ---- Excel download (new 13-sheet, 3-statement AJP engine workbook) ----
     st.divider()
