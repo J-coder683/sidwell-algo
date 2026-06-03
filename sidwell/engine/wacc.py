@@ -67,7 +67,14 @@ class WACCEngine:
         target_wacc = (1 - target_debt_to_cap) * target_ke + (target_debt_to_cap) * after_tax_kd
         
         avg_wacc = (current_wacc + target_wacc) / 2.0
-        
+
+        # User-supplied WACC override: forces all three *_wacc values to a fixed
+        # scalar while preserving beta/ke fields for display (offline, no-network).
+        _wo = AJPLoader.get_assumption_or_fallback(ajp, "wacc_override", None, "")
+        if _wo.value is not None:
+            w = float(_wo.value)
+            current_wacc = target_wacc = avg_wacc = w
+
         return {
             "rf": rf_val,
             "total_erp": total_erp,

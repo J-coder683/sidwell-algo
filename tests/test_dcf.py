@@ -358,3 +358,79 @@ def test_cyclical_no_abort_when_normalized_margin_supplied():
     assert result["intrinsic_value_per_share"] == -1.0, (
         "Engine result should be returned as-is when normalized_ebit_margin is supplied"
     )
+
+
+# ---------------------------------------------------------------------------
+# Tests: offline override hook  (CHANGE 1 + CHANGE 2)
+# ---------------------------------------------------------------------------
+
+def test_overrides_none_is_backward_compatible():
+    """overrides=None must produce the exact same intrinsic as calling
+    run_dcf_valuation without the param at all."""
+    base = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    with_none = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None, overrides=None)
+    assert base["intrinsic_value_per_share"] == with_none["intrinsic_value_per_share"], (
+        "overrides=None must be identical to no-override call"
+    )
+
+
+def test_override_stage1_revenue_growth_lowers_intrinsic():
+    """Slashing stage1_revenue_growth to 1 % must yield a lower intrinsic
+    than the baseline (which uses a 5 % engine-default growth)."""
+    baseline = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    overridden = run_dcf_valuation(
+        get_base_mock_financials(), {}, 0.04, None,
+        overrides={"stage1_revenue_growth": 0.01},
+    )
+    assert overridden["intrinsic_value_per_share"] < baseline["intrinsic_value_per_share"], (
+        f"Lower stage1_revenue_growth should reduce intrinsic: "
+        f"baseline={baseline['intrinsic_value_per_share']:.2f}, "
+        f"overridden={overridden['intrinsic_value_per_share']:.2f}"
+    )
+
+
+def test_override_terminal_growth_lowers_intrinsic():
+    """A near-zero terminal_growth must yield a lower intrinsic than the
+    engine's default 2 % fallback."""
+    baseline = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    overridden = run_dcf_valuation(
+        get_base_mock_financials(), {}, 0.04, None,
+        overrides={"terminal_growth": 0.005},
+    )
+    assert overridden["intrinsic_value_per_share"] < baseline["intrinsic_value_per_share"], (
+        f"Lower terminal_growth should reduce intrinsic: "
+        f"baseline={baseline['intrinsic_value_per_share']:.2f}, "
+        f"overridden={overridden['intrinsic_value_per_share']:.2f}"
+    )
+
+
+def test_override_wacc_forces_used_wacc_and_lowers_intrinsic():
+    """wacc_override=0.20 must (a) be reflected in result['wacc'] and
+    (b) produce a lower intrinsic than the baseline (avg_wacc ≈ 0.118)."""
+    baseline = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    overridden = run_dcf_valuation(
+        get_base_mock_financials(), {}, 0.04, None,
+        overrides={"wacc_override": 0.20},
+    )
+    assert abs(overridden["wacc"] - 0.20) < 1e-9, (
+        f"WACC used should be exactly 0.20; got {overridden['wacc']}"
+    )
+    assert overridden["intrinsic_value_per_share"] < baseline["intrinsic_value_per_share"], (
+        f"Higher forced WACC should reduce intrinsic: "
+        f"baseline={baseline['intrinsic_value_per_share']:.2f}, "
+        f"overridden={overridden['intrinsic_value_per_share']:.2f}"
+    )
+
+
+def test_override_absent_driver_no_crash():
+    """An override for a driver not present in AJP (exit_ev_ebitda_multiple)
+    must be appended without raising any exception."""
+    result = run_dcf_valuation(
+        get_base_mock_financials(), {}, 0.04, None,
+        overrides={"exit_ev_ebitda_multiple": 8},
+    )
+    # Engine may or may not use this driver; the important guarantee is no crash
+    # and the result still has the required keys.
+    assert "intrinsic_value_per_share" in result
+    assert result["intrinsic_value_per_share"] > 0
+

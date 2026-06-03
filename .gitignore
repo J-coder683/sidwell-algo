@@ -52,6 +52,18 @@ desktop.ini
 # Antigravity / agent artifacts that aren't part of the project
 .antigravity/
 
+# Jetro / IDE agent scaffolding — NOT part of the project.
+# .jetro/ includes credentials.json (secrets) — never commit. The dropped
+# CLAUDE.md/AGENT.md contain third-party agent instructions, not our code.
+.jetro/
+.agents/
+.cursor/
+.windsurfrules
+.mcp.json
+AGENT.md
+CLAUDE.md
+.github/copilot-instructions.md
+
 # Knowledge base — reference materials, mostly copyrighted (books, articles,
 # transcripts). Used locally to inform framework specs, but never committed.
 # Treat as an Obsidian vault — lives on disk, stays out of git.

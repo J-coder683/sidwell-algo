@@ -8,7 +8,42 @@ from sidwell.ajp.loader import AJPLoader
 
 logger = logging.getLogger("sidwell.valuation.dcf")
 
-def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float, qualitative_results: dict = None) -> dict:
+
+def _apply_overrides(ajp, overrides):
+    """Patch AJP assumption values from a user-supplied overrides dict.
+
+    Mutates *ajp* in-place and returns it.  If overrides is falsy this is a
+    no-op, guaranteeing backward-compatible behaviour when overrides=None.
+    """
+    from sidwell.ajp.schema import AJPAssumption
+    if not overrides:
+        return ajp
+    by_id = {a.driver_id: a for a in ajp.assumptions}
+    for k, v in overrides.items():
+        if v is None:
+            continue
+        if k in by_id:
+            a = by_id[k]
+            a.value = v
+            a.scenario = None
+            a.source_type = "USER_INPUT"
+            a.confidence = "HIGH"
+            a.verify_flag = None
+        else:
+            ajp.assumptions.append(AJPAssumption(
+                driver_id=k, value=v, unit="ratio",
+                source_type="USER_INPUT", confidence="HIGH",
+                rationale="User override", interrogation_refs=[]))
+    return ajp
+
+
+def run_dcf_valuation(
+    financials: dict,
+    macro_data: dict,
+    risk_free_rate: float,
+    qualitative_results: dict = None,
+    overrides: dict = None,
+) -> dict:
     """
     Adapter that calls the new deterministic sidwell.engine, applying legacy constraints
     (bank short-circuit, cyclicality checks) and mapping outputs back to the legacy schema
@@ -75,7 +110,10 @@ def run_dcf_valuation(financials: dict, macro_data: dict, risk_free_rate: float,
         assumptions = []
         ajp = AJP(meta=meta, assumptions=assumptions)
         
-    # 3. Call the deterministic engine!
+    # 3. Apply user overrides (offline, no-network; no-op when overrides=None)
+    ajp = _apply_overrides(ajp, overrides)
+
+    # 4. Call the deterministic engine!
     engine_results = run_engine(financials, ajp)
 
     # If the Gemini AJP produced a non-positive valuation (an extreme forward
