@@ -556,7 +556,7 @@ def _render_dcf_tab(results: dict):
             ]:
                 ch = _mk_chart(ttl, hy, hv, py, pvv)
                 if ch is not None:
-                    st.altair_chart(ch, use_container_width=True)
+                    st.altair_chart(ch, width="stretch")
             st.caption("Blue = actuals, gold = Sidwell\u2019s forecast. Rs mm.")
 
         with st.expander("Valuation vs a single driver", expanded=False):
@@ -588,49 +588,37 @@ def _render_dcf_tab(results: dict):
             if st.button("Plot valuation curve", key=f"sweep_btn_{ticker}"):
                 drv, lo, hi = sweep_opts[sel]
                 xs = [round(lo + (hi - lo) * k / 12.0, 6) for k in range(13)]
-                ys = []
+                ys, errs = [], []
                 for xv in xs:
                     try:
-                        r = _dcf.run_dcf_valuation(
-                            financials, macro_data, rf, qual,
-                            overrides={drv: xv},
-                        )
-                        ys.append(r["intrinsic_value_per_share"])
-                    except Exception:
+                        r = _dcf.run_dcf_valuation(financials, macro_data, rf, qual, overrides={drv: xv})
+                        ys.append(r.get("intrinsic_value_per_share"))
+                    except Exception as e:
                         ys.append(None)
-                st.session_state[f"sweep_data_{ticker}"] = {
-                    "label": sel, "xs": xs, "ys": ys,
-                }
+                        errs.append(f"{drv}={xv}: {e}")
+                st.session_state[f"sweep_data_{ticker}"] = {"label": sel, "xs": xs, "ys": ys, "errs": errs}
+
             data = st.session_state.get(f"sweep_data_{ticker}")
             if data:
-                dfc = pd.DataFrame({
-                    data["label"]: data["xs"],
-                    "Intrinsic":   data["ys"],
-                }).dropna()
-                if not dfc.empty:
-                    line = (
-                        alt.Chart(dfc)
-                        .mark_line(point=True)
-                        .encode(
-                            x=alt.X(f"{data['label']}:Q"),
-                            y=alt.Y("Intrinsic:Q",
-                                    title=f"Intrinsic ({currency})"),
-                            tooltip=[
-                                alt.Tooltip(f"{data['label']}:Q", format=".4f"),
-                                alt.Tooltip("Intrinsic:Q",         format=",.2f"),
-                            ],
-                        )
-                    )
-                    rule = (
-                        alt.Chart(pd.DataFrame({"price": [price]}))
-                        .mark_rule(color="red", strokeDash=[4, 4])
-                        .encode(y="price:Q")
-                    )
-                    st.altair_chart(line + rule, use_container_width=True)
-                    st.caption(
-                        "Red dashed line = current price. "
-                        "Each point re-runs the engine (offline)."
-                    )
+                # safe column name ("Driver") to avoid Vega field-name issues with spaced labels
+                dfc = pd.DataFrame({"Driver": data["xs"], "Intrinsic": data["ys"]}).dropna()
+                if dfc.empty:
+                    st.warning("Couldn't compute the valuation curve — every point returned no value "
+                               "(the engine may reject this driver's range for this company).")
+                    if data.get("errs"):
+                        st.caption("First error: " + data["errs"][0])
+                else:
+                    if data.get("errs"):
+                        st.caption(f"{len(data['errs'])} of {len(data['xs'])} points failed and were dropped.")
+                    line = (alt.Chart(dfc).mark_line(point=True).encode(
+                                x=alt.X("Driver:Q", title=data["label"]),
+                                y=alt.Y("Intrinsic:Q", title=f"Intrinsic ({currency})"),
+                                tooltip=[alt.Tooltip("Driver:Q", format=".4f"),
+                                         alt.Tooltip("Intrinsic:Q", format=",.2f")]))
+                    rule = (alt.Chart(pd.DataFrame({"price": [price]}))
+                            .mark_rule(color="red", strokeDash=[4, 4]).encode(x="price:Q"))
+                    st.altair_chart((line + rule), width="stretch")
+                    st.caption("Red dashed line = current price. Each point re-runs the engine (offline).")
 
     st.divider()
     st.markdown("### \U0001f3df\ufe0f Comps & Football Field")
@@ -671,7 +659,7 @@ def _render_dcf_tab(results: dict):
                         "EV/EBITDA": r.get("ev_ebitda"),
                         "EV/Sales": r.get("ev_sales"),
                         "P/E": r.get("pe"),
-                    } for r in pm]), hide_index=True, use_container_width=True)
+                    } for r in pm]), hide_index=True, width="stretch")
 
                 med = comps.get("medians", {})
                 def _fm(m): return (f"{m['med']:.1f}\u00d7 (min {m['min']:.1f} / max {m['max']:.1f})"
@@ -716,7 +704,7 @@ def _render_dcf_tab(results: dict):
                 rule = alt.Chart(pd.DataFrame({"price": [price]})).mark_rule(
                     color="red", strokeDash=[4, 4]).encode(x="price:Q")
                 st.altair_chart((bars + pts + rule).properties(height=28 * len(rows) + 40),
-                                use_container_width=True)
+                                width="stretch")
                 st.caption("Dots = point estimates, bars = ranges, red dashed line = current price.")
 
     # ---- Excel download (new 13-sheet, 3-statement AJP engine workbook) ----
