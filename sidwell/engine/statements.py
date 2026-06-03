@@ -424,6 +424,22 @@ class StatementsEngine:
         if term_g >= rev_g_s1:
             term_g = max(0.0, rev_g_s1 - 0.01)
 
+        # Dynamic Competitive Advantage Period (CAP) = number of stage-1 high-growth years.
+        # Priority: AI moat read -> cyclical-peak backstop (short CAP) -> default 5.
+        # Clamp to [2, explicit_years-2] so there are always >=2 fade years.
+        _cap_hi = max(2, explicit_years - 2)
+        _cap_a = AJPLoader.get_assumption_or_fallback(ajp, "cap_years", None, "")
+        if _cap_a.value is not None:
+            stage1_years = int(_clamp(float(_cap_a.value), 2, _cap_hi))
+            cap_source = "ai_moat"
+        elif ebit_margin_peak_normalized:
+            stage1_years = int(_clamp(3, 2, _cap_hi))   # cyclical peak => short advantage period
+            cap_source = "engine_cyclical_backstop"
+        else:
+            stage1_years = int(_clamp(5, 2, _cap_hi))
+            cap_source = "default"
+        fade_years = explicit_years - stage1_years
+
         proj["freeze_working_capital"] = freeze_working_capital
         proj["assumptions_used"] = {
             "stage1_revenue_growth": rev_g_s1, "hist_revenue_cagr": hist_cagr,
@@ -453,6 +469,8 @@ class StatementsEngine:
             "dividend_payout_ratio": dividend_payout,
             "effective_rate": effective_rate,
             "debt_ebitda_ratio": debt_ebitda_ratio,
+            "cap_years": stage1_years,
+            "cap_years_source": cap_source,
         }
         
         # Initial values from hist
@@ -475,9 +493,7 @@ class StatementsEngine:
         last_da = hist["is"]["depreciation"][-1] if hist["is"]["depreciation"] else 0.0
         last_da_sales = last_da / last_sales if last_sales > 0 else target_da_sales
         
-        # Project 10 years (5 years stage 1, 5 years fade)
-        stage1_years = 5
-        fade_years = explicit_years - stage1_years
+        # stage1_years and fade_years are set dynamically above (CAP block).
         
         prev_sales = last_sales
         prev_cogs = prev_sales * cogs_margin

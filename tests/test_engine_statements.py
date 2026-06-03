@@ -485,3 +485,124 @@ def test_peak_margin_guardrail_ai_wins():
     assert au["ebit_margin_peak_normalized"] is False
     assert au.get("ebit_margin_peak_caveat") == ""
     assert abs(au["ebit_margin_start"] - 0.12) < 1e-4
+
+
+# ---------------------------------------------------------------------------
+# Tests: Dynamic Competitive Advantage Period (CAP)
+# ---------------------------------------------------------------------------
+
+def _make_peak_hist() -> dict:
+    """Historical data with a cyclical peak in the last year (triggers guardrail)."""
+    hist = _make_hist()
+    hist["years_annual"] = ["2020", "2021", "2022", "2023", "2024"]
+    hist["is"]["sales"] = [100.0, 110.0, 120.0, 130.0, 140.0]
+    hist["is"]["revenue"] = [100.0, 110.0, 120.0, 130.0, 140.0]
+    # ~10% margin for first 4 years, then peak ~28.6% (40/140)
+    hist["is"]["operating_profit"] = [10.0, 11.0, 12.0, 13.0, 40.0]
+    hist["bs"]["fixed_assets"] = [500.0, 510.0, 520.0, 530.0, 540.0]
+    hist["bs"]["trade_receivables"] = [123.3, 135.6, 148.2, 160.7, 173.2]
+    hist["bs"]["inventories"] = [82.2, 90.4, 98.6, 107.1, 115.5]
+    hist["bs"]["trade_payables"] = [123.3, 135.6, 148.2, 160.7, 173.2]
+    hist["is"]["depreciation"] = [50.0, 55.0, 60.0, 65.0, 70.0]
+    hist["is"]["interest"] = [16.0, 16.0, 16.0, 16.0, 16.0]
+    hist["is"]["profit_before_tax"] = [100.0, 110.0, 120.0, 130.0, 140.0]
+    hist["is"]["tax"] = [25.0, 27.5, 30.0, 32.5, 35.0]
+    hist["is"]["net_profit"] = [75.0, 82.5, 90.0, 97.5, 105.0]
+    hist["bs"]["borrowings"] = [200.0, 200.0, 200.0, 200.0, 200.0]
+    hist["bs"]["equity_capital"] = [100.0, 100.0, 100.0, 100.0, 100.0]
+    hist["bs"]["reserves"] = [400.0, 475.0, 557.5, 647.5, 745.0]
+    hist["bs"]["cash_equivalents"] = [100.0, 100.0, 100.0, 100.0, 100.0]
+    hist["cf"]["fixed_assets_purchased"] = [-60.0, -65.0, -70.0, -75.0, -80.0]
+    hist["ratios"]["debtor_days"] = [45.0, 45.0, 45.0, 45.0, 45.0]
+    hist["ratios"]["inventory_days"] = [30.0, 30.0, 30.0, 30.0, 30.0]
+    hist["ratios"]["days_payable"] = [45.0, 45.0, 45.0, 45.0, 45.0]
+    return hist
+
+
+def test_cap_ai_moat_8():
+    """AJP cap_years=8 → assumptions_used["cap_years"]==8, source=="ai_moat"."""
+    hist = _make_hist()
+    ajp = _make_ajp({"cap_years": 8})
+    proj = StatementsEngine.run_projections(hist, ajp)
+    au = proj["assumptions_used"]
+    assert au["cap_years"] == 8
+    assert au["cap_years_source"] == "ai_moat"
+
+
+def test_cap_ai_moat_3():
+    """AJP cap_years=3 → 3."""
+    hist = _make_hist()
+    ajp = _make_ajp({"cap_years": 3})
+    proj = StatementsEngine.run_projections(hist, ajp)
+    au = proj["assumptions_used"]
+    assert au["cap_years"] == 3
+    assert au["cap_years_source"] == "ai_moat"
+
+
+def test_cap_ai_clamp_high():
+    """cap_years=20 → clamped to explicit_years-2 = 8 (default explicit_years=10)."""
+    hist = _make_hist()
+    ajp = _make_ajp({"cap_years": 20})
+    proj = StatementsEngine.run_projections(hist, ajp)
+    au = proj["assumptions_used"]
+    assert au["cap_years"] == 8   # 10 - 2 = 8
+    assert au["cap_years_source"] == "ai_moat"
+
+
+def test_cap_ai_clamp_low():
+    """cap_years=1 → clamped to 2."""
+    hist = _make_hist()
+    ajp = _make_ajp({"cap_years": 1})
+    proj = StatementsEngine.run_projections(hist, ajp)
+    au = proj["assumptions_used"]
+    assert au["cap_years"] == 2
+    assert au["cap_years_source"] == "ai_moat"
+
+
+def test_cap_cyclical_backstop():
+    """Cyclical-peak hist, no cap_years, no normalized_ebit_margin → cap==3, source=engine_cyclical_backstop."""
+    hist = _make_peak_hist()
+    ajp = _make_ajp()  # no cap_years, no normalized_ebit_margin
+    proj = StatementsEngine.run_projections(hist, ajp)
+    au = proj["assumptions_used"]
+    assert au["cap_years"] == 3
+    assert au["cap_years_source"] == "engine_cyclical_backstop"
+    # Verify the peak guardrail fired (proves precondition is satisfied)
+    assert au["ebit_margin_peak_normalized"] is True
+
+
+def test_cap_default():
+    """Normal hist, no AI cap_years → cap==5, source=="default"."""
+    hist = _make_hist()
+    ajp = _make_ajp()  # no cap_years
+    proj = StatementsEngine.run_projections(hist, ajp)
+    au = proj["assumptions_used"]
+    assert au["cap_years"] == 5
+    assert au["cap_years_source"] == "default"
+
+
+def test_cap_value_ordering():
+    """Longer CAP (cap=8) produces higher intrinsic value than shorter CAP (cap=3)."""
+    from sidwell.engine.terminal import TerminalEngine
+    from sidwell.engine.fcf import FCFEngine
+    from sidwell.engine.bridge import BridgeEngine
+
+    hist = _make_hist()
+
+    def _run_and_value(cap: int) -> float:
+        ajp = _make_ajp({"cap_years": cap})
+        proj = StatementsEngine.run_projections(hist, ajp)
+        wacc = 0.10
+        term_res = TerminalEngine.calculate(proj, wacc, ajp)
+        fcf_res = FCFEngine.calculate(proj, wacc, term_res)
+        ev = fcf_res["enterprise_value"]
+        bridge = BridgeEngine.calculate(ev=ev, hist_bs=hist["bs"], ajp=ajp)
+        return bridge["equity_value"]
+
+    eq_cap3 = _run_and_value(3)
+    eq_cap8 = _run_and_value(8)
+
+    assert eq_cap8 > eq_cap3, (
+        f"Expected cap=8 equity ({eq_cap8:.1f}) > cap=3 equity ({eq_cap3:.1f}): "
+        "longer advantage period sustains high growth → higher value"
+    )

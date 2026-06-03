@@ -162,6 +162,11 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
       //                           and you have clear historical evidence of the normal range.
       //                           The engine uses this as the STARTING base margin (replacing the
       //                           last-actual peak/trough value) and fades to ebit_margin_target.
+      //   cap_years               unit "years" — the Competitive Advantage Period: how many years the
+      //                           company can sustain above-average growth before competition erodes it,
+      //                           based on moat strength. Wide/durable moat (strong brand, network effects,
+      //                           switching costs, regulatory moat): 7-8. Moderate moat: 5. Weak/no moat,
+      //                           commodity, or cyclical (price-taker, oversupply-prone): 2-3. Integer 2-8.
       //   da_rate_on_block        unit "ratio" — depreciation as a % of the net fixed-asset base, if guided.
       //   tax_rate                unit "ratio" — guided / normalized effective tax rate.
       //
