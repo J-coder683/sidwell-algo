@@ -8,7 +8,7 @@ fredapi>=0.5
 openpyxl>=3.1.0
 xlrd>=2.0.1
 pdfplumber>=0.11
-streamlit>=1.35.0
+streamlit==1.57.0
 weasyprint>=62.0
 
 beautifulsoup4>=4.12.0
