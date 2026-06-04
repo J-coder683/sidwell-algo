@@ -251,12 +251,33 @@ def run_comps_valuation(
         if valid_implied else None
     )
 
+    implied_ranges = {"ev_ebitda": None, "ev_sales": None, "pe": None}
+    if medians["ev_ebitda"] and t["ebitda"] and t["ebitda"] > 0:
+        m = medians["ev_ebitda"]
+        implied_ranges["ev_ebitda"] = {
+            "low":  _ev_to_ps(m["min"] * t["ebitda"]),
+            "med":  _ev_to_ps(m["med"] * t["ebitda"]),
+            "high": _ev_to_ps(m["max"] * t["ebitda"]),
+        }
+    if medians["ev_sales"] and t["sales"] and t["sales"] > 0:
+        m = medians["ev_sales"]
+        implied_ranges["ev_sales"] = {
+            "low":  _ev_to_ps(m["min"] * t["sales"]),
+            "med":  _ev_to_ps(m["med"] * t["sales"]),
+            "high": _ev_to_ps(m["max"] * t["sales"]),
+        }
+    if medians["pe"] and t["np"] is not None and t["shares"] and t["shares"] > 0:
+        eps = (t["np"] * 1e7) / t["shares"]
+        m = medians["pe"]
+        implied_ranges["pe"] = {"low": m["min"]*eps, "med": m["med"]*eps, "high": m["max"]*eps}
+
     caveat = "n<3 is noisy" if n_valid < 3 else ""
 
     return {
         "peer_multiples":    peer_multiples,
         "medians":           medians,
         "implied_per_share": implied,
+        "implied_ranges":    implied_ranges,
         "comps_range":       comps_range,
         "excluded":          excluded,
         "n_peers":           n_peers,

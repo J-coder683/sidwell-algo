@@ -703,16 +703,34 @@ def _render_dcf_tab(results: dict):
                 # ---- Football field ----
                 st.markdown("**Football field**")
                 intrinsic = dcf_results["intrinsic_value_per_share"]
-                rows = [{"Method": "DCF (base)", "low": intrinsic, "high": intrinsic, "mid": intrinsic}]
-                for lbl, key in [("Comps EV/EBITDA", "ev_ebitda"),
-                                 ("Comps EV/Sales", "ev_sales"), ("Comps P/E", "pe")]:
-                    v = imp.get(key)
-                    if v:
-                        rows.append({"Method": lbl, "low": v, "high": v, "mid": v})
-                cr = comps.get("comps_range")
-                if cr and cr.get("low") is not None:
-                    rows.append({"Method": "Comps blended", "low": cr["low"], "high": cr["high"],
-                                 "mid": (cr["low"] + cr["high"]) / 2.0})
+                rows = []
+
+                # DCF bear/bull via WACC ±1pp (offline re-run of the engine)
+                dcf_lo = dcf_hi = intrinsic
+                try:
+                    _hi = _dcf.run_dcf_valuation(financials, macro_data, rf, qual,
+                            overrides={"wacc_override": max(0.03, round(base_wacc - 0.01, 4))})["intrinsic_value_per_share"]
+                    _lo = _dcf.run_dcf_valuation(financials, macro_data, rf, qual,
+                            overrides={"wacc_override": round(base_wacc + 0.01, 4)})["intrinsic_value_per_share"]
+                    dcf_lo, dcf_hi = min(_lo, _hi), max(_lo, _hi)
+                except Exception:
+                    pass
+                rows.append({"Method": "DCF (WACC ±1%)", "low": dcf_lo, "high": dcf_hi, "mid": intrinsic})
+
+                ir = comps.get("implied_ranges", {})
+                for lbl, key in [("Comps EV/EBITDA", "ev_ebitda"), ("Comps EV/Sales", "ev_sales"), ("Comps P/E", "pe")]:
+                    rng = ir.get(key)
+                    if rng and rng.get("med") is not None:
+                        lo = rng["low"]  if rng.get("low")  is not None else rng["med"]
+                        hi = rng["high"] if rng.get("high") is not None else rng["med"]
+                        rows.append({"Method": lbl, "low": min(lo, hi), "high": max(lo, hi), "mid": rng["med"]})
+
+                # Incoherence flag: if the comps method medians span > 2x, peers likely aren't comparable
+                _cmeds = [r["mid"] for r in rows if r["Method"].startswith("Comps") and r["mid"]]
+                if len(_cmeds) >= 2 and min(_cmeds) > 0 and (max(_cmeds) / min(_cmeds)) > 2.0:
+                    st.caption(f"⚠️ Comps span {max(_cmeds)/min(_cmeds):.1f}× — peers likely aren't comparable for "
+                               f"this company (common for high-growth names); weight the DCF more than comps.")
+
                 dff = pd.DataFrame(rows)
                 order = list(dff["Method"])
                 bars = alt.Chart(dff).mark_bar(height=14, color="#9ec5e8").encode(

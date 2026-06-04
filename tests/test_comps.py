@@ -260,3 +260,33 @@ def test_scale_anchor_identical_peer_implies_current_price():
     assert abs(imp["ev_sales"] - target_current_price) < 0.01, (
         f"EV/Sales implied {imp['ev_sales']:.4f} ≠ target price {target_current_price}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Test 5: Implied ranges (football field bar bounds)
+# ---------------------------------------------------------------------------
+
+def test_implied_ranges():
+    """Verify that implied_ranges are computed correctly for multiple peers
+    (low <= med <= high) and collapse to a point for identical clones."""
+    # Two differing peers
+    calls = {"PEER_A.NS": _make_peer_fin(), "PEER_B.NS": _PEER_B}
+    res = run_comps_valuation(_TARGET_FIN, ["PEER_A.NS", "PEER_B.NS"], fetch_fn=calls.__getitem__)
+    ir = res["implied_ranges"]
+
+    assert ir["ev_ebitda"] is not None
+    assert ir["ev_ebitda"]["low"] <= ir["ev_ebitda"]["med"] <= ir["ev_ebitda"]["high"]
+    assert ir["ev_ebitda"]["low"] > 0
+
+    assert ir["pe"] is not None
+    assert ir["pe"]["low"] <= ir["pe"]["med"] <= ir["pe"]["high"]
+
+    # Identical clone peers
+    clone = _make_peer_fin()
+    calls2 = {"CLONE1": clone, "CLONE2": clone}
+    res2 = run_comps_valuation(_TARGET_FIN, ["CLONE1", "CLONE2"], fetch_fn=calls2.__getitem__)
+    ir2 = res2["implied_ranges"]
+
+    # For identical peers, min == med == max, so ranges collapse to a point
+    assert ir2["ev_ebitda"]["low"] == ir2["ev_ebitda"]["med"] == ir2["ev_ebitda"]["high"]
+    assert abs(ir2["ev_ebitda"]["low"] - 200.0) < 0.01
