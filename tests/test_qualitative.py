@@ -2,7 +2,13 @@ import json
 import pytest
 from unittest.mock import patch, MagicMock
 
-from analysis.qualitative import extract_qualitative, MODEL_NAME, PROMPT_VERSION, _extract_html
+from analysis.qualitative import (
+    extract_qualitative,
+    MODEL_NAME,
+    PROMPT_VERSION,
+    _extract_html,
+    _select_documents,
+)
 
 # All tests are OFFLINE: the OpenAI/DeepSeek client, PDF fetch (requests) and
 # pdfplumber are mocked so the suite never makes a network or LLM call.
@@ -267,3 +273,36 @@ def test_historical_context_prepended_in_prompt(mock_pdfplumber, mock_get, monke
     assert hist_pos < docs_pos, (
         "Historical context must appear BEFORE the documents section in the prompt"
     )
+
+
+# ---------------------------------------------------------------------------
+# _select_documents — pure, offline (no network / DeepSeek needed)
+# ---------------------------------------------------------------------------
+
+_ANNUAL    = {"url": "http://x/ar.pdf",     "type": "annual_report",    "label": "AR"}
+_CONCALL_A = {"url": "http://x/cc1.pdf",    "type": "concall_transcript","label": "Concall A"}
+_CONCALL_B = {"url": "http://x/cc2.pdf",    "type": "concall_transcript","label": "Concall B"}
+_RATING    = {"url": "http://x/r.html",     "type": "credit_rating",    "label": "Rating"}
+
+_FULL_LIST = [_ANNUAL, _CONCALL_A, _CONCALL_B, _RATING]
+
+
+def test_select_documents_with_research_returns_latest_concall_only():
+    """has_research=True → only the first (newest) concall; discover returns newest-first."""
+    result = _select_documents(_FULL_LIST, has_research=True)
+    assert result == [_CONCALL_A], (
+        f"Expected [_CONCALL_A], got {result}"
+    )
+
+
+def test_select_documents_without_research_returns_full_list():
+    """has_research=False → all documents unchanged."""
+    result = _select_documents(_FULL_LIST, has_research=False)
+    assert result == _FULL_LIST
+
+
+def test_select_documents_with_research_no_concall_returns_empty():
+    """has_research=True but no concall present → empty list (research-only mode)."""
+    docs_no_concall = [_ANNUAL, _RATING]
+    result = _select_documents(docs_no_concall, has_research=True)
+    assert result == []

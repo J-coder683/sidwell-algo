@@ -266,6 +266,47 @@ def _extract_html(html_bytes: bytes) -> tuple[str, dict]:
     return text, {"sections_found": ["html_full"], "fallback_used": False, "pages_extracted": 0}
 
 
+def _table_to_md(rows: list) -> str:
+    """Convert a list-of-lists table (from pdfplumber) to a Markdown table string."""
+    rows = [["" if c is None else str(c).replace("\n", " ").strip() for c in r]
+            for r in (rows or []) if r]
+    if not rows:
+        return ""
+    header = rows[0] or [""]
+    w = len(header)
+    out = ["| " + " | ".join(header) + " |",
+           "| " + " | ".join(["---"] * w) + " |"]
+    for r in rows[1:]:
+        r = (r + [""] * w)[:w]
+        out.append("| " + " | ".join(r) + " |")
+    return "\n".join(out)
+
+
+def _extract_research_markdown(pdf_bytes: bytes) -> tuple[str, dict]:
+    """Research/sell-side reports are table-heavy. Emit markdown: page prose + each
+    table rendered as a markdown table, so DeepSeek sees structured numbers."""
+    parts = []
+    with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
+        for page in pdf.pages:
+            txt = (page.extract_text() or "").strip()
+            if txt:
+                parts.append(txt)
+            for tbl in (page.extract_tables() or []):
+                md = _table_to_md(tbl)
+                if md:
+                    parts.append(md)
+    return "\n\n".join(parts), {}
+
+
+def _select_documents(documents: list, has_research: bool) -> list:
+    """If research is supplied, use only the latest concall (discover returns
+    newest-first) plus the research; else use all discovered documents."""
+    if has_research:
+        concalls = [d for d in documents if d.get("type") == "concall_transcript"]
+        return concalls[:1]   # latest only; [] if none
+    return documents
+
+
 # ─── DeepSeek client ──────────────────────────────────────────────────────────
 
 def _call_deepseek(documents_text: str, ticker: str, historical_context: str = "") -> dict:
@@ -332,9 +373,30 @@ def _call_deepseek(documents_text: str, ticker: str, historical_context: str = "
 
 MIN_USABLE_DOCS = 1
 
-def extract_qualitative(ticker: str, documents: list, historical_context: str = "") -> dict:
+def extract_qualitative(
+    ticker: str,
+    documents: list,
+    historical_context: str = "",
+    research_docs: list | None = None,
+) -> dict:
     """
     Run DeepSeek V4 Pro extraction across the documents.
+
+    Parameters
+    ----------
+    ticker : str
+        Stock ticker.
+    documents : list
+        Discovered documents (each: {url, type, label}) from doc_module.discover_documents.
+    historical_context : str
+        Optional Markdown block prepended before the prompt.
+    research_docs : list[{"filename": str, "bytes": bytes}] | None
+        User-uploaded equity research PDFs (or other docs). When supplied:
+        - Only the latest concall (newest-first from discover) + these research
+          docs are sent to DeepSeek (discovery still runs to get the concall).
+        - The MIN_USABLE_DOCS gate is bypassed (research is itself high-value).
+        - Cache key incorporates a hash of the uploaded bytes so a stale
+          no-research result is never served.
 
     Returns a dict matching the schema in qualitative_extraction.md plus:
       - status: "available" | "unavailable"
@@ -346,16 +408,30 @@ def extract_qualitative(ticker: str, documents: list, historical_context: str = 
     Cached by combined document URL hash + prompt version.
     Never raises — all failure modes return an "unavailable" dict.
     """
-    if not documents:
-        return _unavailable(f"No documents found for {ticker} on screener.in")
-        
-    high_value_docs = [d for d in documents if d.get("type") in ("annual_report", "concall_transcript")]
-    if len(high_value_docs) < MIN_USABLE_DOCS:
-        return _unavailable(f"Fewer than {MIN_USABLE_DOCS} high-value document(s) (AR/Concall) found for {ticker}")
+    research_docs = research_docs or []
+    has_research = len(research_docs) > 0
+    selected = _select_documents(documents, has_research)
 
-    urls = sorted(d["url"] for d in documents)
-    combined_url_hash = hashlib.sha256("".join(urls).encode()).hexdigest()[:16]
-    cache_key = f"qualitative_{ticker}_{combined_url_hash}_{PROMPT_VERSION}.json"
+    # Gate: require high-value docs only when no user research is supplied.
+    if not has_research:
+        if not documents:
+            return _unavailable(f"No documents found for {ticker} on screener.in")
+        high_value_docs = [d for d in documents if d.get("type") in ("annual_report", "concall_transcript")]
+        if len(high_value_docs) < MIN_USABLE_DOCS:
+            return _unavailable(
+                f"Fewer than {MIN_USABLE_DOCS} high-value document(s) (AR/Concall) found for {ticker}"
+            )
+    else:
+        # With research: still return unavailable if we have absolutely nothing to send.
+        if not selected and not research_docs:
+            return _unavailable(f"No documents found for {ticker} on screener.in")
+
+    # Cache key must vary with uploaded research content so a stale no-research
+    # result is never returned when research is added.
+    url_src = "".join(sorted(d["url"] for d in selected))
+    research_src = b"".join(r.get("bytes", b"") for r in research_docs)
+    combined = hashlib.sha256(url_src.encode() + research_src).hexdigest()[:16]
+    cache_key = f"qualitative_{ticker}_{combined}_{PROMPT_VERSION}.json"
 
     cached = cache.get_json(cache_key, QUALITATIVE_CACHE_TTL)
     if cached is not None:
@@ -365,7 +441,8 @@ def extract_qualitative(ticker: str, documents: list, historical_context: str = 
     extracted_docs = []
     extraction_metadata_docs = []
 
-    for d in documents:
+    # --- Fetch and extract selected discovered documents (URL path) ---
+    for d in selected:
         url = d["url"]
         doc_type = d.get("type", "unknown")
         label = d.get("label", url)
@@ -373,7 +450,7 @@ def extract_qualitative(ticker: str, documents: list, historical_context: str = 
             resp = requests.get(url, timeout=30, headers=BROWSER_HEADERS)
             resp.raise_for_status()
             pdf_bytes = resp.content
-            
+
             # Prevent Streamlit Cloud OOM: Skip PDFs larger than 50MB
             if len(pdf_bytes) > 50 * 1024 * 1024:
                 logger.warning(f"Skipping {url}: file too large ({len(pdf_bytes)/1024/1024:.1f} MB). Prevents OOM.")
@@ -408,8 +485,39 @@ def extract_qualitative(ticker: str, documents: list, historical_context: str = 
             logger.warning(f"Failed to fetch or parse {url}: {type(e).__name__}: {e}")
             continue
 
+    # --- Extract user-uploaded research docs (bytes path, no network) ---
+    for r in research_docs:
+        b = r.get("bytes", b"")
+        if not b:
+            continue
+        if len(b) > 50 * 1024 * 1024:  # OOM guard, same as URL path
+            logger.warning(
+                f"Skipping uploaded research {r.get('filename')}: "
+                f"file too large ({len(b)/1024/1024:.1f} MB). Prevents OOM."
+            )
+            continue
+        try:
+            if b[:5].startswith(b"%PDF"):
+                text, meta = _extract_research_markdown(b)
+            else:
+                text, meta = _extract_html(b)
+            extracted_docs.append({
+                "filename": r.get("filename", "research.pdf"),
+                "type": "research_report",
+                "text": text,
+            })
+            extraction_metadata_docs.append({
+                "url": r.get("filename", "research.pdf"),
+                "type": "research_report",
+                "chars_extracted": len(text),
+                "sections_found": [],
+                "fallback_used": False,
+            })
+        except Exception as e:
+            logger.warning(f"Failed to parse uploaded research {r.get('filename')}: {e}")
+
     if not extracted_docs:
-        return _unavailable(f"All {len(documents)} documents for {ticker} failed to fetch or parse")
+        return _unavailable(f"All documents for {ticker} failed to fetch or parse")
 
     documents_text = "\n\n---\n\n".join(
         f"### {d['filename']} (type: {d['type']})\n\n{d['text']}"

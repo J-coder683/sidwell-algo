@@ -111,13 +111,36 @@ def _extract_qualitative(ticker: str, doc_tuples: tuple):
 
 
 @st.cache_data(ttl=86_400, show_spinner=False)   # 24h
-def _run_pipeline(ticker: str) -> dict:
+def _run_pipeline(ticker: str, research_tuple: tuple = ()) -> dict:
     """
     Full pipeline — delegates to value.analyze() so app.py and value.py
     always call the SAME code path.  Parity is structural, not a convention.
+
+    research_tuple: hashable tuple of (filename, bytes) pairs so @st.cache_data
+    can vary its key with uploaded research without needing a dict.
+    Empty tuple () => no research => identical to prior behaviour.
     """
     from value import analyze
-    return analyze(ticker)
+    research_docs = [{"filename": n, "bytes": b} for n, b in research_tuple] or None
+    return analyze(ticker, research_docs=research_docs)
+
+
+@st.cache_data(ttl=86_400, show_spinner=False)
+def _peer_options() -> dict:
+    """Map 'Company Name (TICKER)' -> TICKER from the committed universe index."""
+    from data.ticker_resolver import get_local_index
+    opts = {}
+    for name, info in get_local_index().items():
+        nse = info.get("nse_symbol", "")
+        bse = info.get("bse_code", "")
+        if nse:
+            t = f"{nse}.NS"
+        elif bse:
+            t = f"{bse}.BO"
+        else:
+            continue
+        opts[f"{name} ({t})"] = t
+    return opts
 
 
 # ---------------------------------------------------------------------------
@@ -623,27 +646,24 @@ def _render_dcf_tab(results: dict):
     st.divider()
     st.markdown("### \U0001f3df\ufe0f Comps & Football Field")
     with st.expander("Comparable companies (you choose the peers)", expanded=False):
-        st.caption("Enter 2\u20135 peers (tickers or names), comma-separated, e.g. "
-                   "BRITANNIA.NS, NESTLEIND.NS. You pick the peers; multiples are computed from screener.")
-        peers_raw = st.text_input("Peers", key=f"comps_peers_{ticker}",
-                                  placeholder="BRITANNIA.NS, NESTLEIND.NS")
+        st.caption("Pick 2\u20135 peer companies \u2014 type a name and choose from the dropdown.")
+        _opts = _peer_options()
+        selected = st.multiselect(
+            "Peers",
+            options=list(_opts.keys()),
+            max_selections=5,
+            key=f"comps_ms_{ticker}",
+            placeholder="Type a company name and pick from the list\u2026",
+        )
+        from valuation.comps import run_comps_valuation
         if st.button("Run comps", key=f"comps_btn_{ticker}"):
-            from data.ticker_resolver import resolve_ticker_from_input
-            from valuation.comps import run_comps_valuation
-            raw = [x.strip() for x in (peers_raw or "").split(",") if x.strip()]
-            resolved = []
-            for r in raw:
-                try:
-                    t, _ = resolve_ticker_from_input(r)
-                except Exception:
-                    t = r.upper()
-                resolved.append(t)
-            if len(resolved) < 2:
-                st.warning("Enter at least 2 peers.")
+            tickers = [_opts[s] for s in selected]
+            if len(tickers) < 2:
+                st.warning("Pick at least 2 peers.")
             else:
                 with st.spinner("Fetching peers and computing multiples\u2026"):
                     try:
-                        st.session_state[f"comps_data_{ticker}"] = run_comps_valuation(financials, resolved[:5])
+                        st.session_state[f"comps_data_{ticker}"] = run_comps_valuation(financials, tickers[:5])
                     except Exception as e:
                         st.session_state[f"comps_data_{ticker}"] = {"error": f"Comps failed: {e}"}
 
@@ -778,6 +798,26 @@ with st.sidebar:
 
     st.divider()
 
+    research_files = st.file_uploader(
+        "Equity research report (optional, max 2 PDFs)",
+        type=["pdf"],
+        accept_multiple_files=True,
+        key="research_upload",
+        help=(
+            "Sell-side research. If provided, Sidwell uses ONLY the latest concall + "
+            "your report(s) for the qualitative read; otherwise it uses all discovered filings."
+        ),
+    )
+    if research_files and len(research_files) > 2:
+        st.warning("Max 2 research reports — using the first 2.")
+        research_files = research_files[:2]
+    research_tuple = tuple((f.name, f.getvalue()) for f in (research_files or []))
+    if research_tuple:
+        st.caption(
+            f"\U0001f4c4 {len(research_tuple)} research report(s) loaded "
+            "\u2014 will use latest concall + your report(s)."
+        )
+
     with st.expander("Advanced (optional): your own assumptions", expanded=False):
         st.caption("Leave any field blank to let Sidwell/DeepSeek decide. Filled fields override ours.")
         _uo: dict = {}
@@ -833,7 +873,7 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
     # ---- Run pipeline ----
     with st.spinner(f"Running Sidwell pipeline for **{ticker}**…"):
         try:
-            results = _run_pipeline(ticker)
+            results = _run_pipeline(ticker, research_tuple)
         except ValueError as e:
             err_msg = str(e)
             if "appears to be cyclical" in err_msg:
