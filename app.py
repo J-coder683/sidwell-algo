@@ -717,13 +717,17 @@ def _render_dcf_tab(results: dict):
                     pass
                 rows.append({"Method": "DCF (WACC ±1%)", "low": dcf_lo, "high": dcf_hi, "mid": intrinsic})
 
-                ir = comps.get("implied_ranges", {})
+                ir  = comps.get("implied_ranges", {}) or {}
+                imp = comps.get("implied_per_share", {}) or {}
                 for lbl, key in [("Comps EV/EBITDA", "ev_ebitda"), ("Comps EV/Sales", "ev_sales"), ("Comps P/E", "pe")]:
                     rng = ir.get(key)
                     if rng and rng.get("med") is not None:
                         lo = rng["low"]  if rng.get("low")  is not None else rng["med"]
                         hi = rng["high"] if rng.get("high") is not None else rng["med"]
                         rows.append({"Method": lbl, "low": min(lo, hi), "high": max(lo, hi), "mid": rng["med"]})
+                    elif imp.get(key) is not None:          # fallback: cached result w/o ranges -> point
+                        v = imp[key]
+                        rows.append({"Method": lbl, "low": v, "high": v, "mid": v})
 
                 # Incoherence flag: if the comps method medians span > 2x, peers likely aren't comparable
                 _cmeds = [r["mid"] for r in rows if r["Method"].startswith("Comps") and r["mid"]]
