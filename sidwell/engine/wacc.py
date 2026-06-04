@@ -87,5 +87,13 @@ class WACCEngine:
             "target_wacc": target_wacc,
             "pretax_kd": pretax_kd,
             "after_tax_kd": after_tax_kd,
-            "avg_wacc": avg_wacc
+            "avg_wacc": avg_wacc,
+            # Weights + inputs exposed for the WACC sheet formulas and app display
+            "tax_rate": tax_rate,
+            "target_debt_to_cap": target_debt_to_cap,
+            "current_equity_weight": (current_equity / (current_debt + current_equity))
+                                      if (current_debt + current_equity) > 0 else 1.0,
+            "current_debt_weight": (current_debt / (current_debt + current_equity))
+                                    if (current_debt + current_equity) > 0 else 0.0,
         }
+

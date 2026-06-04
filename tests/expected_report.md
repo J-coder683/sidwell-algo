@@ -73,8 +73,8 @@ Every component of the Weighted Average Cost of Capital (WACC) is explicitly sou
 | **Cost of Equity ($K_e$)** | 12.15% | CAPM: $R_f + \beta \times ERP$ = 12.15% |
 | **Cost of Debt ($K_d$)** | 6.00% | AJP Engine Fallback |
 | **Effective Tax Rate ($t$)** | 25.00% | 4-year historical average from filings |
-| **Equity Weight ($W_e$)** | 50.00% | Market Cap / (Market Cap + Total Debt) |
-| **Debt Weight ($W_d$)** | 50.00% | Total Debt / (Market Cap + Total Debt) |
+| **Equity Weight ($W_e$)** | 96.15% | Market Cap / (Market Cap + Total Debt) |
+| **Debt Weight ($W_d$)** | 3.85% | Total Debt / (Market Cap + Total Debt) |
 | **Computed WACC** | **11.73%** | Weighted cost of capital = **11.73%** |
 
 ### 5-Year High-Growth Forecast (Stage 1)

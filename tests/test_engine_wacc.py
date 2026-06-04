@@ -266,3 +266,56 @@ def test_country_risk_premium_adds_to_erp():
     res = WACCEngine.calculate(fin, ajp)
     assert abs(res["total_erp"] - 0.07) < 1e-9
     assert abs(res["current_ke"] - 0.12) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Test 7: current_equity_weight / current_debt_weight + extra keys exposed
+#
+# fin: market_cap = 80, debt = 20  →  equity_weight = 80/100 = 0.80
+#                                       debt_weight   = 20/100 = 0.20
+# weights must sum to 1.0; tax_rate and target_debt_to_cap must be present.
+# ---------------------------------------------------------------------------
+def test_weight_keys_present_and_correct():
+    peer_betas = [{"beta": 1.2, "debt": 40.0, "equity": 60.0}]
+    ajp = _make_ajp([
+        {"driver_id": "risk_free_rate",                 "value": 0.05},
+        {"driver_id": "equity_risk_premium",            "value": 0.05},
+        {"driver_id": "country_risk_premium",           "value": 0.00},
+        {"driver_id": "tax_rate",                       "value": 0.25},
+        {"driver_id": "peer_betas",                     "value": peer_betas},
+        {"driver_id": "pretax_cost_of_debt_override",   "value": 0.08},
+        {"driver_id": "target_debt_to_cap",             "value": 0.30},
+    ])
+    fin = _minimal_fin(debt=20.0, market_cap=80.0)
+    res = WACCEngine.calculate(fin, ajp)
+
+    # Real market-value weights
+    assert abs(res["current_equity_weight"] - 80.0 / 100.0) < 1e-9
+    assert abs(res["current_debt_weight"]   - 20.0 / 100.0) < 1e-9
+    assert abs(res["current_equity_weight"] + res["current_debt_weight"] - 1.0) < 1e-9
+
+    # Extra metadata keys must be present
+    assert "tax_rate" in res
+    assert "target_debt_to_cap" in res
+    assert abs(res["tax_rate"] - 0.25) < 1e-9
+    assert abs(res["target_debt_to_cap"] - 0.30) < 1e-9
+
+
+# ---------------------------------------------------------------------------
+# Test 8: pure-equity company weights — equity_weight = 1.0, debt_weight = 0.0
+# ---------------------------------------------------------------------------
+def test_weight_keys_pure_equity():
+    ajp = _make_ajp([
+        {"driver_id": "risk_free_rate",                 "value": 0.05},
+        {"driver_id": "equity_risk_premium",            "value": 0.05},
+        {"driver_id": "country_risk_premium",           "value": 0.00},
+        {"driver_id": "tax_rate",                       "value": 0.25},
+        {"driver_id": "pretax_cost_of_debt_override",   "value": 0.08},
+        {"driver_id": "target_debt_to_cap",             "value": 0.0},
+    ])
+    fin = _minimal_fin(debt=0.0, market_cap=100.0)
+    res = WACCEngine.calculate(fin, ajp)
+
+    assert abs(res["current_equity_weight"] - 1.0) < 1e-9
+    assert abs(res["current_debt_weight"]   - 0.0) < 1e-9
+    assert abs(res["current_equity_weight"] + res["current_debt_weight"] - 1.0) < 1e-9

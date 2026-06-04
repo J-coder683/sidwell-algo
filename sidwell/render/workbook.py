@@ -826,7 +826,7 @@ class WorkbookRenderer:
         # Summary block (col C). WACC/g/exit-multiple linked from their detailed sheets.
         # Terminal value matches the engine: average of Gordon and exit-multiple TV.
         ws.cell(row=9, column=2, value="WACC (from 9_WACC)").font = F.FONT_BOLD
-        w9 = ws.cell(row=9, column=3, value="='9_WACC'!$C$14"); w9.font = F.FONT_LINK; w9.number_format = F.FMT_PERCENT
+        w9 = ws.cell(row=9, column=3, value="='9_WACC'!$C$18"); w9.font = F.FONT_LINK; w9.number_format = F.FMT_PERCENT
         ws.cell(row=10, column=2, value="Terminal growth g (from 10_Terminal)").font = F.FONT_BOLD
         g10 = ws.cell(row=10, column=3, value="='10_Terminal'!$C$3"); g10.font = F.FONT_LINK; g10.number_format = F.FMT_PERCENT
         ws.cell(row=11, column=2, value="Exit EV/EBITDA (from 10_Terminal)").font = F.FONT_BOLD
@@ -845,23 +845,46 @@ class WorkbookRenderer:
         ws.cell(row=17, column=3, value="=C12+C16").number_format = F.FMT_NUMBER
 
     def render_wacc(self):
+        """Formula-driven WACC build.
+
+        Blue cells (C3–C7, C9, C14) are hardcoded inputs read from the engine.
+        All other rows are live Excel formulas:
+          C8  = after-tax Kd         = C7*(1-C6)
+          C10 = debt weight          = 1-C9
+          C11 = current levered beta = C5*(1+(1-C6)*(C10/C9))
+          C12 = Ke (CAPM, current)   = C3+C11*C4
+          C13 = WACC (current)       = C9*C12+C10*C8
+          C15 = target levered beta  = C5*(1+(1-C6)*(C14/(1-C14)))
+          C16 = Ke (CAPM, target)    = C3+C15*C4
+          C17 = WACC (target)        = (1-C14)*C16+C14*C8
+          C18 = WACC (avg, used)     = (C13+C17)/2  ← linked by 8_FCF_DCF
+
+        Editing any blue input cell recomputes the full WACC and propagates
+        through to Enterprise Value and Intrinsic Value automatically.
+        """
         ws = self._create_sheet("9_WACC")
-        self._write_header(ws, 2, 2, "WACC Build")
+        self._write_header(ws, 2, 2, "WACC Build — CAPM / Hamada")
         w = self.results["wacc"]
         pct = Formats.FMT_PERCENT
         r = 3
-        r = self._kv(ws, r, "Risk-free rate", w["rf"], pct, blue=True)
-        r = self._kv(ws, r, "Total ERP", w["total_erp"], pct, blue=True)
-        r = self._kv(ws, r, "Asset (unlevered) beta", w["median_asset_beta"], '0.00', blue=True)
-        r = self._kv(ws, r, "Current levered beta", w["current_levered_beta"], '0.00')
-        r = self._kv(ws, r, "Cost of equity (current)", w["current_ke"], pct)
-        r = self._kv(ws, r, "WACC (current structure)", w["current_wacc"], pct)
-        r = self._kv(ws, r, "Target levered beta", w["target_levered_beta"], '0.00')
-        r = self._kv(ws, r, "Cost of equity (target)", w["target_ke"], pct)
-        r = self._kv(ws, r, "WACC (target structure)", w["target_wacc"], pct)
-        r = self._kv(ws, r, "Pre-tax cost of debt", w["pretax_kd"], pct, blue=True)
-        r = self._kv(ws, r, "After-tax cost of debt", w["after_tax_kd"], pct)
-        r = self._kv(ws, r, "WACC (average, used)", w["avg_wacc"], pct, blue=True)  # editable driver (C14)
+        # ── Blue inputs (C3–C9, C14) ─────────────────────────────────────────
+        r = self._kv(ws, r, "Risk-free rate (rf)",            w["rf"],                    pct,  blue=True)  # C3
+        r = self._kv(ws, r, "Total ERP",                      w["total_erp"],             pct,  blue=True)  # C4
+        r = self._kv(ws, r, "Unlevered (asset) beta",         w["median_asset_beta"],    '0.00', blue=True)  # C5
+        r = self._kv(ws, r, "Tax rate",                       w["tax_rate"],              pct,  blue=True)  # C6
+        r = self._kv(ws, r, "Pre-tax cost of debt",           w["pretax_kd"],             pct,  blue=True)  # C7
+        # ── Formula rows ─────────────────────────────────────────────────────
+        r = self._kv(ws, r, "After-tax cost of debt",         "=C7*(1-C6)",               pct)             # C8
+        r = self._kv(ws, r, "Equity weight (market value)",   w["current_equity_weight"], pct,  blue=True)  # C9
+        r = self._kv(ws, r, "Debt weight (book)",             "=1-C9",                    pct)             # C10
+        r = self._kv(ws, r, "Current levered beta",           "=C5*(1+(1-C6)*(C10/C9))", '0.00')          # C11
+        r = self._kv(ws, r, "Cost of equity (CAPM)",          "=C3+C11*C4",               pct)             # C12
+        r = self._kv(ws, r, "WACC (current structure)",       "=C9*C12+C10*C8",           pct)             # C13
+        r = self._kv(ws, r, "Target debt-to-cap",             w["target_debt_to_cap"],    pct,  blue=True)  # C14
+        r = self._kv(ws, r, "Target levered beta",            "=C5*(1+(1-C6)*(C14/(1-C14)))", '0.00')      # C15
+        r = self._kv(ws, r, "Cost of equity (target)",        "=C3+C15*C4",               pct)             # C16
+        r = self._kv(ws, r, "WACC (target structure)",        "=(1-C14)*C16+C14*C8",      pct)             # C17
+        r = self._kv(ws, r, "WACC (average, used)",           "=(C13+C17)/2",             pct)             # C18  ← 8_FCF_DCF!$C$9 links here
 
     def render_terminal(self):
         ws = self._create_sheet("10_Terminal")
