@@ -870,6 +870,14 @@ elif _resolve_source == "unresolved":
 if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_last_ticker"] == ticker):
     st.session_state["_last_ticker"] = ticker
 
+    if not research_tuple:
+        from data.research_provider import get_research_for_ticker
+        _lib = get_research_for_ticker(ticker)
+        if _lib:
+            research_tuple = tuple((r["filename"], r["bytes"]) for r in _lib)
+            st.caption(f"📚 Auto-loaded {len(research_tuple)} research report(s) from your local library "
+                       f"for {ticker}.")
+
     # ---- Run pipeline ----
     with st.spinner(f"Running Sidwell pipeline for **{ticker}**…"):
         try:
