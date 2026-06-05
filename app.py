@@ -128,7 +128,7 @@ def _run_pipeline(ticker: str, research_tuple: tuple = ()) -> dict:
 @st.cache_data(ttl=86_400, show_spinner=False)
 def _peer_options() -> dict:
     """Map 'Company Name (TICKER)' -> TICKER from the committed universe index."""
-    from data.ticker_resolver import get_local_index
+    from data.ticker_resolver import get_local_index, get_us_universe
     opts = {}
     for name, info in get_local_index().items():
         nse = info.get("nse_symbol", "")
@@ -140,6 +140,10 @@ def _peer_options() -> dict:
         else:
             continue
         opts[f"{name} ({t})"] = t
+        
+    for tkr, name in get_us_universe().items():
+        opts[f"{name} ({tkr})"] = tkr
+        
     return opts
 
 

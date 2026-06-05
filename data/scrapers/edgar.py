@@ -669,4 +669,84 @@ def fetch_edgar_financials(ticker: str) -> dict:
     return fin
 
 
+def fetch_edgar_filings_text(ticker: str) -> list:
+    """Pull the latest 10-K for a US ticker via edgartools and extract qualitative sections.
 
+    Returns a list with one element: {"filename": str, "text": str}
+    The text contains MD&A + Risk Factors + Business sections (or truncated full text if
+    those section accessors are unavailable). Returns [] on any failure.
+
+    The result is cached for 7 days so repeat calls are instant (offline).
+    """
+    key = f"edgar_filing_text_{ticker.upper()}.json"
+    cached = cache.get_json(key, 7 * 24 * 3600)
+    if cached is not None:
+        return cached
+
+    out = []
+    try:
+        if set_identity is not None:
+            set_identity(_EDGAR_IDENTITY)
+        if Company is None:
+            raise ImportError("edgartools not installed")
+
+        filing = Company(ticker.upper()).get_filings(form="10-K").latest()
+        if filing is None:
+            raise ValueError(f"No 10-K found for {ticker}")
+
+        parts = []
+
+        # Try structured section accessors first
+        try:
+            tenk = filing.obj()
+            # edgartools TenK object may expose these under different attribute names
+            section_candidates = [
+                # (attribute_name, section_label)
+                ("management_discussion_and_analysis", "MD&A"),
+                ("management_discussion", "MD&A"),
+                ("mda", "MD&A"),
+                ("risk_factors", "Risk Factors"),
+                ("business", "Business"),
+                ("item_1", "Business"),
+                ("item_1a", "Risk Factors"),
+                ("item_7", "MD&A"),
+                ("item_7a", "Quantitative Disclosures"),
+            ]
+            seen_labels = set()
+            for attr, label in section_candidates:
+                if label in seen_labels:
+                    continue
+                sec = getattr(tenk, attr, None)
+                if sec:
+                    text_sec = str(sec).strip()
+                    if text_sec:
+                        parts.append(f"## {label}\n\n{text_sec}")
+                        seen_labels.add(label)
+        except Exception as sec_err:
+            logger.debug(f"Structured 10-K section extraction failed for {ticker}: {sec_err}")
+
+        # Fallback: full filing text, truncated
+        if not parts:
+            try:
+                if hasattr(filing, "text"):
+                    full = filing.text()
+                elif hasattr(filing, "markdown"):
+                    full = filing.markdown()
+                else:
+                    full = str(filing)
+            except Exception:
+                full = ""
+            if full and full.strip():
+                parts.append(full[:150_000])
+
+        text = "\n\n".join(p for p in parts if p)[:200_000]
+        if text.strip():
+            fdate = getattr(filing, "filing_date", "") or ""
+            out = [{"filename": f"{ticker.upper()} 10-K {fdate}".strip(), "text": text}]
+
+    except Exception as e:
+        logger.warning(f"fetch_edgar_filings_text({ticker}) failed: {e}")
+        out = []
+
+    cache.set_json(key, out)
+    return out

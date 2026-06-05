@@ -137,6 +137,23 @@ def _build_local_index() -> tuple[dict, dict]:
 _STATIC_INDEX_PATH = os.path.join(os.path.dirname(__file__), "universe_index.json")
 
 
+_us_universe_cache = None
+
+def get_us_universe() -> dict:
+    global _us_universe_cache
+    if _us_universe_cache is not None:
+        return _us_universe_cache
+    
+    path = os.path.join(os.path.dirname(__file__), "us_universe.json")
+    try:
+        import json
+        with open(path, "r", encoding="utf-8") as f:
+            _us_universe_cache = json.load(f)
+    except Exception as e:
+        logger.warning(f"Could not load US universe: {e}")
+        _us_universe_cache = {}
+    return _us_universe_cache
+
 def _load_static_index() -> dict:
     """Load the committed NSE+BSE universe snapshot shipped in the repo.
 
@@ -220,12 +237,24 @@ def search_companies(query: str) -> list[tuple[str, str]]:
             if len(results) >= 15:
                 break
 
-    # 2. Search US hardcoded map
+    # 2. Search US hardcoded map + US universe
+    us_count = 0
     for us_name, us_ticker in _US_NAME_TO_TICKER.items():
         if q in us_name or q in us_ticker.lower():
             label = f"{us_name.title()} ({us_ticker})"
             if not any(t == us_ticker for _, t in results):
                 results.append((label, us_ticker))
+                us_count += 1
+                
+    us_universe = get_us_universe()
+    for us_ticker, us_name in us_universe.items():
+        if us_count >= 15:
+            break
+        if q in us_name.lower() or q in us_ticker.lower():
+            label = f"{us_name} ({us_ticker})"
+            if not any(t == us_ticker for _, t in results):
+                results.append((label, us_ticker))
+                us_count += 1
 
     # 3. If few results, fallback to screener live search
     if len(results) < 5:
@@ -337,7 +366,10 @@ def resolve_ticker_from_input(user_input: str) -> tuple[str, str]:
 
     # Already looks like a ticker — pass through
     if _looks_like_ticker(raw):
-        return raw.upper(), "ticker"
+        ticker = raw.upper()
+        if ticker in get_us_universe():
+            return ticker, "us_ticker"
+        return ticker, "ticker"
 
     # Treat as a name. Check cache first.
     norm = _normalize(raw)
@@ -381,6 +413,13 @@ def resolve_ticker_from_input(user_input: str) -> tuple[str, str]:
         cache.set_json(cache_key, {"ticker": ticker, "source": "us_name_hardcoded"})
         logger.info(f"Resolved name '{raw}' → {ticker} via hardcoded US map")
         return ticker, "us_name_hardcoded"
+
+    us_univ = get_us_universe()
+    for us_ticker, us_name in us_univ.items():
+        if _normalize(us_name) == norm:
+            cache.set_json(cache_key, {"ticker": us_ticker, "source": "us_name"})
+            logger.info(f"Resolved name '{raw}' → {us_ticker} via US universe")
+            return us_ticker, "us_name"
 
     # Try stockanalysis.com search
     us = _resolve_via_stockanalysis_search(raw)

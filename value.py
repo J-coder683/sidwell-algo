@@ -100,8 +100,19 @@ def analyze(
     docs = doc_module.discover_documents(ticker)
     from analysis.historical_context import build_historical_context_md
     hist_ctx = build_historical_context_md(financials)
+
+    # For US tickers: augment research_docs with the latest 10-K text (MD&A / Risk / Business).
+    # India path is untouched — .NS/.BO tickers skip this branch entirely.
+    research_docs = list(research_docs) if research_docs else []
+    if not (ticker.endswith(".NS") or ticker.endswith(".BO")):
+        try:
+            from data.scrapers.edgar import fetch_edgar_filings_text
+            research_docs += fetch_edgar_filings_text(ticker)
+        except Exception as e:
+            logger.warning(f"EDGAR filing text unavailable for {ticker}: {e}")
+
     qualitative_results = qualitative.extract_qualitative(
-        ticker, docs, historical_context=hist_ctx, research_docs=research_docs
+        ticker, docs, historical_context=hist_ctx, research_docs=(research_docs or None)
     )
 
     # Step 5: Run DCF Valuation Engine

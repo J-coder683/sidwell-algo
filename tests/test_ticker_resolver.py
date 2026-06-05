@@ -47,8 +47,8 @@ def test_normalize_strips_and_lowers():
 
 
 def test_resolve_passthrough_for_ticker():
-    ticker, source = resolve_ticker_from_input("AAPL")
-    assert ticker == "AAPL"
+    ticker, source = resolve_ticker_from_input("XYZQ")
+    assert ticker == "XYZQ"
     assert source == "ticker"
 
 
@@ -180,3 +180,25 @@ def test_get_local_index_partial_no_cache(mock_set_json, mock_get_json, mock_bui
     index = get_local_index()
     # Now it should be called
     mock_set_json.assert_called_once()
+
+
+def test_search_us_universe():
+    res = search_companies("apple")
+    assert any(ticker == "AAPL" for label, ticker in res)
+
+def test_resolve_us_universe():
+    ticker, source = resolve_ticker_from_input("AAPL")
+    assert ticker == "AAPL"
+    # _looks_like_ticker passes through, but now we check us_ticker
+    assert source == "us_ticker"
+    
+    ticker2, source2 = resolve_ticker_from_input("RELIANCE.NS")
+    assert ticker2 == "RELIANCE.NS"
+    assert source2 == "ticker"
+
+def test_get_us_universe():
+    from data.ticker_resolver import get_us_universe
+    univ = get_us_universe()
+    assert isinstance(univ, dict)
+    assert len(univ) > 0
+    assert "AAPL" in univ
