@@ -628,7 +628,7 @@ def fetch_edgar_financials(ticker: str) -> dict:
     fin["total_assets"] = total_assets_abs
     fin["total_equity"] = equity_abs
     fin["cash"] = cash_abs
-    fin["debt"] = latest_debt
+    fin["debt"] = debt_abs_series   # per-year absolute-USD list (screener contract; lenses iterate it)
     fin["capex"] = capex_abs
     fin["depreciation"] = depreciation_abs
     fin["working_capital_change"] = wc_change_abs
