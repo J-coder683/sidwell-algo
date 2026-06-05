@@ -43,6 +43,11 @@ def _make_mock_companyfacts_json():
 
     return {
         "facts": {
+            "dei": {
+                "EntityCommonStockSharesOutstanding": {
+                    "units": {"shares": make_series([1.55e10, 1.55e10, 1.55e10], fiscal_ends)}
+                }
+            },
             "us-gaap": {
                 "RevenueFromContractWithCustomerExcludingAssessedTax": {
                     "units": {"USD": make_series(revenues, fiscal_ends)}
@@ -121,6 +126,7 @@ def test_fetch_edgar_returns_correct_structure():
          patch("data.scrapers.edgar.Company", return_value=_make_mock_company()), \
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
+         patch("data.scrapers.edgar._us_price", return_value=189.50), \
          patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
 
         from data.scrapers.edgar import fetch_edgar_financials
@@ -182,6 +188,7 @@ def test_statement_values_are_usd_divided_by_1e7():
          patch("data.scrapers.edgar.Company", return_value=_make_mock_company()), \
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
+         patch("data.scrapers.edgar._us_price", return_value=189.50), \
          patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
 
         from data.scrapers.edgar import fetch_edgar_financials
@@ -209,13 +216,16 @@ def test_top_level_market_cap_and_debt_are_absolute_usd():
          patch("data.scrapers.edgar.Company", return_value=_make_mock_company()), \
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
+         patch("data.scrapers.edgar._us_price", return_value=189.50), \
          patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
 
         from data.scrapers.edgar import fetch_edgar_financials
         fin = fetch_edgar_financials("AAPL")
 
-    assert fin["market_cap"] == pytest.approx(2.935e12, rel=1e-2)
+    assert fin["market_cap"] == pytest.approx(189.50 * 1.55e10, rel=1e-2)
     assert fin["current_price"] == pytest.approx(189.50, rel=1e-3)
+    assert fin["shares_outstanding"] == pytest.approx(1.55e10, rel=1e-3)
+    assert fin["market_cap"] == fin["current_price"] * fin["shares_outstanding"]
 
     last_debt = fin["debt"]
     assert last_debt is not None
@@ -233,6 +243,7 @@ def test_is_bank_and_is_financial_flags():
          patch("data.scrapers.edgar.Company", return_value=_make_mock_company("AAPL")), \
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
+         patch("data.scrapers.edgar._us_price", return_value=189.50), \
          patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
 
         from data.scrapers.edgar import fetch_edgar_financials
@@ -255,6 +266,7 @@ def test_bank_sic_sets_is_bank_true():
          patch("data.scrapers.edgar.Company", return_value=bank_company), \
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
+         patch("data.scrapers.edgar._us_price", return_value=189.50), \
          patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
 
         from data.scrapers.edgar import fetch_edgar_financials
@@ -274,6 +286,7 @@ def test_run_engine_on_mocked_aapl_yields_positive_intrinsic():
          patch("data.scrapers.edgar.Company", return_value=_make_mock_company()), \
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
+         patch("data.scrapers.edgar._us_price", return_value=189.50), \
          patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
 
         from data.scrapers.edgar import fetch_edgar_financials
@@ -324,6 +337,7 @@ def test_cache_is_written_on_fetch():
          patch("data.scrapers.edgar.Company", return_value=_make_mock_company()), \
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
+         patch("data.scrapers.edgar._us_price", return_value=189.50), \
          patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
 
         from data.scrapers.edgar import fetch_edgar_financials
@@ -372,7 +386,8 @@ def test_cache_hit_skips_network():
     with patch("data.scrapers.edgar.cache.get_json", side_effect=mock_get_json), \
          patch("data.scrapers.edgar.Company", mock_company_class), \
          patch("data.scrapers.edgar.requests.get", mock_requests), \
-         patch("data.scrapers.edgar.set_identity"):
+         patch("data.scrapers.edgar.set_identity"), \
+         patch("data.scrapers.edgar._us_price", return_value=189.50):
 
         from data.scrapers.edgar import fetch_edgar_financials
         fin = fetch_edgar_financials("AAPL")

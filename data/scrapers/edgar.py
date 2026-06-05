@@ -1,5 +1,5 @@
 """
-SEC EDGAR financial data adapter using edgartools (XBRL facts) + yfinance (price).
+SEC EDGAR financial data adapter using edgartools (XBRL facts) + stooq/yfinance (price).
 
 CONTRACT: Returns the same dict shape as data/scrapers/screener.py's
 fetch_screener_financials so the existing engine values US companies identically.
@@ -69,6 +69,32 @@ def _safe_float(val) -> Optional[float]:
         return float(val)
     except (ValueError, TypeError):
         return None
+
+
+def _us_price(ticker: str) -> float | None:
+    """Reliable US last price: stooq CSV (no key, cloud-friendly) -> yfinance fallback."""
+    t = ticker.upper()
+    try:
+        import requests
+        r = requests.get(
+            f"https://stooq.com/q/l/?s={t.lower()}.us&f=sd2t2ohlcv&h&e=csv",
+            headers={"User-Agent": "Mozilla/5.0 (Sidwell)"}, timeout=15)
+        r.raise_for_status()
+        lines = r.text.strip().splitlines()
+        if len(lines) >= 2:
+            cols = lines[1].split(",")          # Symbol,Date,Time,Open,High,Low,Close,Volume
+            if len(cols) >= 7 and cols[6] not in ("", "N/D"):
+                return float(cols[6])
+    except Exception:
+        pass
+    try:
+        import yfinance as yf
+        p = _safe_float(getattr(yf.Ticker(t).fast_info, "last_price", None))
+        if p:
+            return p
+    except Exception:
+        pass
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -221,7 +247,7 @@ def _concept_annual_map(usgaap: dict, concepts: list) -> dict:
         if not node:
             continue
         units = node.get("units", {})
-        series = units.get("USD") or units.get("USD/shares") or []
+        series = units.get("USD") or units.get("USD/shares") or units.get("shares") or []
         by_fy = {}
         for e in series:
             if not str(e.get("form", "")).startswith("10-K"):
@@ -409,6 +435,7 @@ def fetch_edgar_financials(ticker: str) -> dict:
         resp.raise_for_status()
         facts_json = resp.json()
         usgaap = facts_json.get("facts", {}).get("us-gaap", {})
+        dei = facts_json.get("facts", {}).get("dei", {})
     except Exception as e:
         raise ValueError(f"edgartools/SEC API: failed to fetch XBRL facts for '{ticker_upper}': {e}") from e
 
@@ -424,6 +451,10 @@ def fetch_edgar_financials(ticker: str) -> dict:
     debt_cur= _concept_annual_map(usgaap, _DEBT_CURRENT_CONCEPTS)
     lease_nc= _concept_annual_map(usgaap, ["OperatingLeaseLiabilityNoncurrent", "FinanceLeaseLiabilityNoncurrent"])
     lease_c = _concept_annual_map(usgaap, _LEASE_CURRENT_CONCEPTS)
+    
+    shares_map = _concept_annual_map(dei, ["EntityCommonStockSharesOutstanding"])
+    if not shares_map:
+        shares_map = _concept_annual_map(usgaap, _SHARES_CONCEPTS)
 
     # fiscal-year axis: union of fys seen in the key anchors, sorted, last 10
     anchor_fys = set()
@@ -507,45 +538,36 @@ def fetch_edgar_financials(ticker: str) -> dict:
             fcf_abs.append(None)
 
     # ------------------------------------------------------------------
-    # 6. Price, shares, market cap via yfinance
+    # 6. Price, shares, market cap
     # ------------------------------------------------------------------
-    current_price = None
-    shares_outstanding = None
-    market_cap = None
     trailing_pe = None
     dividend_yield = 0.0
 
     try:
-        if yf is None:
-            raise ImportError("yfinance not available")
-        yf_ticker = yf.Ticker(ticker_upper)
-        fi = yf_ticker.fast_info
-        current_price = _safe_float(getattr(fi, "last_price", None))
-        shares_outstanding = _safe_float(getattr(fi, "shares", None))
-        market_cap_yf = _safe_float(getattr(fi, "market_cap", None))
-        if market_cap_yf is not None:
-            market_cap = market_cap_yf
-        elif current_price and shares_outstanding:
-            market_cap = current_price * shares_outstanding
-
-        # trailing PE and dividend yield from info (best-effort)
-        try:
+        if globals().get("yf") is not None:
+            yf_ticker = globals()["yf"].Ticker(ticker_upper)
             info = yf_ticker.info
             trailing_pe = _safe_float(info.get("trailingPE"))
             div_yield = _safe_float(info.get("dividendYield"))
             dividend_yield = div_yield if div_yield is not None else 0.0
-        except Exception:
-            pass
     except Exception as e:
-        logger.warning(f"yfinance unavailable for {ticker_upper}: {e}")
+        logger.warning(f"yfinance info unavailable for {ticker_upper}: {e}")
 
-    # Fallback shares from XBRL EntityCommonStockSharesOutstanding
-    if shares_outstanding is None:
-        shares_map = _concept_annual_map(usgaap, _SHARES_CONCEPTS)
-        if shares_map and fys and fys[-1] in shares_map:
-            shares_outstanding = shares_map[fys[-1]]
-        elif shares_map:
-            shares_outstanding = list(shares_map.values())[-1]
+    # Shares: SEC XBRL EntityCommonStockSharesOutstanding (primary)
+    shares_outstanding = None
+    if shares_map:                                  # {fy: value} parsed from the dei concept
+        _vals = [v for v in shares_map.values() if v]
+        shares_outstanding = _vals[-1] if _vals else None
+    if not shares_outstanding:
+        try:
+            import yfinance as yf
+            shares_outstanding = _safe_float(getattr(yf.Ticker(ticker_upper).fast_info, "shares", None))
+        except Exception:
+            shares_outstanding = None
+
+    current_price = _us_price(ticker_upper)
+    market_cap = (current_price * shares_outstanding
+                  if (current_price and shares_outstanding) else None)
 
     # Historical shares: 4-element list (use shares_outstanding for all, like screener)
     historical_shares = [shares_outstanding] * 4 if shares_outstanding else [None] * 4
