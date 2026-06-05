@@ -34,7 +34,8 @@ class WACCEngine:
             median_asset_beta = statistics.median(asset_betas)
         else:
             # Condition 4: Fallback to Damodaran industry beta
-            median_asset_beta = 1.0  # In real implementation this comes from Damodaran
+            _ub = AJPLoader.get_assumption_or_fallback(ajp, "unlevered_beta", None, "")
+            median_asset_beta = float(_ub.value) if _ub.value is not None else 1.0
         
         # Current structure
         current_debt_raw = fin.get("debt", 0.0)

@@ -1,11 +1,11 @@
 # Fixture inputs for snapshot testing
-FIXTURE_RISK_FREE_RATE = 0.06
+FIXTURE_RISK_FREE_RATE = 0.07
 
 FIXTURE_MACRO = {
     "mature_market_erp": 0.05,
-    "country_risk_premium": 0.02,
-    "total_erp": 0.07,
-    "industry_unlevered_beta": 0.90,
+    "country_risk_premium": 0.00,
+    "total_erp": 0.05,
+    "industry_unlevered_beta": 1.00,
     "industry_levered_beta": 1.05
 }
 

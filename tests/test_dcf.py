@@ -116,7 +116,7 @@ def get_base_mock_financials():
 
 def test_engine_integration_returns_required_keys():
     """Smoke test: adapter must return all legacy keys the lenses expect."""
-    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
 
     assert res["ticker"] == "TEST"
     assert res["intrinsic_value_per_share"] > 0
@@ -139,7 +139,7 @@ def test_wacc_hand_verified():
     Derivation: see module docstring.
     avg_WACC = (WACC_curr + WACC_tgt) / 2 = (0.12 + 0.1155) / 2 = 0.11775
     """
-    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     assert abs(res["wacc"] - 0.11775) < 1e-5
 
 
@@ -150,7 +150,7 @@ def test_year0_fcf_hand_verified():
     days de-fabricate to 0 → NWC = 0 every year and ufcf_y0 = NOPAT + D&A − CapEx
     (no working-capital term). The old golden encoded a fabricated 30-day NWC.
     """
-    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     fcf_y0 = res["projections"][0]["fcf"]
     # NWC = 0 (de-fabricated). Pinned regression value; logic tied out by
     # test_math_reconciliation, and ufcf_y0 == nopat+da−capex by construction.
@@ -162,7 +162,7 @@ def test_pv_fcf_hand_verified():
     PV of explicit FCFs (sum of mid-year discounted 10-year FCFs) = 82.6888mm × 1e6.
     Hand-derived via full 10-year loop — see module docstring.
     """
-    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     # 82.6888mm * 1e6 = 82,688,800
     assert abs(res["pv_fcf"] - 139_118_966) < 50_000, f"pv_fcf: {res['pv_fcf']:.0f}"
 
@@ -172,7 +172,7 @@ def test_terminal_value_hand_verified():
     avg_TV = (gordon_tv + exit_tv) / 2 = (169.02mm + 332.86mm) / 2 = 250.94mm
     × 1e6 = 250,940,000
     """
-    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     assert abs(res["terminal_value"] - 438_838_680) < 100_000, \
         f"terminal_value: {res['terminal_value']:.0f}"
 
@@ -181,7 +181,7 @@ def test_pv_terminal_value_hand_verified():
     """
     PV(TV) = 250.94mm / (1+0.11775)^10 = 82.4375mm × 1e6
     """
-    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     assert abs(res["pv_terminal_value"] - 144_164_428) < 50_000, \
         f"pv_terminal_value: {res['pv_terminal_value']:.0f}"
 
@@ -190,7 +190,7 @@ def test_enterprise_value_hand_verified():
     """
     EV = pv_fcf + pv_tv = 82.6888mm + 82.4375mm = 165.1263mm × 1e6
     """
-    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     assert abs(res["enterprise_value"] - 283_283_395) < 100_000, \
         f"enterprise_value: {res['enterprise_value']:.0f}"
 
@@ -199,7 +199,7 @@ def test_equity_value_hand_verified():
     """
     equity = EV + cash(2.0 crore × 10 = 20mm) - debt(0) = 185.1263mm × 1e6
     """
-    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     assert abs(res["equity_value"] - 303_283_395) < 100_000, \
         f"equity_value: {res['equity_value']:.0f}"
 
@@ -210,7 +210,7 @@ def test_intrinsic_value_per_share_hand_verified():
     diluted_shares = market_cap / current_price = 100 / 10 = 10
     intrinsic = 185.1263mm * 1e6 / 10 = 18,512,630
     """
-    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     assert abs(res["intrinsic_value_per_share"] - 30_328_339) < 100, \
         f"intrinsic: {res['intrinsic_value_per_share']:.2f}"
 
@@ -220,7 +220,7 @@ def test_stage2_growth_fades_monotone():
     Stage 2 (years 5–9) growth rates must strictly decrease toward terminal growth.
     The adapter reports year_growth as a ratio (e.g. 1.045 = +4.5%).
     """
-    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     projs = res["projections"]
     # Stage 1 (years 0-4): all at stage1_growth
     stage1_growths = [p["year_growth"] for p in projs[:5]]
@@ -244,7 +244,7 @@ def test_bank_short_circuit_returns_not_applicable():
     """Banks must return not_applicable=True without calling the engine."""
     fin = get_base_mock_financials()
     fin["is_bank"] = True
-    res = run_dcf_valuation(fin, {}, 0.04, None)
+    res = run_dcf_valuation(fin, {}, 0.07, None)
     assert res.get("not_applicable") is True
     assert res["intrinsic_value_per_share"] is None
 
@@ -255,7 +255,7 @@ def test_math_reconciliation():
     enterprise_value + cash - debt ≈ equity_value.
     This is the in-process version of the acceptance math gate.
     """
-    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    res = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     # EV = PV(FCFs) + PV(TV)
     ev_reconstructed = res["pv_fcf"] + res["pv_terminal_value"]
     assert abs(ev_reconstructed - res["enterprise_value"]) < 1_000, \
@@ -353,7 +353,7 @@ def test_cyclical_no_abort_when_normalized_margin_supplied():
 
     with patch("valuation.dcf.run_engine", return_value=_eng):
         # Must NOT raise ValueError for the cyclical path
-        result = run_dcf_valuation(fin, {}, 0.04, qual)
+        result = run_dcf_valuation(fin, {}, 0.07, qual)
 
     assert result["intrinsic_value_per_share"] == -1.0, (
         "Engine result should be returned as-is when normalized_ebit_margin is supplied"
@@ -367,8 +367,8 @@ def test_cyclical_no_abort_when_normalized_margin_supplied():
 def test_overrides_none_is_backward_compatible():
     """overrides=None must produce the exact same intrinsic as calling
     run_dcf_valuation without the param at all."""
-    base = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
-    with_none = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None, overrides=None)
+    base = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
+    with_none = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None, overrides=None)
     assert base["intrinsic_value_per_share"] == with_none["intrinsic_value_per_share"], (
         "overrides=None must be identical to no-override call"
     )
@@ -377,9 +377,9 @@ def test_overrides_none_is_backward_compatible():
 def test_override_stage1_revenue_growth_lowers_intrinsic():
     """Slashing stage1_revenue_growth to 1 % must yield a lower intrinsic
     than the baseline (which uses a 5 % engine-default growth)."""
-    baseline = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    baseline = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     overridden = run_dcf_valuation(
-        get_base_mock_financials(), {}, 0.04, None,
+        get_base_mock_financials(), {}, 0.07, None,
         overrides={"stage1_revenue_growth": 0.01},
     )
     assert overridden["intrinsic_value_per_share"] < baseline["intrinsic_value_per_share"], (
@@ -392,9 +392,9 @@ def test_override_stage1_revenue_growth_lowers_intrinsic():
 def test_override_terminal_growth_lowers_intrinsic():
     """A near-zero terminal_growth must yield a lower intrinsic than the
     engine's default 2 % fallback."""
-    baseline = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    baseline = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     overridden = run_dcf_valuation(
-        get_base_mock_financials(), {}, 0.04, None,
+        get_base_mock_financials(), {}, 0.07, None,
         overrides={"terminal_growth": 0.005},
     )
     assert overridden["intrinsic_value_per_share"] < baseline["intrinsic_value_per_share"], (
@@ -407,9 +407,9 @@ def test_override_terminal_growth_lowers_intrinsic():
 def test_override_wacc_forces_used_wacc_and_lowers_intrinsic():
     """wacc_override=0.20 must (a) be reflected in result['wacc'] and
     (b) produce a lower intrinsic than the baseline (avg_wacc ≈ 0.118)."""
-    baseline = run_dcf_valuation(get_base_mock_financials(), {}, 0.04, None)
+    baseline = run_dcf_valuation(get_base_mock_financials(), {}, 0.07, None)
     overridden = run_dcf_valuation(
-        get_base_mock_financials(), {}, 0.04, None,
+        get_base_mock_financials(), {}, 0.07, None,
         overrides={"wacc_override": 0.20},
     )
     assert abs(overridden["wacc"] - 0.20) < 1e-9, (
@@ -426,11 +426,32 @@ def test_override_absent_driver_no_crash():
     """An override for a driver not present in AJP (exit_ev_ebitda_multiple)
     must be appended without raising any exception."""
     result = run_dcf_valuation(
-        get_base_mock_financials(), {}, 0.04, None,
+        get_base_mock_financials(), {}, 0.07, None,
         overrides={"exit_ev_ebitda_multiple": 8},
     )
     # Engine may or may not use this driver; the important guarantee is no crash
     # and the result still has the required keys.
     assert "intrinsic_value_per_share" in result
     assert result["intrinsic_value_per_share"] > 0
+
+
+def test_macro_threading_lowers_wacc():
+    """With macro_data passed and rf=0.043, assert the result's WACC is LOWER
+    than a rf=0.07/macro={} run, and that engine_results['wacc']['rf'] == 0.043."""
+    fin = get_base_mock_financials()
+    # Baseline with rf=0.07 and empty macro (uses fallbacks: rf 0.07, ERP 0.05, CRP 0, Beta 1.0) -> Ke = 0.12
+    baseline = run_dcf_valuation(fin, {}, 0.07, None)
+    
+    # Threaded with rf=0.043 and lower ERP
+    macro = {
+        "mature_market_erp": 0.042,
+        "country_risk_premium": 0.0,
+        "industry_unlevered_beta": 1.0,
+        "target_industry": "X"
+    }
+    threaded = run_dcf_valuation(fin, macro, 0.043, None)
+    
+    assert threaded["wacc"] < baseline["wacc"]
+    assert threaded["engine_results"]["wacc"]["rf"] == 0.043
+    assert threaded["assumptions"]["target_industry"] == "X"
 

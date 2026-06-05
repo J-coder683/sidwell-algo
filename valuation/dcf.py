@@ -110,6 +110,26 @@ def run_dcf_valuation(
         assumptions = []
         ajp = AJP(meta=meta, assumptions=assumptions)
         
+    def _set_macro(ajp, driver_id, value):
+        if value is None:
+            return
+        for a in ajp.assumptions:
+            if a.driver_id == driver_id:
+                a.value = float(value); a.scenario = None
+                return
+        from sidwell.ajp.schema import AJPAssumption
+        ajp.assumptions.append(AJPAssumption(
+            driver_id=driver_id, value=float(value), unit="ratio",
+            source_type="MACRO", confidence="HIGH",
+            rationale="FRED/Damodaran macro", interrogation_refs=[]))
+
+    if risk_free_rate is not None:
+        _set_macro(ajp, "risk_free_rate", risk_free_rate)
+    if macro_data:
+        _set_macro(ajp, "equity_risk_premium", macro_data.get("mature_market_erp"))
+        _set_macro(ajp, "country_risk_premium", macro_data.get("country_risk_premium"))
+        _set_macro(ajp, "unlevered_beta", macro_data.get("industry_unlevered_beta"))
+
     # 3. Apply user overrides (offline, no-network; no-op when overrides=None)
     ajp = _apply_overrides(ajp, overrides)
 
