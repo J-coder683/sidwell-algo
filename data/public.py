@@ -266,15 +266,17 @@ def get_fred_api_key() -> str:
 
 def fetch_financials(ticker: str) -> dict:
     """Returns Sidwell's standard financials dict.
-    Dispatches to screener.in for Indian tickers (.NS / .BO) and stockanalysis.com for US tickers.
+    Dispatches to screener.in for Indian tickers (.NS / .BO) and SEC EDGAR for US tickers.
     """
     is_india = ticker.endswith(".NS") or ticker.endswith(".BO")
     if is_india:
         from data.scrapers.screener import fetch_screener_financials
         return fetch_screener_financials(ticker)
     else:
-        from data.scrapers.stockanalysis import fetch_stockanalysis_financials
-        return fetch_stockanalysis_financials(ticker)
+        from data.scrapers.edgar import fetch_edgar_financials
+        return fetch_edgar_financials(ticker)
+        # from data.scrapers.stockanalysis import fetch_stockanalysis_financials
+        # return fetch_stockanalysis_financials(ticker)
 
 def fetch_risk_free_rate(ticker: str) -> float:
     """

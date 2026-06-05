@@ -215,12 +215,13 @@ def test_no_duplicate_reports(tmp_path, mock_financials):
 from data.documents import discover_documents
 from pathlib import Path
 
-@patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials")
-def test_fetch_financials_us_dispatches_to_stockanalysis(mock_sa):
-    mock_sa.return_value = {"ticker": "AAPL"}
+@patch("data.scrapers.edgar.fetch_edgar_financials")
+def test_fetch_financials_us_dispatches_to_edgar(mock_edgar):
+    mock_edgar.return_value = {"ticker": "AAPL"}
     res = public.fetch_financials("AAPL")
     assert res["ticker"] == "AAPL"
-    mock_sa.assert_called_once_with("AAPL")
+    mock_edgar.assert_called_once_with("AAPL")
+
 
 @patch("data.scrapers.screener.fetch_screener_financials")
 def test_fetch_financials_india_dispatches_to_screener(mock_scr):
