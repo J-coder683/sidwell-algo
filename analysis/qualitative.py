@@ -429,7 +429,10 @@ def extract_qualitative(
     # Cache key must vary with uploaded research content so a stale no-research
     # result is never returned when research is added.
     url_src = "".join(sorted(d["url"] for d in selected))
-    research_src = b"".join(r.get("bytes", b"") for r in research_docs)
+    research_src = b"".join(
+        r.get("bytes", b"") + r.get("text", "").encode("utf-8")
+        for r in research_docs
+    )
     combined = hashlib.sha256(url_src.encode() + research_src).hexdigest()[:16]
     cache_key = f"qualitative_{ticker}_{combined}_{PROMPT_VERSION}.json"
 
@@ -487,6 +490,23 @@ def extract_qualitative(
 
     # --- Extract user-uploaded research docs (bytes path, no network) ---
     for r in research_docs:
+        # Pre-extracted text path (e.g., from EDGAR 10-K integration)
+        pre_extracted_text = r.get("text")
+        if pre_extracted_text:
+            extracted_docs.append({
+                "filename": r.get("filename", "document.txt"),
+                "type": r.get("type", "regulatory_filing"),
+                "text": pre_extracted_text,
+            })
+            extraction_metadata_docs.append({
+                "url": r.get("filename", "document.txt"),
+                "type": r.get("type", "regulatory_filing"),
+                "chars_extracted": len(pre_extracted_text),
+                "sections_found": ["pre_extracted"],
+                "fallback_used": False,
+            })
+            continue
+
         b = r.get("bytes", b"")
         if not b:
             continue
