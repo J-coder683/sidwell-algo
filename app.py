@@ -437,27 +437,38 @@ def _render_dcf_tab(results: dict):
     rf = results["rf_rate"]
     qual = results["qualitative_results"]
 
-    def _snap(v, lo, step):
-        """Snap v to the nearest grid point lo + n*step."""
-        return round(lo + round((v - lo) / step) * step, 6)
+    def _snap(v, lo, step, hi):
+        """Snap v to the nearest grid point lo + n*step, clamped to [lo, hi]."""
+        s = round(lo + round((v - lo) / step) * step, 6)
+        return min(hi, max(lo, s))
 
-    # Scenario-aware, grid-snapped base defaults (match what the engine used)
+    # Scenario-aware, grid-snapped base defaults (match what the engine used).
+    # The 4th arg (hi) MUST equal each slider's max so a default can never fall
+    # outside the slider range (e.g. ebit_margin_target < 0.02 -> StreamlitValueBelowMinError).
     d = {
-        "g1":    _snap(_ajp_val(base_ajp, "stage1_revenue_growth",    0.10), 0.0,  0.01),
-        "ebit":  _snap(_ajp_val(base_ajp, "ebit_margin_target",        0.15), 0.02, 0.01),
-        "capex": _snap(_ajp_val(base_ajp, "capex_pct_sales_target",    0.05), 0.0,  0.01),
-        "tax":   _snap(_ajp_val(base_ajp, "tax_rate",                  0.25), 0.10, 0.01),
-        "wacc":  _snap(base_wacc,                                              0.06, 0.0025),
-        "wc":    int(_ajp_val(base_ajp, "working_capital_days",         0)),
-        "exit":  _snap(_ajp_val(base_ajp, "exit_ev_ebitda_multiple",   10.0), 4.0,  0.5),
+        "g1":    _snap(_ajp_val(base_ajp, "stage1_revenue_growth",    0.10), 0.0,  0.01,   0.40),
+        "ebit":  _snap(_ajp_val(base_ajp, "ebit_margin_target",        0.15), 0.02, 0.01,   0.50),
+        "capex": _snap(_ajp_val(base_ajp, "capex_pct_sales_target",    0.05), 0.0,  0.01,   0.40),
+        "tax":   _snap(_ajp_val(base_ajp, "tax_rate",                  0.25), 0.10, 0.01,   0.40),
+        "wacc":  _snap(base_wacc,                                              0.06, 0.0025, 0.20),
+        "wc":    max(-60, min(180, int(_ajp_val(base_ajp, "working_capital_days", 0)))),
+        "exit":  _snap(_ajp_val(base_ajp, "exit_ev_ebitda_multiple",   10.0), 4.0,  0.5,    30.0),
     }
     _tg_max0 = max(0.0, round(d["wacc"] - 0.005, 4))
-    d["tg"] = min(_snap(_ajp_val(base_ajp, "terminal_growth", 0.02), 0.0, 0.0025), _tg_max0)
+    d["tg"] = _snap(_ajp_val(base_ajp, "terminal_growth", 0.02), 0.0, 0.0025, _tg_max0)
 
-    # Ticker-scoped keys so switching companies resets slider state automatically
+    # Ticker-scoped keys so switching companies resets slider state automatically.
+    # Init each key, and REPAIR any stale session value that's out of range (prevents
+    # a previously-cached bad value from re-crashing the slider).
+    _ranges = {"g1": (0.0, 0.40), "ebit": (0.02, 0.50), "capex": (0.0, 0.40),
+               "tax": (0.10, 0.40), "wacc": (0.06, 0.20), "wc": (-60, 180),
+               "exit": (4.0, 30.0), "tg": (0.0, _tg_max0)}
     sk = {name: f"sl_{name}_{ticker}" for name in d}
     for name, val in d.items():
-        st.session_state.setdefault(sk[name], val)
+        _lo, _hi = _ranges[name]
+        cur = st.session_state.get(sk[name])
+        if cur is None or not (_lo <= cur <= _hi):
+            st.session_state[sk[name]] = val
 
     st.divider()
     with st.expander(
