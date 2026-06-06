@@ -56,6 +56,31 @@ def test_parse_damodaran_beta_sheet(mock_get_sheet, mock_read_excel):
     assert res_fail["industry_unlevered_beta"] == 0.95
     assert res_fail["industry_levered_beta"] == 1.15
 
+
+@patch("pandas.read_excel")
+@patch("data.public.get_beta_sheet_name")
+def test_levered_beta_not_conflated_with_unlevered(mock_get_sheet, mock_read_excel):
+    """Regression: the real Damodaran betaGlobal.xls names the levered column 'Beta'
+    (not 'Average Beta'), and 'Unlevered beta' contains the substring 'levered beta'.
+    The old matcher (['average levered beta','levered beta','average beta']) skipped
+    'Beta' and wrongly grabbed 'Unlevered beta', making levered == unlevered. The
+    levered column must resolve to 'Beta' and stay distinct from the unlevered value."""
+    mock_get_sheet.return_value = "Industry Averages"
+    df = pd.DataFrame({
+        "Industry Name": ["Retail (Special Lines)"],
+        "Number of firms": [649],
+        "Beta": [0.9604],                                  # <- real sheet's levered column name
+        "D/E Ratio": [0.1836],
+        "Effective Tax rate": [0.1692],
+        "Unlevered beta": [0.8447],
+        "Unlevered beta corrected for cash": [0.9036],     # must NOT be picked for either
+    })
+    mock_read_excel.return_value = df
+    res = _parse_damodaran_beta_sheet("dummy.xls", "Retail (Special Lines)", False)
+    assert abs(res["industry_levered_beta"] - 0.9604) < 1e-4, res
+    assert abs(res["industry_unlevered_beta"] - 0.8447) < 1e-4, res
+    assert res["industry_levered_beta"] != res["industry_unlevered_beta"]
+
 @patch("builtins.open", new_callable=MagicMock)
 @patch("os.makedirs")
 def test_single_report_written(mock_makedirs, mock_open):

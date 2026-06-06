@@ -333,6 +333,25 @@ def _find_column(columns, candidates):
     return None
 
 
+def _find_levered_col(columns):
+    """Find the levered (equity) beta column in a Damodaran beta sheet.
+
+    The published betaGlobal.xls names this column exactly 'Beta'; some sheets use
+    'Average Beta' / 'Average Levered Beta' / 'Levered Beta'. This MUST NOT match
+    'Unlevered beta' (or 'Unlevered beta corrected for cash') — note that the substring
+    'levered beta' is contained within 'unlevered beta', which is exactly the trap that
+    previously made levered_beta == unlevered_beta. We therefore skip any column whose
+    name contains 'unlevered' before matching.
+    """
+    for col in columns:
+        cl = str(col).lower().strip()
+        if "unlevered" in cl:
+            continue
+        if cl in ("beta", "average beta") or "levered beta" in cl or "average levered" in cl:
+            return col
+    return None
+
+
 def _hardcoded_beta_defaults() -> dict:
     """Last-resort defaults if Damodaran parsing fails entirely."""
     return {
@@ -379,7 +398,7 @@ def _parse_damodaran_beta_sheet(beta_path: str, target_industry: str, is_india: 
     # Find Unlevered Beta column by name (case-insensitive partial match)
     # Damodaran's naming has been "Unlevered Beta" or "Unlevered beta" consistently.
     unlevered_col = _find_column(df.columns, ["unlevered beta", "unlevered_beta"])
-    levered_col = _find_column(df.columns, ["average levered beta", "levered beta", "average beta"])
+    levered_col = _find_levered_col(df.columns)
     de_col = _find_column(df.columns, ["d/e ratio", "debt/equity", "d/e"])
 
     def _safe_float(val, default=0.0):
