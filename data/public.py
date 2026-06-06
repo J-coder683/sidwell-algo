@@ -596,3 +596,181 @@ def fetch_damodaran_data(ticker: str, financials: dict) -> dict:
     }
     logger.info(f"Loaded Damodaran data: {res}")
     return res
+
+_DAMO_FUND_URLS = {
+    "us":    {"margin": "https://pages.stern.nyu.edu/~adamodar/pc/datasets/margin.xls",
+              "growth": "https://pages.stern.nyu.edu/~adamodar/pc/datasets/histgr.xls",
+              "fund":   "https://pages.stern.nyu.edu/~adamodar/pc/datasets/fundgrEB.xls"},
+    "india": {"margin": "https://pages.stern.nyu.edu/~adamodar/pc/datasets/marginIndia.xls",
+              "growth": "https://pages.stern.nyu.edu/~adamodar/pc/datasets/histgrIndia.xls",
+              "fund":   "https://pages.stern.nyu.edu/~adamodar/pc/datasets/fundgrEBIndia.xls"},
+    "emerg": {"margin": "https://pages.stern.nyu.edu/~adamodar/pc/datasets/marginemerg.xls",
+              "growth": "https://pages.stern.nyu.edu/~adamodar/pc/datasets/histgremerg.xls",
+              "fund":   "https://pages.stern.nyu.edu/~adamodar/pc/datasets/fundgrEBemerg.xls"},
+}
+
+def fetch_damodaran_industry_fundamentals(ticker: str, financials: dict) -> dict:
+    """Returns industry-average fundamentals for the ticker's mapped Damodaran industry,
+    geography-routed (India file for .NS/.BO, US file otherwise; fall back to 'emerg' if the
+    India file is missing/unparseable). Never raises; fields are None when unavailable."""
+    is_india = ticker.endswith(".NS") or ticker.endswith(".BO")
+    region = "india" if is_india else "us"
+    target_industry, _ = get_industry_for_ticker(ticker, financials)
+
+    res = {
+        "target_industry": target_industry,
+        "geography": region,
+        "industry_operating_margin": None,
+        "industry_net_margin": None,
+        "industry_revenue_growth": None,
+        "industry_sales_to_capital": None,
+        "industry_roic": None,
+        "industry_reinvestment_rate": None,
+        "available": False,
+        "source": "Damodaran NYU Stern industry data",
+    }
+
+    def _download_and_parse(file_key, region_key):
+        url = _DAMO_FUND_URLS[region_key][file_key]
+        filename = url.split('/')[-1]
+        cache_key = f"damodaran_{filename}"
+        path = cache.get_cache_path(cache_key)
+        
+        if cache.is_expired(path, TTL_MACRO) or not os.path.exists(path):
+            try:
+                r = requests.get(url, headers={"User-Agent": "Sidwell/1.0"}, timeout=30)
+                r.raise_for_status()
+                cache.set_bytes(cache_key, r.content)
+            except Exception as e:
+                if not os.path.exists(path):
+                    logger.warning(f"Failed to download {filename} and no cache exists: {e}")
+                    return None
+        
+        try:
+            # These workbooks have a 'Variables & FAQ' glossary sheet PLUS an
+            # 'Industry Averages' data sheet -- read the DATA sheet, not sheet 0.
+            xl = pd.ExcelFile(path)
+            data_sheet = next((s for s in xl.sheet_names if "industry" in s.lower()),
+                              xl.sheet_names[-1])
+            probe = pd.read_excel(path, sheet_name=data_sheet, header=None, nrows=15)
+            header_row_idx = None
+            for i in range(len(probe)):
+                val = str(probe.iloc[i, 0]).lower().strip()
+                if val.startswith("industry name") or val == "industry":
+                    header_row_idx = i
+                    break
+            if header_row_idx is None:
+                return None
+            
+            df = pd.read_excel(path, sheet_name=data_sheet, header=header_row_idx)
+            df.columns = [str(c).strip() for c in df.columns]
+            
+            industry_col = df.columns[0]
+            df[industry_col] = df[industry_col].astype(str).str.strip()
+            matches = df[df[industry_col] == target_industry]
+            if matches.empty:
+                return None
+                
+            return (df.columns, matches.iloc[0])
+        except Exception as e:
+            logger.warning(f"Error parsing {filename}: {e}")
+            return None
+
+    def _safe_float(val):
+        try:
+            if isinstance(val, str):
+                val = val.replace("%", "").replace(",", "").strip()
+            v = float(val)
+            if abs(v) > 1.5:
+                v = v / 100.0
+            return v
+        except (ValueError, TypeError):
+            return None
+
+    for r_key in ([region, "emerg"] if region == "india" else [region]):
+        parsed_margin = _download_and_parse("margin", r_key)
+        parsed_growth = _download_and_parse("growth", r_key)
+        parsed_fund = _download_and_parse("fund", r_key)
+        
+        found_any = False
+        if parsed_margin:
+            cols, row = parsed_margin
+            op_col = (_find_column(cols, ["pre-tax unadjusted operating margin"])
+                      or _find_column(cols, ["operating margin", "ebit/sales"]))
+            net_col = _find_column(cols, ["net margin"])
+            if op_col:
+                res["industry_operating_margin"] = _safe_float(row[op_col])
+                if res["industry_operating_margin"] is not None: found_any = True
+            if net_col:
+                res["industry_net_margin"] = _safe_float(row[net_col])
+                
+        if parsed_growth:
+            cols, row = parsed_growth
+            rev_col = (_find_column(cols, ["expected growth in revenues - next 5"])
+                       or _find_column(cols, ["cagr in revenues", "cagr in revenue"])
+                       or _find_column(cols, ["expected growth in revenues - next 2"]))
+            if rev_col:
+                res["industry_revenue_growth"] = _safe_float(row[rev_col])
+                if res["industry_revenue_growth"] is not None: found_any = True
+                
+        if parsed_fund:
+            cols, row = parsed_fund
+            stc_col = _find_column(cols, ["sales/capital","sales to capital","sales/ invested capital"])
+            roic_col = _find_column(cols, ["roic","return on invested capital","roc"])
+            reinv_col = _find_column(cols, ["reinvestment rate","reinvestment"])
+            
+            if stc_col:
+                res["industry_sales_to_capital"] = _safe_float(row[stc_col])
+            if roic_col:
+                res["industry_roic"] = _safe_float(row[roic_col])
+            if reinv_col:
+                res["industry_reinvestment_rate"] = _safe_float(row[reinv_col])
+                
+        if found_any:
+            res["geography"] = r_key
+            res["available"] = True
+            break
+            
+    if not res["available"]:
+        logger.warning(f"Damodaran exact match failed for '{target_industry}' in region '{region}' for fundamentals.")
+        
+    return res
+
+def format_industry_benchmark_doc(fund: dict) -> dict | None:
+    """Render the fundamentals dict as a compact markdown 'INDUSTRY BENCHMARKS' research doc.
+    Returns {"filename","text"} or None if fund['available'] is False."""
+    if not fund or not fund.get("available"):
+        return None
+        
+    lines = []
+    lines.append(f"# INDUSTRY BENCHMARKS: {fund.get('target_industry')} ({fund.get('geography', '').upper()})")
+    lines.append("CURRENT INDUSTRY MEDIANS (anchors / sanity-checks, NOT company forecasts).")
+    lines.append("")
+    
+    metrics = [
+        ("Operating Margin", "industry_operating_margin", True),
+        ("Net Margin", "industry_net_margin", True),
+        ("Revenue Growth", "industry_revenue_growth", True),
+        ("Sales to Capital", "industry_sales_to_capital", False),
+        ("ROIC", "industry_roic", True),
+        ("Reinvestment Rate", "industry_reinvestment_rate", True)
+    ]
+    
+    has_metrics = False
+    for label, key, is_pct in metrics:
+        val = fund.get(key)
+        if val is not None:
+            formatted = f"{val:.2%}" if is_pct else f"{val:.2f}"
+            lines.append(f"- **{label}**: {formatted}")
+            has_metrics = True
+            
+    if not has_metrics:
+        return None
+        
+    lines.append("")
+    lines.append("Use these as anchors: justify any company assumption that deviates materially from its industry median, and normalize cyclical peak/trough margins toward it.")
+    
+    return {
+        "filename": "Damodaran_Industry_Benchmarks.md",
+        "text": "\n".join(lines)
+    }

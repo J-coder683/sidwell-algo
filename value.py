@@ -104,6 +104,18 @@ def analyze(
     # For US tickers: augment research_docs with the latest 10-K text (MD&A / Risk / Business).
     # India path is untouched — .NS/.BO tickers skip this branch entirely.
     research_docs = list(research_docs) if research_docs else []
+
+    try:
+        from data.public import fetch_damodaran_industry_fundamentals, format_industry_benchmark_doc
+        _fund = fetch_damodaran_industry_fundamentals(ticker, financials)
+        _doc = format_industry_benchmark_doc(_fund)
+        if _doc:
+            research_docs.append(_doc)
+            logger.info(f"Industry benchmark added for {ticker}: {_fund.get('target_industry')} "
+                        f"({_fund.get('geography')})")
+    except Exception as e:
+        logger.warning(f"Damodaran industry fundamentals unavailable for {ticker}: {e}")
+
     if not (ticker.endswith(".NS") or ticker.endswith(".BO")):
         try:
             from data.scrapers.edgar import fetch_edgar_filings_text
