@@ -240,30 +240,42 @@ _SHARES_CONCEPTS = [
 # ---------------------------------------------------------------------------
 
 def _concept_annual_map(usgaap: dict, concepts: list) -> dict:
-    """Return {fy:int -> val:float} of ANNUAL (10-K, full-year) values for the first
-    concept that has data. Dedupe per fy keeping the latest fiscal-year-end."""
-    for concept in concepts:
+    """Return {period_year:int -> val:float} of ANNUAL (10-K, full-year) values.
+
+    Keys by the PERIOD year parsed from each fact's `end` date (NOT the filing `fy`,
+    which conflates the filing year with the reported period). For each period year keep
+    the value from the most recently FILED 10-K (restatements win). Candidate concepts are
+    merged in PRIORITY order: a higher-priority concept's value for a period year is never
+    overwritten by a lower-priority one, but lower-priority concepts FILL period years the
+    higher-priority concept is missing (handles filers that switch revenue tags across years,
+    e.g. Alphabet's Revenues vs RevenueFromContractWithCustomerExcludingAssessedTax)."""
+    merged = {}
+    for concept in concepts:                       # priority order
         node = usgaap.get(concept)
         if not node:
             continue
         units = node.get("units", {})
         series = units.get("USD") or units.get("USD/shares") or units.get("shares") or []
-        by_fy = {}
+        per_concept = {}
         for e in series:
             if not str(e.get("form", "")).startswith("10-K"):
                 continue
             if e.get("fp") != "FY":
                 continue
-            fy = e.get("fy")
             end = e.get("end", "")
-            if fy is None:
+            if len(end) < 4:
                 continue
-            # keep the entry with the latest period-end for that fiscal year
-            if fy not in by_fy or end > by_fy[fy][0]:
-                by_fy[fy] = (end, e.get("val"))
-        if by_fy:
-            return {fy: v for fy, (end, v) in by_fy.items()}
-    return {}
+            try:
+                py = int(end[:4])                  # period year, from the period-end date
+            except ValueError:
+                continue
+            filed = e.get("filed", "") or end      # prefer most-recently-filed per period
+            if py not in per_concept or filed > per_concept[py][0]:
+                per_concept[py] = (filed, e.get("val"))
+        for py, (filed, val) in per_concept.items():
+            if py not in merged:                   # fill gaps; keep higher-priority concept
+                merged[py] = val
+    return merged
 
 
 # ---------------------------------------------------------------------------
@@ -746,6 +758,72 @@ def fetch_edgar_filings_text(ticker: str) -> list:
 
     except Exception as e:
         logger.warning(f"fetch_edgar_filings_text({ticker}) failed: {e}")
+        out = []
+
+    cache.set_json(key, out)
+    return out
+
+def fetch_edgar_8k_shareholder_letters(ticker: str, n: int = 2) -> list:
+    """Pull recent 8-K Exhibit 99.1 shareholder letters for a US ticker via edgartools."""
+    key = f"edgar_8k_ex99_{ticker.upper()}.json"
+    cached = cache.get_json(key, 7 * 24 * 3600)
+    if cached is not None:
+        return cached
+
+    out = []
+    try:
+        if set_identity is not None:
+            set_identity(_EDGAR_IDENTITY)
+        if Company is None:
+            raise ImportError("edgartools not installed")
+
+        filings = Company(ticker.upper()).get_filings(form="8-K")
+        if not filings:
+            raise ValueError(f"No 8-K found for {ticker}")
+
+        for filing in list(filings)[:25]:
+            if len(out) >= n:
+                break
+                
+            ex_text = None
+            try:
+                eightk = filing.obj()
+                pr = getattr(eightk, "press_releases", None)
+                if pr:
+                    try:
+                        if hasattr(pr, "text"):
+                            ex_text = pr.text()
+                        elif hasattr(pr, "__len__") and len(pr) > 0 and hasattr(pr[0], "text"):
+                            ex_text = pr[0].text()
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+                
+            if not ex_text:
+                try:
+                    attachments = getattr(filing, "attachments", [])
+                    for att in attachments:
+                        dt = (getattr(att, "document_type", "") or "").upper()
+                        desc = (getattr(att, "description", "") or "").upper()
+                        if dt.startswith("EX-99") or dt.startswith("99.1") or desc.startswith("EX-99") or desc.startswith("99.1"):
+                            try:
+                                ex_text = att.text() if hasattr(att, "text") else str(att)
+                            except Exception:
+                                pass
+                            break
+                except Exception:
+                    pass
+            
+            if ex_text and len(ex_text) > 2000:
+                fdate = getattr(filing, "filing_date", "") or ""
+                out.append({
+                    "filename": f"{ticker.upper()} 8-K Ex-99.1 {fdate}".strip(),
+                    "text": ex_text[:200_000]
+                })
+
+    except Exception as e:
+        logger.warning(f"fetch_edgar_8k_shareholder_letters({ticker}) failed: {e}")
         out = []
 
     cache.set_json(key, out)

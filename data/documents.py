@@ -13,6 +13,5 @@ def discover_documents(ticker: str) -> list[dict]:
         from data.scrapers.screener import fetch_screener_documents
         return fetch_screener_documents(ticker)
     else:
-        # US: EDGAR auto-fetch is v0.8. For now, return empty → qualitative falls to graceful "unavailable" default.
-        logger.info(f"No qualitative document source wired for US ticker {ticker} yet (EDGAR in v0.8); soft checks default per framework rules.")
+        logger.info(f"US ticker {ticker}: concall-style docs (10-K text, 8-K Ex-99.1, transcripts, calendar) are supplied via research_docs in value.analyze; discover_documents returns [].")
         return []

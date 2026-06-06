@@ -111,6 +111,24 @@ def analyze(
         except Exception as e:
             logger.warning(f"EDGAR filing text unavailable for {ticker}: {e}")
 
+        try:
+            from data.scrapers.edgar import fetch_edgar_8k_shareholder_letters
+            research_docs += fetch_edgar_8k_shareholder_letters(ticker, n=2)
+        except Exception as e:
+            logger.warning(f"EDGAR 8-K text unavailable for {ticker}: {e}")
+
+        try:
+            from data.scrapers.apininjas import fetch_earnings_transcripts, fetch_earnings_calendar
+            research_docs += fetch_earnings_transcripts(ticker, n=2)
+        except Exception as e:
+            logger.warning(f"API Ninjas transcripts unavailable for {ticker}: {e}")
+
+        try:
+            from data.scrapers.apininjas import fetch_earnings_calendar
+            research_docs += fetch_earnings_calendar(ticker)
+        except Exception as e:
+            logger.warning(f"API Ninjas calendar unavailable for {ticker}: {e}")
+
     qualitative_results = qualitative.extract_qualitative(
         ticker, docs, historical_context=hist_ctx, research_docs=(research_docs or None)
     )

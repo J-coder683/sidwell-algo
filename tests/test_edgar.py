@@ -230,7 +230,7 @@ def test_top_level_market_cap_and_debt_are_absolute_usd():
     last_debt = fin["debt"]
     assert last_debt is not None
     # LT_debt mock = 9.5281e10, current debt mock = 0 → total ≈ 9.53e10
-    assert abs(last_debt - 9.5281e10) < 1e9, f"debt={last_debt}"
+    assert abs(last_debt[-1] - 9.5281e10) < 1e9, f"debt={last_debt}"
 
 
 def test_is_bank_and_is_financial_flags():
@@ -395,3 +395,25 @@ def test_cache_hit_skips_network():
     mock_company_class.assert_not_called()
     mock_requests.assert_not_called()
     assert fin["current_price"] == 189.50
+
+
+def test_concept_annual_map_merges_split_tags_and_keys_by_period_year():
+    """Reproduces the GOOGL bug: revenue split across two tags, latest year only on the
+    lower-priority tag. Must merge + key by period year + prefer latest-filed."""
+    from data.scrapers.edgar import _concept_annual_map
+    def fact(val, end, fy, filed, form="10-K", fp="FY"):
+        return {"val": val, "end": end, "fy": fy, "filed": filed, "form": form, "fp": fp}
+    usgaap = {
+        "ConceptA": {"units": {"USD": [
+            fact(100, "2022-12-31", 2022, "2023-02-01"),       # original 2022
+            fact(105, "2022-12-31", 2023, "2024-02-01"),       # 2022 restated, filed later -> wins
+            fact(110, "2023-12-31", 2023, "2024-02-01"),
+        ]}},
+        "ConceptB": {"units": {"USD": [
+            fact(120, "2024-12-31", 2024, "2025-02-01"),       # only ConceptB has 2024
+            fact(111, "2023-12-31", 2024, "2025-02-01"),       # B's 2023 must NOT override A's 110
+        ]}},
+    }
+    m = _concept_annual_map(usgaap, ["ConceptA", "ConceptB"])
+    assert m == {2022: 105, 2023: 110, 2024: 120}, m   # merge fills 2024; restatement; priority
+
