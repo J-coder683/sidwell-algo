@@ -470,3 +470,35 @@ def test_wc_days_and_gross_profit():
     expected_gp = 3.8328e11 - 2.1414e11
     assert abs(gp[-1] - expected_gp) < 1.0
 
+
+def test_sic_narrowest_match_and_mapping():
+    from data.scrapers.edgar import _sic_to_sector_industry
+    from data.public import get_industry_for_ticker
+    
+    # SIC 3571 (computers): narrowest match
+    sector, industry = _sic_to_sector_industry(3571, "Electronic Computers")
+    assert sector == "Technology"
+    assert industry == "Computer Hardware"
+    # test mapping resolves properly
+    damodaran_ind, _ = get_industry_for_ticker("DELL", {"scraped_sector": sector, "scraped_industry": industry})
+    assert damodaran_ind == "Computers/Peripherals"
+    
+    # SIC 6798 (REIT)
+    sector, industry = _sic_to_sector_industry(6798, "Real Estate Investment Trusts")
+    assert sector == "Real Estate"
+    assert industry == "REIT-Diversified"
+    damodaran_ind, _ = get_industry_for_ticker("AMT", {"scraped_sector": sector, "scraped_industry": industry})
+    assert damodaran_ind == "R.E.I.T."
+    
+    # Regression: 3559 (Semiconductor Equipment)
+    sector, industry = _sic_to_sector_industry(3559, "Special Industry Machinery")
+    assert industry == "Semiconductor Equipment & Materials"
+    
+    # Generic machinery (3550)
+    sector, industry = _sic_to_sector_industry(3550, "Special Industry Machinery")
+    assert industry == "Specialty Industrial Machinery"
+    
+    # SIC 3674 (Semiconductors)
+    sector, industry = _sic_to_sector_industry(3674, "Semiconductors and Related Devices")
+    assert industry == "Semiconductors"
+

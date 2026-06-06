@@ -343,11 +343,19 @@ def _sic_to_sector_industry(sic: Optional[int], sic_description: Optional[str]):
         (range(8060, 8070),  ("Healthcare", "Medical Care Facilities")),
         (range(8731, 8735),  ("Healthcare", "Diagnostics & Research")),
         (range(8742, 8743),  ("Technology", "Information Technology Services")),
+        (range(3570, 3580),  ("Technology", "Computer Hardware")),
+        (range(6798, 6799),  ("Real Estate", "REIT-Diversified")),
     ]
 
+    best = None
+    best_width = None
     for sic_range, (sector, industry) in SIC_MAP:
         if sic in sic_range:
-            return sector, industry
+            w = sic_range.stop - sic_range.start
+            if best is None or w < best_width:
+                best, best_width = (sector, industry), w
+    if best is not None:
+        return best
 
     # Fallback: use SIC description if available
     desc = (sic_description or "").lower()
