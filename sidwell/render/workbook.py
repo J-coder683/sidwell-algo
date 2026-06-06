@@ -11,6 +11,10 @@ class WorkbookRenderer:
         self.ajp = ajp
         self.wb = openpyxl.Workbook()
         self.wb.remove(self.wb.active) # Remove default sheet
+        _t = str(self.ajp.meta.ticker).upper()
+        _is_india = _t.endswith(".NS") or _t.endswith(".BO")
+        self._cur  = "Rs" if _is_india else "$"
+        self._unit = "Rs mm" if _is_india else "$ mm"
         
     def _create_sheet(self, title: str):
         ws = self.wb.create_sheet(title)
@@ -110,7 +114,7 @@ class WorkbookRenderer:
         ws.cell(row=2, column=2, value="Sidwell DCF Valuation").font = Formats.FONT_BOLD
         ws.cell(row=4, column=2, value="Ticker:")
         ws.cell(row=4, column=3, value=self.ajp.meta.ticker).font = Formats.FONT_BOLD
-        ws.cell(row=5, column=2, value="Intrinsic Value (Rs):")
+        ws.cell(row=5, column=2, value=f"Intrinsic Value ({self._cur}):")
         ws.cell(row=5, column=3, value="='11_Valuation_Bridge'!C13").font = Formats.FONT_LINK
         
     def render_drivers(self):
@@ -206,7 +210,7 @@ class WorkbookRenderer:
         years = proj["years"]
         ny = len(years)
 
-        t = ws.cell(row=2, column=2, value="Income Statement (Rs mm)")
+        t = ws.cell(row=2, column=2, value=f"Income Statement ({self._unit})")
         t.font = F.FONT_HEADER; t.fill = F.FILL_HEADER
         col = 3
         for y in h_years:
@@ -345,7 +349,7 @@ class WorkbookRenderer:
         from openpyxl.utils import get_column_letter as L
         F = Formats
         ws = self._create_sheet("5_Balance_Sheet")
-        n = self._av_header(ws, "Balance Sheet (Rs mm) — integrated / balancing")
+        n = self._av_header(ws, f"Balance Sheet ({self._unit}) — integrated / balancing")
         ref = self._is_ref
         R_REV, R_COGS, R_CX, R_DA, R_NP = ref["R_REV"], ref["R_COGS"], ref["R_CX"], ref["R_DA"], ref["R_NP"]
         ny = ref["ny"]
@@ -615,7 +619,7 @@ class WorkbookRenderer:
         from openpyxl.utils import get_column_letter as L
         F = Formats
         ws = self._create_sheet("6_Cash_Flow")
-        n = self._av_header(ws, "Cash Flow (Rs mm) — linked to Income Statement")
+        n = self._av_header(ws, f"Cash Flow ({self._unit}) — linked to Income Statement")
         p = self.results["proj"]
         ref = getattr(self, "_is_ref", {})
         R_NP, R_DA, R_CX = ref.get("R_NP", 13), ref.get("R_DA", 12), ref.get("R_CX", 10)
@@ -685,7 +689,7 @@ class WorkbookRenderer:
         F = Formats
         from openpyxl.utils import get_column_letter as L
         ws = self._create_sheet("7_Debt_Schedule")
-        n = self._av_header(ws, "Debt Schedule (Rs mm) — Historical & Projected")
+        n = self._av_header(ws, f"Debt Schedule ({self._unit}) — Historical & Projected")
         p = self.results["proj"]
         h = self.results.get("hist", {})
         hbs = h.get("bs", {})
@@ -786,14 +790,14 @@ class WorkbookRenderer:
         ref = getattr(self, "_is_ref", None)
         if not ref:
             # Fallback to plain values if the IS layout wasn't captured
-            self._proj_header(ws, "Unlevered FCF & Discounting (Rs mm)")
+            self._proj_header(ws, f"Unlevered FCF & Discounting ({self._unit})")
             self._row(ws, 3, "Unlevered FCF", p["ufcf"], bold=True)
             return
         pc0, ny = ref["pc0"], ref["ny"]
         R_NOP, R_DA, R_CX = ref["R_NOP"], ref["R_DA"], ref["R_CX"]
         ISN = "'4_Income_Statement'"
 
-        c = ws.cell(row=2, column=2, value="Unlevered FCF & DCF (Rs mm)")
+        c = ws.cell(row=2, column=2, value=f"Unlevered FCF & DCF ({self._unit})")
         c.font = F.FONT_HEADER; c.fill = F.FILL_HEADER
         for j, y in enumerate(p["years"]):
             hc = ws.cell(row=2, column=3 + j, value=self._fy_label(y, "E"))
@@ -888,7 +892,7 @@ class WorkbookRenderer:
 
     def render_terminal(self):
         ws = self._create_sheet("10_Terminal")
-        self._write_header(ws, 2, 2, "Terminal Value (Rs mm)")
+        self._write_header(ws, 2, 2, f"Terminal Value ({self._unit})")
         t = self.results["terminal"]
         r = 3
         r = self._kv(ws, r, "Terminal growth (g)", t["terminal_growth"], Formats.FMT_PERCENT, blue=True)
@@ -903,7 +907,7 @@ class WorkbookRenderer:
         any driver upstream flows through to the intrinsic value here (C13)."""
         F = Formats
         ws = self._create_sheet("11_Valuation_Bridge")
-        c = ws.cell(row=2, column=2, value="Enterprise → Equity Bridge (Rs mm)")
+        c = ws.cell(row=2, column=2, value=f"Enterprise → Equity Bridge ({self._unit})")
         c.font = F.FONT_HEADER; c.fill = F.FILL_HEADER
         b = self.results["bridge"]
         shares = self.results["shares"]["diluted_shares"]
@@ -930,7 +934,7 @@ class WorkbookRenderer:
         ws.cell(row=11, column=3, value="=SUM(C3:C10)").number_format = F.FMT_NUMBER
         ws.cell(row=12, column=2, value="Diluted Shares").font = F.FONT_BOLD
         sc = ws.cell(row=12, column=3, value=shares); sc.number_format = '#,##0'; sc.font = F.FONT_INPUT
-        ws.cell(row=13, column=2, value="Intrinsic Value / Share (Rs)").font = F.FONT_BOLD
+        ws.cell(row=13, column=2, value=f"Intrinsic Value / Share ({self._cur})").font = Formats.FONT_BOLD
         iv = ws.cell(row=13, column=3, value="=C11*1000000/C12")
         iv.number_format = '#,##0.00'; iv.font = F.FONT_BOLD
         

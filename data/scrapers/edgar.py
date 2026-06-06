@@ -104,6 +104,7 @@ def _us_price(ticker: str) -> float | None:
 # We try each concept in order and take the first non-empty series.
 
 _PL_CONCEPTS = [
+    ("cogs", ["CostOfGoodsAndServicesSold", "CostOfRevenue", "CostOfGoodsSold", "CostOfServices"]),
     ("sales", [
         "RevenueFromContractWithCustomerExcludingAssessedTax",
         "Revenues",
@@ -504,8 +505,21 @@ def fetch_edgar_financials(ticker: str) -> dict:
 
     cf_stmt = {label: _scale(_row(cf_maps.get(label, {}))) for label, _ in _CF_CONCEPTS}
 
-    # Ratios: all empty (engine derives NWC from balance sheet)
-    ratios_stmt = {}
+    ca_map    = _concept_annual_map(usgaap, ["AssetsCurrent"])
+    cl_map    = _concept_annual_map(usgaap, ["LiabilitiesCurrent"])
+    cash_map  = bs_maps.get("cash equivalents", {})   # already extracted above
+    sales_map = pl_maps.get("sales", {})
+    _wc_days = []
+    for fy in fys:
+        ca = ca_map.get(fy); cl = cl_map.get(fy); s = sales_map.get(fy)
+        if ca is None or cl is None or not s:
+            _wc_days.append(None); continue
+        cash  = cash_map.get(fy) or 0.0
+        cdebt = debt_cur.get(fy) or 0.0          # current debt already computed above
+        op_nwc = (ca - cash) - (cl - cdebt)      # exclude cash from CA and short-term debt from CL
+        _wc_days.append((op_nwc / s) * 365.0)    # signed days; negative is valid (e.g. Dell)
+    # Comprehensive net WC-days -> engine P2 (same row the India/screener path fills).
+    ratios_stmt = {"working capital days": _wc_days}
 
     # ------------------------------------------------------------------
     # 5. Derive top-level legacy arrays (absolute USD, NOT divided by 1e7,
@@ -517,7 +531,11 @@ def fetch_edgar_financials(ticker: str) -> dict:
         return [m.get(fy) for fy in fys[-4:]]
 
     revenue_abs = _abs_series(pl_maps.get("sales", {}))
-    gross_profit_abs = _abs_series({})   # EDGAR doesn't expose gross profit directly as one concept
+    _cogs_abs = _abs_series(pl_maps.get("cogs", {}))
+    gross_profit_abs = [
+        (s - c) if (s is not None and c is not None) else None
+        for s, c in zip(revenue_abs, _cogs_abs)
+    ]
     ebit_abs = _abs_series(pl_maps.get("operating profit", {}))
     interest_abs = _abs_series(pl_maps.get("interest", {}))
     tax_abs = _abs_series(pl_maps.get("tax", {}))
