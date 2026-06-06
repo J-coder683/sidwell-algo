@@ -1,262 +1,356 @@
-import requests
-import json
+import io
 import logging
-import re
+import requests
+import pandas as pd
 from data import cache
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-TTL_PRICES = 24 * 60 * 60
-TTL_FINANCIALS = 7 * 24 * 60 * 60
-
+TTL_FINANCIALS = 7 * 24 * 3600
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
-    "Accept-Encoding": "gzip, deflate",
-    "DNT": "1",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
 }
 
-def _resolve_sveltekit_node(data_array: list, idx):
-    """Recursively resolves a SvelteKit devalue node graph."""
-    if not isinstance(idx, int):
-        return idx
-    if idx < 0 or idx >= len(data_array):
+def _parse_float(val):
+    if val is None:
         return None
-    val = data_array[idx]
-    if isinstance(val, list):
-        return [_resolve_sveltekit_node(data_array, i) for i in val]
-    if isinstance(val, dict):
-        return {k: _resolve_sveltekit_node(data_array, v) for k, v in val.items()}
-    return val
-
-def _fetch_sveltekit_data(url: str, target_keys: list[str]) -> dict:
-    """
-    Fetches the __data.json endpoint and scans the node graph for objects
-    containing any of the target keys, returning the resolved dictionary.
-    """
-    resp = requests.get(url, headers=HEADERS, timeout=15)
-    resp.raise_for_status()
+    s = str(val).strip()
+    if s in ("-", "", "N/A", "NA"):
+        return None
+    s = s.replace(",", "").replace("%", "")
+    is_neg = False
+    if s.startswith("(") and s.endswith(")"):
+        is_neg = True
+        s = s[1:-1]
+    elif s.startswith("-"):
+        is_neg = True
+        s = s[1:]
     try:
-        data = resp.json()
-    except json.JSONDecodeError:
-        raise ValueError(f"Failed to parse JSON from {url}")
-    
-    nodes = data.get("nodes", [])
-    for node in nodes:
-        node_data = node.get("data", [])
-        if not node_data:
-            continue
-        for item in node_data:
-            if isinstance(item, dict):
-                # If this dictionary contains our target key, resolve and return it
-                if any(k in item for k in target_keys):
-                    resolved = {k: _resolve_sveltekit_node(node_data, v) for k, v in item.items()}
-                    return resolved
-    return {}
+        f = float(s)
+        return -f if is_neg else f
+    except ValueError:
+        return None
 
-def _extract_dividend_yield(div_str: str) -> float:
-    """Extracts percentage float from a string like '$1.04 (0.33%)'."""
-    if not div_str or not isinstance(div_str, str):
-        return 0.0
-    match = re.search(r'\(([0-9.]+)%\)', div_str)
-    if match:
-        try:
-            return float(match.group(1)) / 100.0
-        except ValueError:
-            return 0.0
-    return 0.0
+def fetch_stockanalysis_financials(ticker: str) -> dict | None:
+    t = ticker.upper()
+    cache_key = f"financials_stockanalysis_{t}.json"
+    cached = cache.get_json(cache_key, TTL_FINANCIALS)
+    if cached:
+        logger.info(f"Loaded {t} from stockanalysis cache.")
+        return cached
 
-def fetch_stockanalysis_financials(ticker: str) -> dict:
-    """
-    Returns Sidwell's standard financials dict, scraped from stockanalysis.com.
-    Integrates with existing data/cache.py TTL caching.
-    """
-    ticker = ticker.lower()
-    
-    # 1. Cache Check
-    cache_key_fin = f"financials_stockanalysis_{ticker}.json"
-    cached_fin = cache.get_json(cache_key_fin, TTL_FINANCIALS)
-    
-    cache_key_price = f"price_stockanalysis_{ticker}.json"
-    cached_price = cache.get_json(cache_key_price, TTL_PRICES)
-    
-    if cached_fin and cached_price:
-        logger.info(f"Loaded financials and price for {ticker.upper()} from stockanalysis cache.")
-        # Merge price into financials
-        cached_fin["current_price"] = cached_price.get("current_price")
-        return cached_fin
-    
-    logger.info(f"Fetching {ticker.upper()} from stockanalysis.com...")
-    
-    # 2. Fetch the 4 endpoints
-    base_url = f"https://stockanalysis.com/stocks/{ticker}"
-    
-    # Income Statement
-    inc_data = _fetch_sveltekit_data(f"{base_url}/financials/__data.json", ["financialData"])
-    if not inc_data or "financialData" not in inc_data:
-        raise ValueError(f"Could not find financialData on {ticker} income statement.")
-    inc = inc_data["financialData"]
-    
-    # Balance Sheet
-    bs_data = _fetch_sveltekit_data(f"{base_url}/financials/balance-sheet/__data.json", ["financialData"])
-    bs = bs_data.get("financialData", {})
-    
-    # Cash Flow
-    cf_data = _fetch_sveltekit_data(f"{base_url}/financials/cash-flow-statement/__data.json", ["financialData"])
-    cf = cf_data.get("financialData", {})
-    
-    # Overview (Quote and Stats)
-    # The quote and stats are spread out across multiple dictionaries in the overview page's data nodes.
-    overview_data = _fetch_sveltekit_data(f"{base_url}/__data.json", ["marketCap", "peRatio", "sharesOut", "beta", "quote", "info"])
-    
-    # We might need to pull the specific nodes manually since overview is fragmented, 
-    # so let's do a broader fetch for overview to ensure we capture quote and stats.
-    resp_overview = requests.get(f"{base_url}/__data.json", headers=HEADERS, timeout=15)
-    overview_json = resp_overview.json()
-    overview_nodes = overview_json.get("nodes", [])
-    
-    market_cap, shares_out, stock_beta, trailing_pe, dividend_yield = None, None, 1.0, None, 0.0
-    current_price = None
-    scraped_sector = None
-    scraped_industry = None
-    
-    for node in overview_nodes:
-        node_data = node.get("data", [])
-        if not node_data: continue
-        for item in node_data:
-            if isinstance(item, dict):
-                res = {k: _resolve_sveltekit_node(node_data, v) for k, v in item.items()}
-                if "marketCap" in res:
-                    dividend_yield = _extract_dividend_yield(res.get("dividend"))
-                    try:
-                        stock_beta = float(res.get("beta", 1.0)) if res.get("beta") is not None else 1.0
-                    except (ValueError, TypeError):
-                        stock_beta = 1.0
-                if "quote" in res and isinstance(res["quote"], dict):
-                    current_price = res["quote"].get("p")
-                
-                if "infoTable" in res and isinstance(res["infoTable"], list):
-                    for entry in res["infoTable"]:
-                        if isinstance(entry, dict):
-                            if entry.get("t") == "Sector":
-                                scraped_sector = str(entry.get("v", ""))
-                            elif entry.get("t") == "Industry":
-                                scraped_industry = str(entry.get("v", ""))
-    
-    # Compute stats cleanly from Income Statement to avoid T/B/M string parsing
+    urls = {
+        "income": f"https://stockanalysis.com/stocks/{t.lower()}/financials/",
+        "balance": f"https://stockanalysis.com/stocks/{t.lower()}/financials/balance-sheet/",
+        "cashflow": f"https://stockanalysis.com/stocks/{t.lower()}/financials/cash-flow-statement/",
+        "ratios": f"https://stockanalysis.com/stocks/{t.lower()}/financials/ratios/",
+        "overview": f"https://stockanalysis.com/stocks/{t.lower()}/"
+    }
+
     try:
-        shares_out = inc.get("sharesDiluted", [0])[0]
-        if shares_out is None: shares_out = inc.get("sharesDiluted", [0])[1]
-    except (IndexError, TypeError):
-        shares_out = 0.0
+        pages = {}
+        for key, url in urls.items():
+            r = requests.get(url, headers=HEADERS, timeout=30)
+            r.raise_for_status()
+            pages[key] = r.text
+            
+        def _parse_table(html):
+            dfs = pd.read_html(io.StringIO(html))
+            if not dfs: return None
+            df = sorted(dfs, key=lambda x: x.size, reverse=True)[0]
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            
+            keep_cols = [c for c in df.columns if isinstance(c, str) and (c.startswith("FY ") or c in ["Current", "TTM"])]
+            fy_cols = [c for c in df.columns if isinstance(c, str) and c.startswith("FY ")]
+            fy_cols.sort()
+            
+            label_col = df.columns[0]
+            df.set_index(label_col, inplace=True)
+            
+            # keep the selected columns, ensuring they are ordered correctly with FY cols first, then TTM/Current
+            ordered_cols = fy_cols + [c for c in keep_cols if c not in fy_cols]
+            df = df[ordered_cols]
+            
+            # rename FY columns to just years, but keep TTM/Current as is
+            new_cols = []
+            for c in df.columns:
+                if c.startswith("FY "):
+                    new_cols.append(c.split(" ")[1])
+                else:
+                    new_cols.append(c)
+            df.columns = new_cols
+            return df
+
+        inc_df = _parse_table(pages["income"])
+        bal_df = _parse_table(pages["balance"])
+        cf_df = _parse_table(pages["cashflow"])
+        rat_df = _parse_table(pages["ratios"])
         
-    if shares_out and current_price:
-        market_cap = float(shares_out * current_price)
+        if inc_df is None or bal_df is None or cf_df is None or rat_df is None:
+            return None
+            
+        years_annual = [c for c in inc_df.columns if str(c).isdigit()]
         
-    try:
-        eps_ttm = inc.get("epsDiluted", [0])[0]
-        if eps_ttm is None: eps_ttm = inc.get("epsDiluted", [0])[1]
-        if current_price and eps_ttm and eps_ttm > 0:
-            trailing_pe = float(current_price / eps_ttm)
-    except (IndexError, TypeError):
-        trailing_pe = None
-    
-    # 3. Period Slicing
-    # Drop TTM (index 0), take next 4 (indices 1-4), reverse to chronological
-    def _slice(arr):
-        if not arr or not isinstance(arr, list) or len(arr) < 5:
-            return [None, None, None, None]
-        return arr[1:5][::-1]
-    
-    def _slice_sum(arrs):
-        # sum multiple arrays element-wise after slicing
-        sliced = [_slice(a) for a in arrs]
-        res = []
-        for i in range(4):
-            val = sum(a[i] if a[i] is not None else 0 for a in sliced)
-            res.append(val)
-        return res
+        def _get_row(df, label):
+            for idx in df.index:
+                if str(idx).strip().lower() == label.lower():
+                    row = df.loc[idx]
+                    if isinstance(row, pd.DataFrame):
+                        row = row.iloc[0]
+                    return [_parse_float(row[y]) for y in years_annual]
+            return [None] * len(years_annual)
+            
+        def _get_rat_col(df, label, col="Current"):
+            for idx in df.index:
+                if str(idx).strip().lower() == label.lower():
+                    if col in df.columns:
+                        row = df.loc[idx]
+                        if isinstance(row, pd.DataFrame):
+                            row = row.iloc[0]
+                        return _parse_float(row[col])
+            return None
 
-    # 4. Map to Sidwell Financials Dict
-    fin = {}
-    
-    # Overview
-    fin["market_cap"] = market_cap
-    fin["shares_outstanding"] = shares_out
-    fin["current_price"] = current_price
-    fin["stock_beta"] = stock_beta
-    fin["trailing_pe"] = trailing_pe
-    fin["dividend_yield"] = dividend_yield
-    
-    fin["scraped_sector"] = scraped_sector if scraped_sector else None
-    fin["scraped_industry"] = scraped_industry if scraped_industry else None
-    
-    if not scraped_sector and not scraped_industry:
-        logger.info(f"Could not extract sector/industry for {ticker.upper()} from stockanalysis.com")
-    fin["insider_ownership"] = 0.0
-    fin["recommendation_mean"] = None
-    
-    # Income
-    fin["ticker"] = ticker.upper()
-    
-    date_keys = _slice(inc.get("datekey"))
-    fin["years"] = [str(d)[:10] if d is not None else "Unknown" for d in date_keys]
-    
-    fin["revenue"] = _slice(inc.get("revenue"))
-    fin["gross_profit"] = _slice(inc.get("grossProfit"))
-    fin["ebit"] = _slice(inc.get("operatingIncome"))
-    
-    debt_sliced = _slice(bs.get("debt"))
-    raw_interest = inc.get("income_statement_interest_expense")
-    if raw_interest is not None and any(x is not None for x in raw_interest):
-        fin["interest_expense"] = [abs(x) if x is not None else 0.0 for x in _slice(raw_interest)]
-        logger.info(f"Real interest_expense extracted from stockanalysis.com for {ticker.upper()}")
-        fin["interest_source"] = "direct"
-    else:
-        # Interest expense proxy if missing
-        fin["interest_expense"] = []
-        for d in debt_sliced:
-            if d is not None:
-                fin["interest_expense"].append(d * 0.05)
+        def _get_last_n_diluted_shares(df, label, n=4):
+            for idx in df.index:
+                if str(idx).strip().lower() == label.lower():
+                    row = df.loc[idx]
+                    if isinstance(row, pd.DataFrame):
+                        row = row.iloc[0]
+                    vals = [_parse_float(row[y]) for y in years_annual[-n:]]
+                    if len(vals) < n:
+                        vals = [None] * (n - len(vals)) + vals
+                    return vals
+            return [None] * n
+
+        inc_map = {
+            "sales": "Revenue",
+            "cogs": "Cost of Revenue",
+            "operating profit": "Operating Income",
+            "interest": "Interest Expense",
+            "profit before tax": "Pretax Income",
+            "tax": "Provision for Income Taxes",
+            "net profit": "Net Income"
+        }
+        
+        cf_map = {
+            "cash from operating activity": "Operating Cash Flow",
+            "fixed assets purchased": "Capital Expenditures",
+            "depreciation": "Depreciation & Amortization",
+            "receivables": "Change in Receivables",
+            "inventory": "Changes in Inventories",
+            "payables": "Changes in Accounts Payable",
+            "proceeds from borrowings": "Long-Term Debt Issued",
+            "repayment of borrowings": "Long-Term Debt Repaid"
+        }
+        
+        bal_map = {
+            "cash equivalents": "Cash & Equivalents",
+            "trade receivables": "Accounts Receivable",
+            "inventories": "Inventory",
+            "trade payables": "Accounts Payable",
+            "fixed assets": "Net Property, Plant & Equipment",
+            "investments": "Long-Term Investments",
+            "total assets": "Total Assets",
+            "total liabilities": "Total Liabilities",
+            "reserves": "Total Common Shareholders' Equity",
+            "borrowings": "Total Debt",
+            "non controlling int": "Minority Interest"
+        }
+
+        def _scale_row(row):
+            return [(v * 1e6) / 1e7 if v is not None else None for v in row]
+
+        pl_stmt = {k: _scale_row(_get_row(inc_df, v)) for k, v in inc_map.items()}
+        cf_stmt = {k: _scale_row(_get_row(cf_df, v)) for k, v in cf_map.items()}
+        
+        cf_stmt["fixed assets purchased"] = [abs(v) if v is not None else None for v in cf_stmt["fixed assets purchased"]]
+
+        bs_stmt = {k: _scale_row(_get_row(bal_df, v)) for k, v in bal_map.items()}
+        bs_stmt["equity capital"] = [None] * len(years_annual)
+        
+        tca = _get_row(bal_df, "Total Current Assets")
+        tcl = _get_row(bal_df, "Total Current Liabilities")
+        cash = _get_row(bal_df, "Cash & Equivalents")
+        std = _get_row(bal_df, "Short-Term Debt")
+        sales = _get_row(inc_df, "Revenue")
+        
+        wc_days = []
+        for i in range(len(years_annual)):
+            a = tca[i]
+            l = tcl[i]
+            c = cash[i] if cash[i] is not None else 0.0
+            s = std[i] if std[i] is not None else 0.0
+            rev = sales[i]
+            if a is not None and l is not None and rev:
+                op_nwc = (a - c) - (l - s)
+                wc_days.append(op_nwc / rev * 365.0)
             else:
-                fin["interest_expense"].append(0.0)
-        logger.warning(f"interest_expense not available from stockanalysis.com; using proxy = debt × 0.05 for {ticker.upper()}")
-        fin["interest_source"] = "proxy"
-    
-    fin["tax_provision"] = _slice(inc.get("income_statement_provision_for_income_taxes"))
-    fin["pretax_income"] = _slice(inc.get("pretax"))
-    fin["net_income"] = _slice(inc.get("netIncome"))
-    
-    # Balance Sheet
-    fin["total_assets"] = _slice(bs.get("assets"))
-    fin["total_equity"] = _slice(bs.get("equity"))
-    fin["cash"] = _slice(bs.get("totalcash"))
-    fin["debt"] = debt_sliced
-    
-    # Cash Flow
-    capex_raw = _slice(cf.get("capex"))
-    fin["capex"] = [abs(c) if c is not None else None for c in capex_raw]
-    
-    fin["depreciation"] = _slice(cf.get("cash_flow_statement_depreciation_and_amortization"))
-    
-    fin["working_capital_change"] = _slice_sum([
-        cf.get("changeInReceivables", []),
-        cf.get("cash_flow_statement_changes_in_inventories", []),
-        cf.get("cash_flow_statement_changes_in_accounts_payable", []),
-        cf.get("cash_flow_statement_changes_in_other_operating_activities", [])
-    ])
-    
-    fin["fcf"] = _slice(cf.get("fcf"))
-    fin["historical_shares"] = _slice(inc.get("sharesDiluted"))
-    fin["source"] = "stockanalysis.com"
-    fin["book_value_per_share"] = fin["total_equity"][-1] / shares_out if shares_out and shares_out > 0 and len(fin["total_equity"]) > 0 and fin["total_equity"][-1] is not None else 0.0
+                wc_days.append(None)
+                
+        def _abs_row(df, label):
+            return [(v * 1e6) if v is not None else None for v in _get_row(df, label)[-4:]]
 
-    # 5. Save to Cache
-    price_dict = {"current_price": current_price}
-    cache.set_json(cache_key_fin, fin)
-    cache.set_json(cache_key_price, price_dict)
+        revenue_abs = _abs_row(inc_df, "Revenue")
+        cogs_abs = _abs_row(inc_df, "Cost of Revenue")
+        gross_profit_abs = [(s - c) if s is not None and c is not None else None for s, c in zip(revenue_abs, cogs_abs)]
+        
+        ebit_abs = _abs_row(inc_df, "Operating Income")
+        interest_abs = _abs_row(inc_df, "Interest Expense")
+        tax_abs = _abs_row(inc_df, "Provision for Income Taxes")
+        pretax_abs = _abs_row(inc_df, "Pretax Income")
+        net_income_abs = _abs_row(inc_df, "Net Income")
+        
+        total_assets_abs = _abs_row(bal_df, "Total Assets")
+        total_equity_abs = _abs_row(bal_df, "Total Common Shareholders' Equity")
+        cash_abs = _abs_row(bal_df, "Cash & Equivalents")
+        debt_abs = _abs_row(bal_df, "Total Debt")
+        
+        depr_abs = _abs_row(cf_df, "Depreciation & Amortization")
+        cfo_abs = _abs_row(cf_df, "Operating Cash Flow")
+        capex_raw_abs = _abs_row(cf_df, "Capital Expenditures")
+        capex_abs = [abs(v) if v is not None else None for v in capex_raw_abs]
+        
+        wc_change_abs = []
+        for o, ni, d in zip(cfo_abs, net_income_abs, depr_abs):
+            if o is not None and ni is not None and d is not None:
+                wc_change_abs.append(o - ni - d)
+            else:
+                wc_change_abs.append(None)
+                
+        fcf_abs = []
+        for o, cx in zip(cfo_abs, capex_abs):
+            if o is not None and cx is not None:
+                fcf_abs.append(o - cx)
+            else:
+                fcf_abs.append(None)
+                
+        market_cap_raw = _get_rat_col(rat_df, "Market Cap")
+        market_cap = (market_cap_raw * 1e6) if market_cap_raw is not None else None
+        
+        current_price = _get_rat_col(rat_df, "Last Close Price")
+        trailing_pe = _get_rat_col(rat_df, "PE Ratio")
+        div_yield_raw = _get_rat_col(rat_df, "Dividend Yield")
+        dividend_yield = (div_yield_raw / 100.0) if div_yield_raw is not None else 0.0
+        
+        shares_out_raw = _get_rat_col(inc_df, "Shares Outstanding (Diluted)", "Current")
+        if shares_out_raw is None:
+            shares_out_raw = _get_row(inc_df, "Shares Outstanding (Diluted)")[-1]
+            
+        shares_outstanding = (shares_out_raw * 1e6) if shares_out_raw is not None else None
+        
+        hist_shares_raw = _get_last_n_diluted_shares(inc_df, "Shares Outstanding (Diluted)")
+        historical_shares = [(v * 1e6) if v is not None else None for v in hist_shares_raw]
+        
+        debt_latest_raw = _get_rat_col(bal_df, "Total Debt", "Current")
+        if debt_latest_raw is None:
+            debt_latest_raw = _get_row(bal_df, "Total Debt")[-1]
+        debt_latest = (debt_latest_raw * 1e6) if debt_latest_raw is not None else 0.0
+        
+        book_value_per_share = 0.0
+        if total_equity_abs and total_equity_abs[-1] is not None and shares_outstanding:
+            book_value_per_share = total_equity_abs[-1] / shares_outstanding
+            
+        soup = BeautifulSoup(pages["overview"], 'html.parser')
+        scraped_sector = None
+        scraped_industry = None
+        
+        for tr in soup.find_all("tr"):
+            if "Sector" in tr.text:
+                tds = tr.find_all("td")
+                if len(tds) > 1:
+                    scraped_sector = tds[1].text.strip()
+            if "Industry" in tr.text:
+                tds = tr.find_all("td")
+                if len(tds) > 1:
+                    scraped_industry = tds[1].text.strip()
+                    
+        if not scraped_sector:
+            for div in soup.find_all("div"):
+                if div.text.strip() == "Sector":
+                    s_div = div.find_next_sibling("div")
+                    if s_div: scraped_sector = s_div.text.strip()
+                if div.text.strip() == "Industry":
+                    i_div = div.find_next_sibling("div")
+                    if i_div: scraped_industry = i_div.text.strip()
+                    
+        if not scraped_sector:
+            for a in soup.find_all("a"):
+                href = a.get("href", "")
+                if "/sector/" in href:
+                    scraped_sector = a.text.strip()
+                if "/industry/" in href:
+                    scraped_industry = a.text.strip()
+                    
+        is_bank = False
+        is_financial = False
+        if scraped_industry:
+            if "bank" in scraped_industry.lower():
+                is_bank = True
+        if scraped_sector and "financial" in scraped_sector.lower():
+            is_financial = True
+        if scraped_industry and any(kw in scraped_industry.lower() for kw in ("financial", "broker", "insurance")):
+            is_financial = True
 
-    return fin
+        fin = {
+            "statements": {
+                "years_annual": years_annual,
+                "annual": {
+                    "profit_loss": pl_stmt,
+                    "balance_sheet": bs_stmt,
+                    "cash_flow": cf_stmt
+                },
+                "ratios": {"working capital days": wc_days}
+            },
+            "revenue": revenue_abs,
+            "gross_profit": gross_profit_abs,
+            "ebit": ebit_abs,
+            "interest_expense": interest_abs,
+            "tax_provision": tax_abs,
+            "pretax_income": pretax_abs,
+            "net_income": net_income_abs,
+            "total_assets": total_assets_abs,
+            "total_equity": total_equity_abs,
+            "cash": cash_abs,
+            "debt": debt_abs,
+            "capex": capex_abs,
+            "depreciation": depr_abs,
+            "working_capital_change": wc_change_abs,
+            "fcf": fcf_abs,
+            "historical_shares": historical_shares,
+            "current_price": current_price,
+            "market_cap": market_cap,
+            "shares_outstanding": shares_outstanding,
+            "trailing_pe": trailing_pe,
+            "dividend_yield": dividend_yield,
+            "stock_beta": 1.0,
+            "recommendation_mean": None,
+            "insider_ownership": 0.0,
+            "book_value_per_share": book_value_per_share,
+            "debt_latest": debt_latest,
+            "scraped_sector": scraped_sector,
+            "scraped_broad_industry": None,
+            "scraped_industry": scraped_industry,
+            "is_bank": is_bank,
+            "is_financial": is_financial,
+            "source": "stockanalysis",
+            "ticker": ticker.upper(),
+            "years": years_annual[-4:] if len(years_annual) >= 4 else years_annual
+        }
+        
+        _HIST_NUMERIC_KEYS = (
+            "revenue", "gross_profit", "ebit", "interest_expense", "tax_provision",
+            "pretax_income", "net_income", "total_assets", "total_equity", "cash",
+            "debt", "capex", "depreciation", "working_capital_change", "fcf", "historical_shares"
+        )
+        for k in _HIST_NUMERIC_KEYS:
+            if k in fin and isinstance(fin[k], list):
+                fin[k] = [(v if v is not None else 0.0) for v in fin[k]]
+
+        cache.set_json(cache_key, fin)
+        return fin
+
+    except Exception as e:
+        logger.warning(f"stockanalysis fetch failed for {ticker}: {e}")
+        return None

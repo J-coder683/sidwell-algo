@@ -15,11 +15,16 @@ TTL_MACRO = 30 * 24 * 60 * 60       # 30 days
 
 def _normalize_sector_key(s: str) -> str:
     if not s: return ""
-    return (s.lower()
-            .replace("\u00a0", " ")
-            .replace("\u2014", "-")  # em-dash to hyphen
-            .replace("\u2013", "-")  # en-dash to hyphen
-            .strip())
+    import re
+    s = (s.lower()
+         .replace("\u00a0", " ")
+         .replace("\u2014", "-")  # em-dash to hyphen
+         .replace("\u2013", "-")  # en-dash to hyphen
+         .strip())
+    # Canonicalize hyphen spacing so stockanalysis "Beverages - Non-Alcoholic" and the
+    # map key "beverages-non-alcoholic" match (and likewise India "non - ferrous metals").
+    s = re.sub(r"\s*-\s*", "-", s)
+    return s
 
 TICKER_INDUSTRY_MAP = {}
 
@@ -106,6 +111,14 @@ SECTOR_TO_DAMODARAN_MAP = {
     "utilities":                         "Utility (General)",
     "real estate":                       "R.E.I.T.",
     "communication services":            "Telecom. Services",
+
+    # === US GICS sector names (stockanalysis "Sector" field) ===
+    "consumer staples":                  "Household Products",
+    "consumer discretionary":            "Retail (General)",
+    "health care":                       "Healthcare Services",
+    "financials":                        "Financial Svcs. (Non-bank & Insurance)",
+    "information technology":            "Software (System & Application)",
+    "materials":                         "Chemical (Diversified)",
 
     # === India — most-specific tier (screener Industry) ===
     "refineries & marketing":            "Oil/Gas (Integrated)",
@@ -199,6 +212,11 @@ SECTOR_TO_DAMODARAN_MAP = {
 
 DEFAULT_INDUSTRY = "Chemical (Specialty)"  # conservative fallback when ticker not mapped
 
+# Map keys themselves are written with mixed hyphen spacing (US "beverages-non-alcoholic"
+# vs India "non - ferrous metals"). Canonicalize the KEYS too so lookups match regardless
+# of how either side spaces hyphens. Built once at import.
+_NORM_SECTOR_MAP = {_normalize_sector_key(k): v for k, v in SECTOR_TO_DAMODARAN_MAP.items()}
+
 def get_industry_for_ticker(ticker: str, financials: dict) -> tuple[str, str]:
     """Returns (damodaran_industry, source_tag).
     Source tag: 'ticker_override' | 'scraped_industry' | 'scraped_broad_industry' | 'scraped_sector' | 'default'
@@ -211,18 +229,18 @@ def get_industry_for_ticker(ticker: str, financials: dict) -> tuple[str, str]:
     
     # Tier 2: Try scraped industry (more specific than sector)
     industry = _normalize_sector_key(financials.get("scraped_industry"))
-    if industry and industry in SECTOR_TO_DAMODARAN_MAP:
-        return SECTOR_TO_DAMODARAN_MAP[industry], "scraped_industry"
+    if industry and industry in _NORM_SECTOR_MAP:
+        return _NORM_SECTOR_MAP[industry], "scraped_industry"
         
     # Tier 3: Try scraped broad industry
     broad_industry = _normalize_sector_key(financials.get("scraped_broad_industry"))
-    if broad_industry and broad_industry in SECTOR_TO_DAMODARAN_MAP:
-        return SECTOR_TO_DAMODARAN_MAP[broad_industry], "scraped_broad_industry"
+    if broad_industry and broad_industry in _NORM_SECTOR_MAP:
+        return _NORM_SECTOR_MAP[broad_industry], "scraped_broad_industry"
     
     # Tier 4: Try scraped sector (broader)
     sector = _normalize_sector_key(financials.get("scraped_sector"))
-    if sector and sector in SECTOR_TO_DAMODARAN_MAP:
-        return SECTOR_TO_DAMODARAN_MAP[sector], "scraped_sector"
+    if sector and sector in _NORM_SECTOR_MAP:
+        return _NORM_SECTOR_MAP[sector], "scraped_sector"
     
     # Log unmapped strings so we can extend the map iteratively
     if industry or broad_industry or sector:
@@ -273,10 +291,13 @@ def fetch_financials(ticker: str) -> dict:
         from data.scrapers.screener import fetch_screener_financials
         return fetch_screener_financials(ticker)
     else:
+        from data.scrapers.stockanalysis import fetch_stockanalysis_financials
+        fin = fetch_stockanalysis_financials(ticker)
+        if fin and fin.get("statements", {}).get("years_annual"):
+            return fin
+        logger.warning(f"stockanalysis failed for {ticker}; falling back to EDGAR")
         from data.scrapers.edgar import fetch_edgar_financials
         return fetch_edgar_financials(ticker)
-        # from data.scrapers.stockanalysis import fetch_stockanalysis_financials
-        # return fetch_stockanalysis_financials(ticker)
 
 def fetch_risk_free_rate(ticker: str) -> float:
     """
