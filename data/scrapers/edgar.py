@@ -758,6 +758,8 @@ def fetch_edgar_filings_text(ticker: str) -> list:
                 if sec:
                     text_sec = str(sec).strip()
                     if text_sec:
+                        if label == "Risk Factors" and len(text_sec) > 40000:
+                            text_sec = text_sec[:40000] + "\n\n[... Risk Factors truncated for length ...]"
                         parts.append(f"## {label}\n\n{text_sec}")
                         seen_labels.add(label)
         except Exception as sec_err:
