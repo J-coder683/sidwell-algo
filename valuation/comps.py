@@ -21,8 +21,6 @@ For comps (preferred/pension/nols are zero / not available from trailing data):
 import logging
 from statistics import median
 
-from data.scrapers.screener import fetch_screener_financials
-
 logger = logging.getLogger("sidwell.valuation.comps")
 
 _MIN_PEERS = 2
@@ -87,7 +85,7 @@ def _metrics(fin: dict) -> dict:
 def run_comps_valuation(
     target_financials: dict,
     peer_tickers: list,
-    fetch_fn=fetch_screener_financials,
+    fetch_fn=None,
 ) -> dict:
     """Run simplified trailing trading comps.
 
@@ -113,6 +111,14 @@ def run_comps_valuation(
         caveat           – non-empty when n_valid < 3
         error            – present (and non-None) when result is degenerate
     """
+    # Default to the geography-aware dispatcher so US peers (no suffix) route to
+    # stockanalysis/EDGAR and Indian (.NS/.BO) peers to screener. Each peer is
+    # routed by its own suffix, so mixed baskets work. Lazy import avoids a cycle.
+    # (Tests always pass fetch_fn explicitly, so this default is never hit there.)
+    if fetch_fn is None:
+        from data.public import fetch_financials
+        fetch_fn = fetch_financials
+
     n_peers = len(peer_tickers or [])
 
     # ── Peer count guard (return graceful error, no exception) ──────────────
