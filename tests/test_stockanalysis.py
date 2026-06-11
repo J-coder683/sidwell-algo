@@ -52,18 +52,20 @@ def test_stockanalysis_parser(mock_requests_get):
     assert fin["scraped_industry"] == "Oil & Gas Integrated" or fin["scraped_industry"] == "By Industry"
 
 def test_fetch_financials_fallback(mock_requests_get):
-    # It should use stockanalysis if it succeeds
-    fin = fetch_financials("XOM")
-    assert fin is not None
-    assert fin["source"] == "stockanalysis"
+    # macrotrends is now primary; patch it to None so stockanalysis gets used
+    with patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None):
+        fin = fetch_financials("XOM")
+        assert fin is not None
+        assert fin["source"] == "stockanalysis"
     
 def test_fetch_financials_failure_fallback():
-    # If stockanalysis returns None, it should fallback to edgar
-    with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials", return_value=None):
-        with patch("data.scrapers.edgar.fetch_edgar_financials", return_value={"source": "sec_edgar"}) as mock_edgar:
-            fin = fetch_financials("XOM")
-            assert fin["source"] == "sec_edgar"
-            mock_edgar.assert_called_once_with("XOM")
+    # If both macrotrends and stockanalysis return None, it should fallback to EDGAR
+    with patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None):
+        with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials", return_value=None):
+            with patch("data.scrapers.edgar.fetch_edgar_financials", return_value={"source": "sec_edgar"}) as mock_edgar:
+                fin = fetch_financials("XOM")
+                assert fin["source"] == "sec_edgar"
+                mock_edgar.assert_called_once_with("XOM")
 
 def test_engine_smoke(mock_requests_get):
     from sidwell.engine.core import run_engine

@@ -163,6 +163,10 @@ def fetch_stockanalysis_financials(ticker: str) -> dict | None:
             return [(v * 1e6) / 1e7 if v is not None else None for v in row]
 
         pl_stmt = {k: _scale_row(_get_row(inc_df, v)) for k, v in inc_map.items()}
+        # Interest expense: stockanalysis.com reports it NEGATIVE. Store it POSITIVE to
+        # match the screener/contract convention -- the lenses guard with `if interest > 0`,
+        # so a negative value makes interest-coverage evaluate to infinity (false pass).
+        pl_stmt["interest"] = [abs(v) if v is not None else None for v in pl_stmt["interest"]]
         cf_stmt = {k: _scale_row(_get_row(cf_df, v)) for k, v in cf_map.items()}
         
         cf_stmt["fixed assets purchased"] = [abs(v) if v is not None else None for v in cf_stmt["fixed assets purchased"]]
@@ -198,6 +202,9 @@ def fetch_stockanalysis_financials(ticker: str) -> dict | None:
         
         ebit_abs = _abs_row(inc_df, "Operating Income")
         interest_abs = _abs_row(inc_df, "Interest Expense")
+        # Positive convention (see pl_stmt["interest"] note): lenses read this top-level
+        # array and guard with `if interest > 0`.
+        interest_abs = [abs(v) if v is not None else None for v in interest_abs]
         tax_abs = _abs_row(inc_df, "Provision for Income Taxes")
         pretax_abs = _abs_row(inc_df, "Pretax Income")
         net_income_abs = _abs_row(inc_df, "Net Income")

@@ -291,9 +291,16 @@ def fetch_financials(ticker: str) -> dict:
         from data.scrapers.screener import fetch_screener_financials
         return fetch_screener_financials(ticker)
     else:
+        from data.scrapers.macrotrends import fetch_macrotrends_financials
+        fin = fetch_macrotrends_financials(ticker)
+        if fin and fin.get("statements", {}).get("years_annual"):
+            logger.info(f"fetch_financials: served {ticker} from macrotrends")
+            return fin
+        logger.warning(f"macrotrends failed for {ticker}; falling back to stockanalysis")
         from data.scrapers.stockanalysis import fetch_stockanalysis_financials
         fin = fetch_stockanalysis_financials(ticker)
         if fin and fin.get("statements", {}).get("years_annual"):
+            logger.info(f"fetch_financials: served {ticker} from stockanalysis")
             return fin
         logger.warning(f"stockanalysis failed for {ticker}; falling back to EDGAR")
         from data.scrapers.edgar import fetch_edgar_financials

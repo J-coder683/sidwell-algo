@@ -240,8 +240,9 @@ def test_no_duplicate_reports(tmp_path, mock_financials):
 from data.documents import discover_documents
 from pathlib import Path
 
+@patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None)
 @patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials")
-def test_fetch_financials_us_dispatches_to_stockanalysis(mock_sa):
+def test_fetch_financials_us_dispatches_to_stockanalysis(mock_sa, mock_mt):
     mock_sa.return_value = {"ticker": "AAPL", "statements": {"years_annual": ["2024", "2025"]}}
     res = public.fetch_financials("AAPL")
     assert res["ticker"] == "AAPL"
@@ -250,8 +251,9 @@ def test_fetch_financials_us_dispatches_to_stockanalysis(mock_sa):
 
 @patch("data.scrapers.edgar.fetch_edgar_financials")
 @patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials")
-def test_fetch_financials_us_falls_back_to_edgar(mock_sa, mock_edgar):
-    # stockanalysis miss (None or empty) -> EDGAR fallback
+@patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None)
+def test_fetch_financials_us_falls_back_to_edgar(mock_mt, mock_sa, mock_edgar):
+    # macrotrends + stockanalysis miss (None) -> EDGAR fallback
     mock_sa.return_value = None
     mock_edgar.return_value = {"ticker": "AAPL"}
     res = public.fetch_financials("AAPL")
