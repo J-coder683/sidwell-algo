@@ -1,6 +1,7 @@
 import numpy as np
 import logging
 from analysis import framework_parser
+from lenses import _scoring
 
 logger = logging.getLogger("sidwell.lenses.buffett")
 
@@ -273,19 +274,29 @@ def evaluate_buffett_lens(
 
     # 10. Owner orientation
     # Test: insider_ownership > 0.05 OR (soft) LLM = owner_oriented
+    # Hybrid: hard path is always computable. Soft branch only fires when
+    # confidence != 'low' (low-confidence soft signal cannot rescue a hard FAIL).
     insider_pct = financials.get("insider_ownership", 0.0)
     hard_owner_pass = insider_pct > 0.05
     soft_owner_verdict = None
-    soft_owner_pass = True  # default PASS when unavailable
+    soft_owner_confidence = None
+    soft_owner_quote = ""
+    soft_owner_pass = False  # default: soft branch does not fire
     if qualitative_results and qualitative_results.get("status") == "available":
         oo = qualitative_results.get("owner_orientation_signal", {}) or {}
         soft_owner_verdict = oo.get("verdict")
-        soft_owner_pass = (soft_owner_verdict == "owner_oriented")
+        soft_owner_confidence = oo.get("confidence")
+        soft_owner_quote = (oo.get("evidence_quote") or "")[:300]
+        # Only let the soft branch fire when signal is usable (not low confidence)
+        if soft_owner_verdict == "owner_oriented" and soft_owner_confidence != "low":
+            soft_owner_pass = True
     check_10_passed = hard_owner_pass or soft_owner_pass
+    quote_str = f' Evidence: "{soft_owner_quote}"' if soft_owner_quote else ""
+    conf_str = f" (confidence: {soft_owner_confidence})" if soft_owner_confidence else ""
     detail_10 = (
         f"Insider ownership: {insider_pct*100:.2f}% "
         f"({'PASS' if hard_owner_pass else 'FAIL'} at >5%). "
-        f"LLM owner-orientation: {soft_owner_verdict or 'unavailable'}"
+        f"Signal: {soft_owner_verdict or 'unavailable'}{conf_str}.{quote_str}"
     )
     checks["10_owner_orientation"] = {
         "name": "Owner orientation",
@@ -298,25 +309,30 @@ def evaluate_buffett_lens(
     }
 
     # 11. Management coherence
-    # Test (soft): LLM coherence verdict = "coherent"; defaults PASS when unavailable
-    soft_coherence_pass = True
-    soft_coherence_detail = "Soft check: SKIPPED (qualitative unavailable); defaulted PASS"
-    if qualitative_results and qualitative_results.get("status") == "available":
-        coh = qualitative_results.get("coherence_assessment", {}) or {}
-        soft_coherence_verdict = coh.get("verdict", "coherent")
-        soft_coherence_pass = (soft_coherence_verdict == "coherent")
-        reasoning = (coh.get("reasoning") or "")[:500]
-        soft_coherence_detail = (
-            f"Soft check: {'PASS' if soft_coherence_pass else 'FAIL'} "
-            f"(LLM coherence: {soft_coherence_verdict}). {reasoning}"
-        )
+    # Test (soft): LLM coherence verdict = "coherent". Excluded from denominator
+    # (N/A) when qualitative is unavailable, the verdict is unclear, or confidence is low.
+    q_status = (qualitative_results or {}).get("status", "unavailable")
+    coh = (qualitative_results or {}).get("coherence_assessment", {}) or {}
+    coh_verdict = coh.get("verdict")
+    coh_confidence = coh.get("confidence")
+    coh_quote = (coh.get("evidence_quote") or "")[:300]
+    coh_reasoning = (coh.get("reasoning") or "")[:500]
+    coh_quote_str = f' Evidence: "{coh_quote}"' if coh_quote else ""
+    coh_conf_str = f" (confidence: {coh_confidence})" if coh_confidence else ""
+    coh_passed, coh_applicable, coh_detail = _scoring.resolve_soft(
+        q_status, coh_verdict, {"coherent"},
+        confidence=coh_confidence,
+        pass_detail=f"Signal: coherent{coh_conf_str}.{coh_quote_str} {coh_reasoning}",
+        fail_detail=f"Signal: {coh_verdict}{coh_conf_str}.{coh_quote_str} {coh_reasoning}",
+    )
     checks["11_mgmt_coherence"] = {
         "name": "Management coherence",
         "metric_name": "LLM coherence verdict",
-        "value": soft_coherence_pass,
+        "value": coh_verdict,
         "threshold_str": "LLM coherence = coherent",
-        "passed": soft_coherence_pass,
-        "detail": soft_coherence_detail,
+        "passed": coh_passed,
+        "applicable": coh_applicable,
+        "detail": coh_detail,
         "part": "C",
     }
 
@@ -383,23 +399,29 @@ def evaluate_buffett_lens(
     }
 
     # 14. Holdability — 20-year test (soft, LLM-based)
-    # Test: LLM verdict = "holdable_20y"; defaults PASS when unavailable
-    soft_hold_pass = True
-    soft_hold_detail = "Holdability check skipped (qualitative unavailable); defaulted PASS"
-    hold_verdict = None
-    if qualitative_results and qualitative_results.get("status") == "available":
-        ha = qualitative_results.get("holdability_assessment", {}) or {}
-        hold_verdict = ha.get("verdict")
-        soft_hold_pass = (hold_verdict == "holdable_20y")
-        reasoning = (ha.get("reasoning") or "")[:500]
-        soft_hold_detail = f"LLM holdability verdict: {hold_verdict}. {reasoning}"
+    # Test: LLM verdict = "holdable_20y". Excluded from denominator (N/A) when
+    # qualitative is unavailable, the verdict is unclear, or confidence is low.
+    ha = (qualitative_results or {}).get("holdability_assessment", {}) or {}
+    hold_verdict = ha.get("verdict")
+    hold_confidence = ha.get("confidence")
+    hold_quote = (ha.get("evidence_quote") or "")[:300]
+    hold_reasoning = (ha.get("reasoning") or "")[:500]
+    hold_quote_str = f' Evidence: "{hold_quote}"' if hold_quote else ""
+    hold_conf_str = f" (confidence: {hold_confidence})" if hold_confidence else ""
+    hold_passed, hold_applicable, hold_detail = _scoring.resolve_soft(
+        q_status, hold_verdict, {"holdable_20y"},
+        confidence=hold_confidence,
+        pass_detail=f"Signal: {hold_verdict}{hold_conf_str}.{hold_quote_str} {hold_reasoning}",
+        fail_detail=f"Signal: {hold_verdict}{hold_conf_str}.{hold_quote_str} {hold_reasoning}",
+    )
     checks["14_holdability"] = {
         "name": "Holdability (20-year test)",
         "metric_name": "LLM holdability assessment",
         "value": hold_verdict,
         "threshold_str": "LLM verdict = holdable_20y",
-        "passed": soft_hold_pass,
-        "detail": soft_hold_detail,
+        "passed": hold_passed,
+        "applicable": hold_applicable,
+        "detail": hold_detail,
         "part": "D",
     }
 
@@ -419,26 +441,27 @@ def evaluate_buffett_lens(
     # =========================================================================
     # Scoring & Verdict (per frameworks/buffett.md)
     # =========================================================================
-    score = sum(1 for c in checks.values() if c["passed"])
-    # max_score excludes checks marked not-applicable (e.g. margin of safety for
-    # banks, where no valuation model exists yet). Non-bank checks never set
-    # "applicable", so they default to True and max_score stays 14.
-    max_score = sum(1 for c in checks.values() if c.get("applicable", True))
+    # Exclude-from-denominator: soft checks marked not-applicable (qualitative
+    # unavailable/unclear) and the bank margin-of-safety N/A drop out of both
+    # score and max_score. Verdict thresholds are ratio-based against ORIG_MAX=14
+    # so full-data behavior is identical to the original absolute 12/10 cutoffs.
+    ORIG_MAX = 14
+    score, max_score = _scoring.tally(checks)
     check_12 = checks["12_margin_of_safety"]
     check_12_passes = check_12["passed"]
     mos_applicable = check_12.get("applicable", True)
 
-    if mos_applicable and score >= 12 and check_12_passes:
+    if mos_applicable and _scoring.meets(score, max_score, ORIG_MAX, 12) and check_12_passes:
         verdict = "BUY"
         reason = "Excellent business meeting Buffett quality, management, and price criteria."
-    elif mos_applicable and score >= 10 and not check_12_passes:
+    elif mos_applicable and _scoring.meets(score, max_score, ORIG_MAX, 10) and not check_12_passes:
         verdict = "WAIT"
         reason = (
             f"High-quality business that satisfies most Buffett criteria but lacks "
             f"margin of safety. Set alert at buy-trigger price: "
             f"₹{intrinsic_value * 0.75:.2f} (75% of intrinsic value)."
         )
-    elif score >= 10:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 10):
         verdict = "WATCH"
         reason = "Most quality criteria pass; monitor for resolution of failed checks."
         if not mos_applicable:

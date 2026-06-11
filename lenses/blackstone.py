@@ -6,6 +6,7 @@ Implementation of the Blackstone playbook for private equity evaluation.
 
 import numpy as np
 from analysis import framework_parser
+from lenses import _scoring
 
 BLACKSTONE_FAVORED_THEMES = {
     "Computers/Peripherals",
@@ -119,14 +120,19 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
         "detail": f"{target_industry} {'in' if pass_5 else 'not in'} themes."
     }
     
-    # 6. Cycle position
-    cyc_sig = q.get("cycle_position", {}).get("sector_cycle", "unclear")
-    if q_status != "available":
-        pass_6 = True
-        det_6 = "Defaulted PASS (assumed mid_cycle)"
-    else:
-        pass_6 = cyc_sig in ["trough", "early_recovery", "mid_cycle", "unclear"]
-        det_6 = f"Cycle: {cyc_sig}"
+    # 6. Cycle position — excluded (N/A) when unavailable/unclear or low-confidence.
+    cyc_data = q.get("cycle_position", {}) or {}
+    cyc_sig = cyc_data.get("sector_cycle")
+    cyc_conf = cyc_data.get("confidence")
+    cyc_quote = (cyc_data.get("evidence_quote") or "")[:300]
+    cyc_conf_str = f" (confidence: {cyc_conf})" if cyc_conf else ""
+    cyc_quote_str = f' Evidence: "{cyc_quote}"' if cyc_quote else ""
+    pass_6, applic_6, det_6 = _scoring.resolve_soft(
+        q_status, cyc_sig, {"trough", "early_recovery", "mid_cycle"},
+        confidence=cyc_conf,
+        pass_detail=f"Signal: {cyc_sig}{cyc_conf_str}.{cyc_quote_str}",
+        fail_detail=f"Signal: {cyc_sig}{cyc_conf_str}.{cyc_quote_str}",
+    )
     checks["6_cycle_position"] = {
         "part": "B",
         "name": "Cycle Position",
@@ -134,17 +140,23 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
         "value": cyc_sig,
         "threshold_str": "Not peak/late",
         "passed": pass_6,
+        "applicable": applic_6,
         "detail": det_6
     }
     
-    # 7. Structural tailwind
-    tw_sig = q.get("structural_tailwind_signal", {}).get("verdict", "unclear")
-    if q_status != "available":
-        pass_7 = True
-        det_7 = "Defaulted PASS (assumed neutral)"
-    else:
-        pass_7 = tw_sig in ["tailwind", "neutral", "unclear"]
-        det_7 = f"Tailwind: {tw_sig}"
+    # 7. Structural tailwind — excluded (N/A) when unavailable/unclear or low-confidence.
+    tw_data = q.get("structural_tailwind_signal", {}) or {}
+    tw_sig = tw_data.get("verdict")
+    tw_conf = tw_data.get("confidence")
+    tw_quote = (tw_data.get("evidence_quote") or "")[:300]
+    tw_conf_str = f" (confidence: {tw_conf})" if tw_conf else ""
+    tw_quote_str = f' Evidence: "{tw_quote}"' if tw_quote else ""
+    pass_7, applic_7, det_7 = _scoring.resolve_soft(
+        q_status, tw_sig, {"tailwind", "neutral"},
+        confidence=tw_conf,
+        pass_detail=f"Signal: {tw_sig}{tw_conf_str}.{tw_quote_str}",
+        fail_detail=f"Signal: {tw_sig}{tw_conf_str}.{tw_quote_str}",
+    )
     checks["7_structural_tailwind"] = {
         "part": "B",
         "name": "Structural Tailwind",
@@ -152,6 +164,7 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
         "value": tw_sig,
         "threshold_str": "Tailwind/neutral",
         "passed": pass_7,
+        "applicable": applic_7,
         "detail": det_7
     }
     
@@ -213,14 +226,19 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
         "detail": f"Market cap is {'adequate' if pass_11 else 'too small'}."
     }
     
-    # 12. 20-year core viability
-    ha_sig = q.get("holdability_assessment", {}).get("verdict", "unclear")
-    if q_status != "available":
-        pass_12 = True
-        det_12 = "Defaulted PASS (assumed holdable)"
-    else:
-        pass_12 = ha_sig in ["holdable_20y", "unclear"]
-        det_12 = f"Signal: {ha_sig}"
+    # 12. 20-year core viability — excluded (N/A) when unavailable/unclear or low-confidence.
+    ha_data = q.get("holdability_assessment", {}) or {}
+    ha_sig = ha_data.get("verdict")
+    ha_conf = ha_data.get("confidence")
+    ha_quote = (ha_data.get("evidence_quote") or "")[:300]
+    ha_conf_str = f" (confidence: {ha_conf})" if ha_conf else ""
+    ha_quote_str = f' Evidence: "{ha_quote}"' if ha_quote else ""
+    pass_12, applic_12, det_12 = _scoring.resolve_soft(
+        q_status, ha_sig, {"holdable_20y"},
+        confidence=ha_conf,
+        pass_detail=f"Signal: {ha_sig}{ha_conf_str}.{ha_quote_str}",
+        fail_detail=f"Signal: {ha_sig}{ha_conf_str}.{ha_quote_str}",
+    )
     checks["12_core_viability"] = {
         "part": "D",
         "name": "20-Year Core Viability",
@@ -228,17 +246,23 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
         "value": ha_sig,
         "threshold_str": "Holdable 20y",
         "passed": pass_12,
+        "applicable": applic_12,
         "detail": det_12
     }
     
-    # 13. Multi-product engagement
-    mp_sig = q.get("multi_product_engagement_signal", {}).get("verdict", "unclear")
-    if q_status != "available" or mp_sig == "unclear":
-        pass_13 = True
-        det_13 = "neutral default — qualitative unavailable; check counted as PASS"
-    else:
-        pass_13 = mp_sig in ["multi_product_potential"]
-        det_13 = f"Signal: {mp_sig}"
+    # 13. Multi-product engagement — excluded (N/A) when unavailable/unclear or low-confidence.
+    mp_data = q.get("multi_product_engagement_signal", {}) or {}
+    mp_sig = mp_data.get("verdict")
+    mp_conf = mp_data.get("confidence")
+    mp_quote = (mp_data.get("evidence_quote") or "")[:300]
+    mp_conf_str = f" (confidence: {mp_conf})" if mp_conf else ""
+    mp_quote_str = f' Evidence: "{mp_quote}"' if mp_quote else ""
+    pass_13, applic_13, det_13 = _scoring.resolve_soft(
+        q_status, mp_sig, {"multi_product_potential"},
+        confidence=mp_conf,
+        pass_detail=f"Signal: {mp_sig}{mp_conf_str}.{mp_quote_str}",
+        fail_detail=f"Signal: {mp_sig}{mp_conf_str}.{mp_quote_str}",
+    )
     checks["13_multi_product"] = {
         "part": "D",
         "name": "Multi-Product Engagement",
@@ -246,21 +270,32 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
         "value": mp_sig,
         "threshold_str": "Multi-product",
         "passed": pass_13,
+        "applicable": applic_13,
         "detail": det_13
     }
     
     # --- PART E: Phalippou Defensibility ---
-    # 14. Alpha thesis (levers: 2, 3, 5, 7, 12, 13)
-    edge_passed = sum([pass_2, pass_3, pass_5, pass_7, pass_12, pass_13])
-    pass_14 = edge_passed >= 4
+    # 14. Alpha thesis (levers: 2, 3, 5, 7, 12, 13). Proportional gate: when some
+    # levers are N/A (soft signal unavailable), require >= ceil(4/6 * applicable).
+    edge_levers = [
+        (pass_2, True),        # durable moat (quant)
+        (pass_3, True),        # recurring revenue (quant)
+        (pass_5, True),        # theme alignment (quant)
+        (pass_7, applic_7),    # structural tailwind (soft)
+        (pass_12, applic_12),  # core viability (soft)
+        (pass_13, applic_13),  # multi-product (soft)
+    ]
+    edge_passed, edge_n, edge_threshold, pass_14 = _scoring.proportional_gate(edge_levers)
     checks["14_alpha_thesis"] = {
         "part": "E",
         "name": "Above-Average Alpha",
         "metric_name": "Edge Levers Passed",
         "value": edge_passed,
-        "threshold_str": ">= 4",
+        "threshold_str": f">= {edge_threshold} of {edge_n} applicable",
         "passed": pass_14,
-        "detail": f"{edge_passed} of 6 levers passed."
+        "detail": (f"{edge_passed} of {edge_n} applicable levers passed (need {edge_threshold}; "
+                   f"{6 - edge_n} N/A excluded)." if edge_n < 6
+                   else f"{edge_passed} of 6 levers passed (need {edge_threshold}).")
     }
     
     # --- SCORING ---
@@ -277,36 +312,41 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
             )
         check_dict["framework_reasoning"] = reasoning
 
-    score = sum(1 for c in checks.values() if c["passed"])
-    
+    # Exclude-from-denominator: soft checks with unavailable/unclear signals drop
+    # out of both score and max_score. Verdict thresholds are ratio-based against
+    # ORIG_MAX=14 (original 11/9 cutoffs). precond_1 is all-quant (8,9,10); precond_2
+    # is the proportional Phalippou gate — so missing soft data never auto-SKIPs.
+    ORIG_MAX = 14
+    score, max_score = _scoring.tally(checks)
+
     precond_1 = sum([pass_8, pass_9, pass_10]) >= 2
     precond_2 = pass_14
-    
+
     if not (precond_1 and precond_2):
         verdict = "SKIP"
         if not precond_1:
             reason = "Failed Part C pre-condition: lacks Schwarzman downside protection (<2/3 passed)."
         else:
             reason = "Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar)."
-    elif score >= 11:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 11):
         verdict = "BUY"
         reason = "High-conviction Blackstone target. Good business in a good neighborhood."
-    elif score >= 9 and not pass_6:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 9) and not pass_6:
         verdict = "WAIT"
         reason = "WAIT (wrong cycle moment). Protected and aligned but late cycle."
-    elif score >= 9 and not pass_11:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 9) and not pass_11:
         verdict = "WAIT"
         reason = "WAIT (sub-scale). Protected and aligned but too small."
-    elif score >= 9:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 9):
         verdict = "WATCH"
         reason = "Mixed signals across thematic/scale checks; monitor."
     else:
         verdict = "SKIP"
         reason = "Too many failed checks for an investable thesis."
-        
+
     return {
         "score": score,
-        "max_score": 14,
+        "max_score": max_score,
         "verdict": verdict,
         "reason": reason,
         "checks": checks

@@ -1,4 +1,4 @@
-# Qualitative Extraction Prompt v0.10
+# Qualitative Extraction Prompt v0.12
 
 You are an investment analyst extracting structured insights from company
 documents. Read all the documents provided below. Return ONLY a JSON object
@@ -27,88 +27,128 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
   },
   "coherence_assessment": {
     "verdict": "coherent | incoherent",
-    "reasoning": "one paragraph"
+    "reasoning": "one paragraph",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "owner_orientation_signal": {
     "verdict": "owner_oriented | management_class | unclear",
-    "evidence": "one paragraph citing specific language patterns from the documents — partnership framing, candor about mistakes, long-term focus vs short-term metric games"
+    "evidence": "one paragraph citing specific language patterns from the documents — partnership framing, candor about mistakes, long-term focus vs short-term metric games",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "holdability_assessment": {
     "verdict": "holdable_20y | uncertain | not_holdable_20y",
-    "reasoning": "one paragraph. Holdable_20y = business model resilient to obvious 20-year disruption (durable customer need, hard to disintermediate). Not_holdable = single-technology or single-regulatory dependency that could shift in 20 years. Uncertain = mixed signals."
+    "reasoning": "one paragraph. Holdable_20y = business model resilient to obvious 20-year disruption (durable customer need, hard to disintermediate). Not_holdable = single-technology or single-regulatory dependency that could shift in 20 years. Uncertain = mixed signals.",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "cycle_position": {
     "sector_cycle": "trough | early_recovery | mid_cycle | late_cycle | peak",
     "company_cycle": "early | mid | late",
-    "reasoning": "one paragraph identifying signals: capacity utilization, pricing trends, M&A activity in sector, demand commentary"
+    "reasoning": "one paragraph identifying signals: capacity utilization, pricing trends, M&A activity in sector, demand commentary",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the sector_cycle verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "variant_perception": {
     "consensus_view": "one sentence — what the market/analyst consensus believes about this company",
     "company_view": "one sentence — what management's actual outlook is",
     "variant_present": true,
     "specificity": "high | medium | low",
-    "notes": "one paragraph. Variant present + high specificity means there is a clearly articulated non-consensus thesis with a specific operational/financial mechanism — not just 'AI tailwind.'"
+    "notes": "one paragraph. Variant present + high specificity means there is a clearly articulated non-consensus thesis with a specific operational/financial mechanism — not just 'AI tailwind.'",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the variant_present verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "management_humility": {
     "verdict": "humble | hubristic | unclear",
-    "evidence": "one paragraph citing specific examples: acknowledging uncertainty, refusing to give multi-year forecasts they can't defend, admitting past mistakes, NOT making bold macro predictions"
+    "evidence": "one paragraph citing specific examples: acknowledging uncertainty, refusing to give multi-year forecasts they can't defend, admitting past mistakes, NOT making bold macro predictions",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "why_now_signal": {
     "verdict": "dislocation_present | normal_cycle | catalyst_present | unclear",
     "specific_event": "one sentence — name the event creating opportunity: post-shock, post-distress, post-management-change, regulatory shift, or 'no specific dislocation'",
-    "notes": "one paragraph elaborating"
+    "notes": "one paragraph elaborating",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "willing_seller_signal": {
     "verdict": "founder_succession | corporate_carveout | distress | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph describing the seller motivation and supporting evidence",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "ma_platform_potential": {
     "verdict": "high | low | unclear",
-    "notes": "fragmented industry with roll-up opportunity"
+    "notes": "one paragraph. High = fragmented industry with clearly identified roll-up runway and management willingness. Low = concentrated or already consolidated sector. Unclear = insufficient evidence.",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "workforce_stavros_fit": {
     "verdict": "high_labor_intensity | low_labor_intensity | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph describing the workforce model and how it relates to operational leverage potential",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "mgmt_upgrade_potential": {
     "verdict": "high | low | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph. High = clear operational gaps addressable by new management or external expertise. Low = management best-in-class or already optimized.",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "wc_optimization_signal": {
     "verdict": "high | low | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph describing working capital position and optimization potential",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "structural_tailwind_signal": {
     "verdict": "present | absent | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph identifying the structural tailwind (demographic, regulatory, technology shift) or explaining its absence",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "multi_product_engagement_signal": {
     "verdict": "high | low | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph describing cross-sell / multi-product opportunity",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "chaos_dislocation_catalyst": {
     "verdict": "present | absent | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph identifying the dislocation or chaos event — post-distress, special situation, forced selling — or confirming its absence",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "fulcrum_security_signal": {
     "verdict": "present | absent | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph describing whether a fulcrum security exists in the capital structure and which tranche it is",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "abf_credit_fit": {
     "verdict": "high | low | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph describing suitability for Apollo's asset-based finance / private credit origination",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "complexity_moat_signal": {
     "verdict": "high | low | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph describing the complexity moat — operational, regulatory, or structural features that give Apollo pricing power over generic lenders",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "permanent_hold_viable": {
     "verdict": "yes | no | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph. Yes = Athene-compatible long-duration asset with stable cash flows; suitable for indefinite hold without an exit plan.",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "covenant_control_potential": {
     "verdict": "high | low | unclear",
-    "notes": "one sentence"
+    "notes": "one paragraph describing whether private credit documentation with maintenance covenants is achievable (private borrower / bank-funded = yes; public bond issuer = typically no)",
+    "evidence_quote": "SHORT verbatim quote (max 1 sentence) from the documents that most directly supports the verdict, plus filename in brackets. Empty string if no direct quote found.",
+    "confidence": "high | medium | low"
   },
   "ajp": {
     "meta": {
@@ -184,7 +224,7 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
       // --- TERMINAL VALUE & CAPITAL STRUCTURE ---
       //   terminal_growth         unit "ratio" — long-run growth, must be <= long-run nominal GDP.
       //   exit_ev_ebitda_multiple unit "x" — a DEFENSIBLE terminal EV/EBITDA exit multiple justified by the
-      //                           company's quality and sector (do not leave it at a generic 10x).
+      //                           company's quality and sector (do not leave it at a generic 10x)
       //   target_debt_to_cap      unit "ratio" — management's intended long-run debt / (debt + equity), if stated.
       //   pretax_cost_of_debt_override  unit "ratio" — only if they disclose their actual borrowing rate.
       //   dividend_payout_ratio   unit "ratio" — FORECAST dividend payout (dividends / net income), clamped [0,1].
@@ -238,11 +278,16 @@ rationale field.
 
 - **CYNICAL AUDITOR MODE**: Act as a cynical, forensic accountant. Cross-examine management's scripted remarks and MD&A against the Analyst Q&A section and Credit Rating reports (if provided). Penalize management humility and tone scores if they evade questions, blame macro environments, refuse specific guidance, or if the Credit Rating highlights working capital/debt stress that management ignored. Check Related Party Transactions (RPT) for promoter governance risks.
 - Do NOT invent content not in the documents. Every item must trace to source documents.
+- **"unclear" is reserved for genuine absence**: Use "unclear" ONLY when the documents genuinely do not address the topic at all. It is NOT a safe default for thin signals. When documents touch a topic but weakly, set confidence to "low" and provide your best-supported verdict — the engine will exclude low-confidence signals from the denominator automatically.
+- **evidence_quote discipline**: The evidence_quote MUST be a verbatim fragment (max 1 sentence) lifted directly from the documents. If you cannot find a direct verbatim quote, leave it as an empty string and lower confidence to "medium" or "low" accordingly.
+- **confidence calibration**:
+    - "high" = the documents explicitly state or strongly support the verdict with direct evidence
+    - "medium" = reasonable inference from the documents; the documents touch the topic but don't directly confirm
+    - "low" = weak or indirect evidence; the documents barely address this topic
 - If a section has no findings, return an empty array (for list fields) or "unclear" / null (for verdict fields).
 - Cite source documents by filename exactly as provided.
 - Keep text fields concise. Max 2 sentences for items; max 5 sentences for paragraphs.
 - Do NOT include any text outside the JSON object.
-- The new verdicts (owner_orientation, holdability, cycle, etc.) may legitimately be "unclear" / "uncertain" — return that honestly rather than guessing.
 
 ## Documents
 

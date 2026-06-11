@@ -111,7 +111,7 @@ These checks answer: *is the management deploying shareholder capital intelligen
   - Whether evasion or contradiction is evident
 **Logic:** Buffett's 2014 letter on character: *"A Berkshire CEO must be 'all in' for the company, not for himself. […] If it's clear to them that shareholders' interests are paramount to him, they will, with few exceptions, also embrace that way of thinking."* Coherent commentary across multiple quarters under hostile analyst questioning is a hard test of integrity. This check inherits the v0.2 hybrid coherence signal.
 **Source:** Berkshire 2003 letter on management quality; v0.2 qualitative ingestion layer (`analysis/qualitative.py`).
-**Determinism note:** This is one of the two LLM-dependent checks in this lens. Defaults to PASS if qualitative input unavailable (preserving v0.1 behavior).
+**Determinism note:** One of the two LLM-dependent checks in this lens. Excluded from the denominator (marked N/A) when qualitative input is unavailable or the verdict is unclear — neither inflates the score (default-PASS) nor penalizes missing data (default-FAIL). A genuine `incoherent` verdict still counts as a failure.
 
 ---
 
@@ -130,10 +130,10 @@ These checks answer: *given everything above, can I buy this today at a price th
 **Source:** Berkshire 1996 letter ("circle of competence"); Buffett's repeated public statements on crypto.
 
 #### 14. Holdability — 20-year test (qualitative)
-**Test (soft, LLM-based):** Gemini reads the qualitative inputs and answers: *would a fund manager with a 20-year mandate want to own this business at any price?* PASS if yes (durable customer need, hard-to-disrupt economics, no obvious technological obsolescence risk in 20 years). FAIL if the business depends on a single technology cycle, regulatory regime that may shift, or fashion-cycle category. Defaults to PASS if qualitative unavailable.
+**Test (soft, LLM-based):** Gemini reads the qualitative inputs and answers: *would a fund manager with a 20-year mandate want to own this business at any price?* PASS if yes (durable customer need, hard-to-disrupt economics, no obvious technological obsolescence risk in 20 years). FAIL if the business depends on a single technology cycle, regulatory regime that may shift, or fashion-cycle category. Excluded from the denominator (N/A) if qualitative unavailable or unclear.
 **Logic:** Buffett's actual final filter is the 20-year test. *"Our favorite holding period is forever."* He has never sold See's Candy. He held Coca-Cola for 30+ years. A great business he'd sell in 5 years isn't a Buffett candidate — it's a Marks candidate (right tool, wrong lens).
 **Source:** Berkshire 1988 letter (Coca-Cola entry rationale); 2014 letter ("if our non-economic values were to be lost, much of Berkshire's economic value would collapse as well").
-**Determinism note:** Second LLM-dependent check. Defaults to PASS when qualitative unavailable.
+**Determinism note:** Second LLM-dependent check. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine `not_holdable_20y` verdict still counts as a failure.
 
 ---
 

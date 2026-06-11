@@ -261,11 +261,82 @@ def _build_exec_summary_html(lens_results: dict, lens_name: str) -> str:
 """
 
 
+def _build_exec_summary_html(lens_results: dict, lens_name: str, ticker: str = "") -> str:
+    from reports.explain import build_lens_narrative
+    checks = lens_results.get("checks", {})
+    score = lens_results.get("score", 0)
+    total_checks = len(checks)
+
+    # Part summary
+    parts: dict[str, list] = {}
+    for check_id, check_dict in checks.items():
+        part = check_dict.get("part", "?")
+        parts.setdefault(part, []).append(check_dict)
+
+    part_names = _PART_NAMES_BY_LENS.get(lens_name, _PART_DISPLAY_NAMES)
+
+    summary_rows = []
+    for part_id in sorted(parts.keys()):
+        part_checks = parts[part_id]
+        passed_count = sum(1 for c in part_checks if c["passed"])
+        part_label = part_names.get(part_id, f"Part {part_id}")
+        status_icon = "&#10003;" if passed_count == len(part_checks) else (
+            "&#8212;" if passed_count > 0 else "&#10007;"
+        )
+        css = "check-status-pass" if passed_count == len(part_checks) else (
+            "" if passed_count > 0 else "check-status-fail"
+        )
+        summary_rows.append(
+            f'<tr><td><span class="{css}">{status_icon}</span></td>'
+            f'<td>{_esc(part_label)}</td>'
+            f'<td style="text-align:right;">{passed_count} / {len(part_checks)}</td></tr>'
+        )
+
+    rows_html = "\n".join(summary_rows)
+
+    # Layer-C narrative
+    display_name = _LENS_DISPLAY_NAMES.get(lens_name, lens_name.capitalize())
+    narrative = build_lens_narrative(display_name, lens_results, ticker or "—")
+    narrative_html = (
+        f'<div class="narrative-block" style="'
+        f'background:#f7f9fc; border-left:3px solid #4a90d9; '
+        f'border-radius:4px; padding:10px 14px; margin-top:16px; '
+        f'font-size:9.5pt; line-height:1.6;">'
+        f'<strong style="font-size:8pt; letter-spacing:0.05em; '
+        f'color:#666; text-transform:uppercase;">In plain English</strong>'
+        f'<br><br>{_esc(narrative)}'
+        f'</div>'
+    )
+
+    return f"""
+<h2>Executive Summary</h2>
+<div class="score-block">
+  <span class="score-number">{score}</span>
+  <span style="font-size:10pt;"> / {total_checks} checks passed</span>
+</div>
+
+<table class="summary-table">
+  <thead>
+    <tr>
+      <th style="width:30px;">&nbsp;</th>
+      <th>Part</th>
+      <th style="text-align:right; width:80px;">Score</th>
+    </tr>
+  </thead>
+  <tbody>
+    {rows_html}
+  </tbody>
+</table>
+{narrative_html}
+"""
+
+
 # ---------------------------------------------------------------------------
 # Check-by-check detail
 # ---------------------------------------------------------------------------
 
 def _build_checks_html(lens_results: dict, lens_name: str) -> str:
+    from reports.explain import build_check_explanation
     checks = lens_results.get("checks", {})
 
     # Group by part
@@ -280,45 +351,54 @@ def _build_checks_html(lens_results: dict, lens_name: str) -> str:
     for part_idx, part_id in enumerate(sorted(parts.keys())):
         part_check_pairs = parts[part_id]
         part_label = part_names.get(part_id, f"Part {part_id}")
-        passed_in_part = sum(1 for _, c in part_check_pairs if c["passed"])
-        total_in_part = len(part_check_pairs)
+        passed_in_part = sum(1 for _, c in part_check_pairs if c.get("applicable", True) and c.get("passed", False))
+        total_in_part = sum(1 for _, c in part_check_pairs if c.get("applicable", True))
 
         # Part header
         page_break_class = "part-section" if part_idx > 0 else ""
         checks_html_list = []
 
         for check_id, check_dict in part_check_pairs:
-            passed = check_dict.get("passed", False)
-            name = check_dict.get("name", check_id)
-            detail = check_dict.get("detail", "")
-            threshold = check_dict.get("threshold_str", "")
-            reasoning = check_dict.get("framework_reasoning", "")
+            expl = build_check_explanation(check_id, check_dict)
+            
+            if expl["status"] == "na":
+                icon = '<span class="check-status-na" style="color: #888;">&#9208;</span>'
+            elif expl["status"] == "pass":
+                icon = '<span class="check-status-pass">&#10003;</span>'
+            else:
+                icon = '<span class="check-status-fail">&#10007;</span>'
 
-            icon = _status_icon(passed)
-            name_html = _esc(name)
-            detail_html = _esc(str(detail))
-            threshold_html = _esc(str(threshold))
+            title_html = _esc(expl["title"])
+            
+            what_why_html = ""
+            if expl["what_why"]:
+                what_why_html = f'<div class="framework-reasoning" style="margin-bottom: 8px;"><strong>What this measures:</strong> {_esc(expl["what_why"])}</div>'
 
-            # Framework reasoning only shown for FAILED checks
-            reasoning_html = ""
-            if not passed and reasoning:
-                reasoning_html = f'<div class="framework-reasoning">{_esc(reasoning)}</div>'
+            finding_html = ""
+            if expl["finding"]:
+                finding_html = f'<div class="check-detail" style="margin-bottom: 4px;"><strong>This company:</strong> {_esc(expl["finding"])}</div>'
+
+            judgment_html = f'<div class="check-judgment"><strong>Verdict:</strong> {_esc(expl["judgment"])}</div>'
+
+            opacity_style = 'style="opacity: 0.6;"' if expl["status"] == "na" else ''
 
             checks_html_list.append(f"""
-<div class="check-row">
-  <div class="check-row-header">
+<div class="check-row" {opacity_style}>
+  <div class="check-row-header" style="margin-bottom: 8px;">
     {icon}
-    <span class="check-name">{name_html}</span>
+    <span class="check-name">{title_html}</span>
   </div>
-  <div class="check-threshold">Threshold: {threshold_html}</div>
-  <div class="check-detail">{detail_html}</div>
-  {reasoning_html}
+  <div style="margin-left: 20px;">
+    {what_why_html}
+    {finding_html}
+    {judgment_html}
+  </div>
 </div>""")
 
         checks_block = "\n".join(checks_html_list)
         html_parts.append(f"""
 <div class="{page_break_class}">
-  <div class="part-header">{_esc(part_label)} &nbsp;·&nbsp; {passed_in_part}/{total_in_part}</div>
+  <div class="part-header">{_esc(part_label)} &nbsp;&middot;&nbsp; {passed_in_part}/{total_in_part}</div>
   {checks_block}
 </div>""")
 
@@ -426,7 +506,7 @@ def export_lens_pdf(
 
     # Build full HTML document
     cover = _build_cover_html(lens_results, financials, dcf_results, lens_name)
-    exec_summary = _build_exec_summary_html(lens_results, lens_name)
+    exec_summary = _build_exec_summary_html(lens_results, lens_name, ticker)
     checks_detail = _build_checks_html(lens_results, lens_name)
     sources = _build_sources_html(lens_name)
 

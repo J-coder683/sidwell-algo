@@ -66,9 +66,9 @@ These checks answer: *where are we in the cycle, and does it favor entry now?*
 #### 5. Sector cycle position (qualitative)
 **Test (soft, LLM-based):** Gemini reads concall transcripts, MD&A, and macro context to judge the sector cycle position. Returns one of: `trough | early_recovery | mid_cycle | late_cycle | peak`.
 PASS if `trough | early_recovery | mid_cycle`. FAIL if `late_cycle | peak`.
-**Logic:** Marks's central framing: *"The pendulum swings."* Sectors oscillate between euphoria and despair. Buying in despair (trough) and selling in euphoria (peak) is the highest-leverage decision in investing. Most quantitative analysis ignores this entirely; the Marks lens forces an explicit cycle-position read. Defaults to `mid_cycle` (PASS) if qualitative unavailable.
+**Logic:** Marks's central framing: *"The pendulum swings."* Sectors oscillate between euphoria and despair. Buying in despair (trough) and selling in euphoria (peak) is the highest-leverage decision in investing. Most quantitative analysis ignores this entirely; the Marks lens forces an explicit cycle-position read. Excluded from the denominator (N/A) if qualitative unavailable or the cycle read is unclear.
 **Source:** "The Most Important Thing," ch. 8 (Being Attentive to Cycles), ch. 9 (Awareness of the Pendulum); "Mastering the Market Cycle" (2018).
-**Determinism note:** LLM-dependent. Defaults to PASS when qualitative unavailable.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine `late_cycle`/`peak` read still counts as a failure.
 
 #### 6. Company earnings vs cyclical peak
 **Test:** `latest_eps / max(historical_4y_eps) > 0.70`
@@ -105,7 +105,7 @@ These checks answer: *can this position survive the worst plausible scenario?* *
 **Test:** Customer concentration < 25% of revenue (if disclosed) AND no regulatory single-point dependence (defined as: not a single-licence operator like one toll road, one casino, one telecom spectrum band) AND auditor relationship < 7 years OR rotated within the period
 **Logic:** Marks's defensive investing rule: identify the structural failure mode that ends the business. Single customer that could leave. Single regulatory licence whose renewal is uncertain. Auditor in place too long without rotation (governance risk surfacing eventually). The framework cannot test all of these from yfinance alone — defaults to soft via Gemini reading the qualitative inputs for these risks. Hard fail only on explicitly known cases (e.g., crypto-tied tickers, single-state regulated utilities with imminent rate cases).
 **Source:** "The Most Important Thing," ch. 18 (Avoiding Pitfalls); Master_Investment_Compendium.md Part 7.2 (Red Flags by Category, especially the Indian governance items).
-**Determinism note:** Partial soft; quantitative check on what's available, LLM fills in.
+**Determinism note:** LLM-dependent (reads `risk_callouts`). Excluded from the denominator (marked N/A) when qualitative unavailable — a zero risk-count from a missing extraction is not evidence of a clean risk profile.
 
 ---
 
@@ -117,19 +117,19 @@ These checks answer: *do I have variant perception, and is the trade contrarian-
 **Test (soft, LLM-based):** Gemini reads transcripts and analyst reports. Returns PASS if there is a clearly articulated **non-consensus thesis** that is **specific and defensible** (not just "the company will grow" — but a specific operational, structural, or cyclical mechanism that consensus is mispricing). FAIL if the bull case is the consensus case (e.g., "AI tailwind," "EV transition," "China reopening" without specificity).
 **Logic:** Marks's central concept: *"You can't do the same things others do and expect to outperform."* If everyone agrees the company will grow at 15%, that 15% is in the price. Alpha requires that something specific is mis-modeled — and that you can articulate what. Master_Investment_Compendium.md Part 7.4 (the Variant Perception Test) operationalizes this with three questions: what does the market believe; what do you believe differently and why; what would prove you wrong.
 **Source:** "The Most Important Thing," ch. 1 (Second-Level Thinking), ch. 11 (Contrarianism); Master_Investment_Compendium.md Part 7.4.
-**Determinism note:** LLM-dependent. Defaults to FAIL when qualitative unavailable (Marks would not pull the trigger without variant perception — absence of evidence is absence of edge).
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or the model cannot assess (variant_present null). A genuine "no variant perception" read counts as a failure. (Previously defaulted FAIL; under exclude-from-denominator, absence of data no longer penalizes the score directly — but note BUY still requires variant perception to have fired positively.)
 
 #### 13. Knowing what you don't know (management humility)
 **Test (soft, LLM-based):** Gemini judges whether management commentary demonstrates appropriate humility — acknowledges what they can't predict, doesn't make bold macro forecasts, doesn't overclaim certainty about future. Returns PASS for humility, FAIL for hubris.
 **Logic:** Marks repeatedly emphasizes: *"It ain't what you don't know that gets you into trouble. It's what you know for sure that just ain't so."* A management team that confidently forecasts the next decade is either delusional or selling. A management team that says "we can't predict X but our business is structured to handle scenarios A, B, or C" is the Marks-preferred type. This check is admittedly subjective but maps to a real Marks principle that consistently differentiates great managers from promotional ones.
 **Source:** "The Most Important Thing," ch. 14 (Knowing What You Don't Know); Oaktree memos "It Is What It Is" (2006), "The Most Important Thing Is" (2003).
-**Determinism note:** LLM-dependent. Defaults to PASS when unavailable.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine hubris read counts as a failure.
 
 #### 14. Patient opportunism — is now actually the right time?
 **Test (soft, LLM-based):** Gemini synthesizes Parts A, B, and the qualitative input to answer: *is now the moment of forced selling or temporary dislocation that creates opportunity, or is this just normal-cycle consensus pricing?* PASS if specific dislocation present (post-shock, post-distress, post-management-change, post-regulatory event). FAIL if entry would be at "normal" valuations during normal markets.
 **Logic:** Marks's *"best returns follow chaos"* (echoed by Marc Rowan at Apollo). The Marks lens does not just want a cheap company — it wants a cheap company AT THE RIGHT MOMENT. Buying a quality business 25% off in a normal market is a Buffett trade. Buying it 50% off in a panic when the seller is forced is a Marks trade. This check is the temporal version of "why now" — and is the most important of the three soft checks. *Skip this and the lens becomes generic value investing.*
 **Source:** Oaktree memo "On Bubble Watch" (2024); Master_Investment_Compendium.md Part 7.6 ("the discipline of why now"); Knowledge at Wharton, Marc Rowan (2009).
-**Determinism note:** LLM-dependent. Defaults to FAIL when unavailable (no chaos signal = no Marks edge).
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine "no dislocation" read counts as a failure.
 
 ---
 

@@ -9,6 +9,7 @@ Part D (12-14): Second-Level Thinking & Contrarianism (LLM-driven)
 """
 import logging
 from analysis import framework_parser
+from lenses import _scoring
 
 logger = logging.getLogger("sidwell.lenses.marks")
 
@@ -189,26 +190,30 @@ def evaluate_marks_lens(
     # =========================================================================
 
     # 5. Sector cycle position (soft, LLM)
-    # Test: LLM read = trough | early_recovery | mid_cycle
-    # Defaults to PASS (mid_cycle) when unavailable
-    soft_cycle_pass = True
-    soft_cycle_detail = "Cycle position unavailable; defaulted PASS (mid_cycle assumed)"
-    sector_cycle = None
-    if qualitative_results and qualitative_results.get("status") == "available":
-        cp = qualitative_results.get("cycle_position", {}) or {}
-        sector_cycle = cp.get("sector_cycle")
-        soft_cycle_pass = sector_cycle in ("trough", "early_recovery", "mid_cycle")
-        soft_cycle_detail = (
-            f"LLM sector cycle: {sector_cycle}. "
-            f"{(cp.get('reasoning') or '')[:500]}"
-        )
+    # Test: LLM read in {trough, early_recovery, mid_cycle}. Excluded (N/A) when
+    # qualitative is unavailable, the cycle read is unclear, or confidence is low.
+    q_status = (qualitative_results or {}).get("status", "unavailable")
+    cp = (qualitative_results or {}).get("cycle_position", {}) or {}
+    sector_cycle = cp.get("sector_cycle")
+    cycle_confidence = cp.get("confidence")
+    cycle_quote = (cp.get("evidence_quote") or "")[:300]
+    cycle_reasoning = (cp.get("reasoning") or "")[:500]
+    cycle_quote_str = f' Evidence: "{cycle_quote}"' if cycle_quote else ""
+    cycle_conf_str = f" (confidence: {cycle_confidence})" if cycle_confidence else ""
+    cycle_passed, cycle_applicable, cycle_detail = _scoring.resolve_soft(
+        q_status, sector_cycle, {"trough", "early_recovery", "mid_cycle"},
+        confidence=cycle_confidence,
+        pass_detail=f"Signal: {sector_cycle}{cycle_conf_str}.{cycle_quote_str} {cycle_reasoning}",
+        fail_detail=f"Signal: {sector_cycle}{cycle_conf_str}.{cycle_quote_str} {cycle_reasoning}",
+    )
     checks["5_sector_cycle"] = {
         "name": "Sector cycle position",
         "metric_name": "LLM cycle read",
         "value": sector_cycle,
         "threshold_str": "trough | early_recovery | mid_cycle",
-        "passed": soft_cycle_pass,
-        "detail": soft_cycle_detail,
+        "passed": cycle_passed,
+        "applicable": cycle_applicable,
+        "detail": cycle_detail,
         "part": "B",
     }
 
@@ -309,24 +314,33 @@ def evaluate_marks_lens(
     }
 
     # 11. No single-point failure mode
-    # Soft: count concentration/regulatory risks from LLM extraction
-    # Test: <= 1 such risk callout
-    soft_failure_risk_count = 0
-    if qualitative_results and qualitative_results.get("status") == "available":
+    # Soft: count concentration/regulatory risks from LLM extraction; <= 1 passes.
+    # Excluded (N/A) when qualitative is unavailable — a zero count from missing
+    # extraction is not evidence of a clean risk profile.
+    if q_status != "available":
+        check_11_passed = False
+        check_11_applicable = False
+        soft_failure_risk_count = None
+        detail_11 = "N/A — qualitative unavailable; excluded from denominator"
+    else:
+        soft_failure_risk_count = 0
         risks = qualitative_results.get("risk_callouts", []) or []
         concentration_keywords = ["concentration", "single customer", "regulatory", "license"]
         for r in risks:
             text = (r.get("risk", "") + " " + r.get("context", "")).lower()
             if any(kw in text for kw in concentration_keywords):
                 soft_failure_risk_count += 1
-    check_11_passed = soft_failure_risk_count <= 1
+        check_11_passed = soft_failure_risk_count <= 1
+        check_11_applicable = True
+        detail_11 = f"Concentration/regulatory risks identified: {soft_failure_risk_count}"
     checks["11_no_single_point_failure"] = {
         "name": "No single-point failure mode",
         "metric_name": "Concentration/regulatory risks in LLM extraction",
         "value": soft_failure_risk_count,
         "threshold_str": "<= 1 concentration/regulatory risk flagged",
         "passed": check_11_passed,
-        "detail": f"Concentration/regulatory risks identified: {soft_failure_risk_count}",
+        "applicable": check_11_applicable,
+        "detail": detail_11,
         "part": "C",
     }
 
@@ -335,19 +349,30 @@ def evaluate_marks_lens(
     # =========================================================================
 
     # 12. Variant perception present
-    # Test: LLM variant_present=True AND specificity=high
-    # Defaults to FAIL when unavailable (Marks doesn't act without variant perception)
-    check_12_passed = False
-    detail_12 = "Variant perception unavailable; defaulted FAIL"
-    if qualitative_results and qualitative_results.get("status") == "available":
-        vp = qualitative_results.get("variant_perception", {}) or {}
-        variant = vp.get("variant_present")
-        spec = vp.get("specificity")
+    # Test: LLM variant_present=True AND specificity=high. Excluded (N/A) when
+    # qualitative is unavailable or the model could not assess (variant_present None).
+    vp = (qualitative_results or {}).get("variant_perception", {}) or {}
+    variant = vp.get("variant_present")
+    spec = vp.get("specificity")
+    vp_quote = (vp.get("evidence_quote") or "")[:300]
+    vp_confidence = vp.get("confidence")
+    if q_status != "available" or variant is None:
+        check_12_passed = False
+        check_12_applicable = False
+        detail_12 = "N/A — variant perception unavailable/unclear; excluded from denominator"
+    elif vp_confidence == "low":
+        check_12_passed = False
+        check_12_applicable = False
+        detail_12 = "N/A — low-confidence signal; excluded from denominator"
+    else:
         check_12_passed = (variant is True) and (spec == "high")
+        check_12_applicable = True
         cons_view = (vp.get("consensus_view") or "")[:200]
         comp_view = (vp.get("company_view") or "")[:200]
+        conf_str = f" (confidence: {vp_confidence})" if vp_confidence else ""
+        quote_str = f' Evidence: "{vp_quote}"' if vp_quote else ""
         detail_12 = (
-            f"Variant: {variant}, Specificity: {spec}. "
+            f"Variant: {variant}, Specificity: {spec}{conf_str}.{quote_str} "
             f"Consensus: '{cons_view}' | Company view: '{comp_view}'"
         )
     checks["12_variant_perception"] = {
@@ -356,50 +381,60 @@ def evaluate_marks_lens(
         "value": check_12_passed,
         "threshold_str": "variant_present=true AND specificity=high",
         "passed": check_12_passed,
+        "applicable": check_12_applicable,
         "detail": detail_12,
         "part": "D",
     }
 
     # 13. Management humility (knowing what you don't know)
-    # Test: LLM verdict = "humble"; defaults PASS when unavailable
-    check_13_passed = True
-    detail_13 = "Management humility check skipped; defaulted PASS"
-    humility_verdict = None
-    if qualitative_results and qualitative_results.get("status") == "available":
-        mh = qualitative_results.get("management_humility", {}) or {}
-        humility_verdict = mh.get("verdict")
-        check_13_passed = (humility_verdict == "humble")
-        evidence = (mh.get("evidence") or "")[:500]
-        detail_13 = f"LLM humility verdict: {humility_verdict}. {evidence}"
+    # Test: LLM verdict = "humble". Excluded (N/A) when unavailable, unclear, or low-confidence.
+    mh = (qualitative_results or {}).get("management_humility", {}) or {}
+    humility_verdict = mh.get("verdict")
+    humility_confidence = mh.get("confidence")
+    humility_quote = (mh.get("evidence_quote") or "")[:300]
+    humility_evidence = (mh.get("evidence") or "")[:500]
+    humility_quote_str = f' Evidence: "{humility_quote}"' if humility_quote else ""
+    humility_conf_str = f" (confidence: {humility_confidence})" if humility_confidence else ""
+    check_13_passed, check_13_applicable, detail_13 = _scoring.resolve_soft(
+        q_status, humility_verdict, {"humble"},
+        confidence=humility_confidence,
+        pass_detail=f"Signal: {humility_verdict}{humility_conf_str}.{humility_quote_str} {humility_evidence}",
+        fail_detail=f"Signal: {humility_verdict}{humility_conf_str}.{humility_quote_str} {humility_evidence}",
+    )
     checks["13_management_humility"] = {
         "name": "Management humility (knowing what you don't know)",
         "metric_name": "LLM humility check",
         "value": humility_verdict,
         "threshold_str": "verdict = humble",
         "passed": check_13_passed,
+        "applicable": check_13_applicable,
         "detail": detail_13,
         "part": "D",
     }
 
     # 14. Patient opportunism — why now?
-    # Test: LLM verdict = "dislocation_present"
-    # Defaults to FAIL when unavailable (no chaos signal = no Marks edge)
-    check_14_passed = False
-    detail_14 = "Why-now signal unavailable; defaulted FAIL"
-    wn_verdict = None
-    if qualitative_results and qualitative_results.get("status") == "available":
-        wn = qualitative_results.get("why_now_signal", {}) or {}
-        wn_verdict = wn.get("verdict")
-        check_14_passed = (wn_verdict == "dislocation_present")
-        event = (wn.get("specific_event") or "")[:200]
-        notes = (wn.get("notes") or "")[:500]
-        detail_14 = f"Why-now: {wn_verdict}. Event: {event}. {notes}"
+    # Test: LLM verdict = "dislocation_present". Excluded (N/A) when unavailable, unclear, or low-confidence.
+    wn = (qualitative_results or {}).get("why_now_signal", {}) or {}
+    wn_verdict = wn.get("verdict")
+    wn_confidence = wn.get("confidence")
+    wn_quote = (wn.get("evidence_quote") or "")[:300]
+    wn_event = (wn.get("specific_event") or "")[:200]
+    wn_notes = (wn.get("notes") or "")[:500]
+    wn_quote_str = f' Evidence: "{wn_quote}"' if wn_quote else ""
+    wn_conf_str = f" (confidence: {wn_confidence})" if wn_confidence else ""
+    check_14_passed, check_14_applicable, detail_14 = _scoring.resolve_soft(
+        q_status, wn_verdict, {"dislocation_present"},
+        confidence=wn_confidence,
+        pass_detail=f"Signal: {wn_verdict}{wn_conf_str}.{wn_quote_str} Event: {wn_event}. {wn_notes}",
+        fail_detail=f"Signal: {wn_verdict}{wn_conf_str}.{wn_quote_str} Event: {wn_event}. {wn_notes}",
+    )
     checks["14_why_now"] = {
         "name": "Patient opportunism (why now)",
         "metric_name": "LLM dislocation check",
         "value": wn_verdict,
         "threshold_str": "verdict = dislocation_present",
         "passed": check_14_passed,
+        "applicable": check_14_applicable,
         "detail": detail_14,
         "part": "D",
     }
@@ -420,20 +455,20 @@ def evaluate_marks_lens(
     # =========================================================================
     # Scoring & Verdict (per frameworks/marks.md)
     # =========================================================================
-    score = sum(1 for c in checks.values() if c["passed"])
-    # max_score excludes checks marked not-applicable (deep MoS + asymmetric
-    # payoff for banks, where no valuation model exists yet). Non-bank checks
-    # never set "applicable", so they default to True and max_score stays 14.
-    max_score = sum(1 for c in checks.values() if c.get("applicable", True))
+    # Exclude-from-denominator: bank valuation N/A (checks 1,2) and any soft check
+    # with an unavailable/unclear signal drop out of both score and max_score.
+    # Verdict thresholds are ratio-based against ORIG_MAX=14 (original 11/9 cutoffs).
+    ORIG_MAX = 14
+    score, max_score = _scoring.tally(checks)
     deep_mos_passes = checks["1_deep_mos"]["passed"]
     asymmetric_passes = checks["2_asymmetric_payoff"]["passed"]
     multiple_passes = checks["4_multiple_expansion"]["passed"]
     valuation_applicable = checks["1_deep_mos"].get("applicable", True)
 
-    if valuation_applicable and score >= 11 and deep_mos_passes and asymmetric_passes:
+    if valuation_applicable and _scoring.meets(score, max_score, ORIG_MAX, 11) and deep_mos_passes and asymmetric_passes:
         verdict = "BUY"
         reason = "Risk architecture clean, deep MoS, asymmetric payoff, contrarian setup present."
-    elif valuation_applicable and score >= 9 and (not deep_mos_passes or not multiple_passes):
+    elif valuation_applicable and _scoring.meets(score, max_score, ORIG_MAX, 9) and (not deep_mos_passes or not multiple_passes):
         verdict = "WAIT"
         if intrinsic_value is not None and intrinsic_value > 0:
             target = intrinsic_value * 0.60  # 40% MoS price = 60% of intrinsic
@@ -443,7 +478,7 @@ def evaluate_marks_lens(
             )
         else:
             reason = "Risk architecture acceptable but MoS or multiple position inadequate."
-    elif score >= 9:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 9):
         verdict = "WATCH"
         reason = "Mixed signals across Marks framework; monitor for cycle/sentiment change."
         if not valuation_applicable:

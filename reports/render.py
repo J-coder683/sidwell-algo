@@ -369,6 +369,10 @@ def render_markdown_report(
     md.append(f"All {buffett_max} checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):")
     md.append("")
 
+    from reports.explain import build_lens_narrative
+    md.append("> **Summary:** " + build_lens_narrative("Warren Buffett", buffett_results, ticker))
+    md.append("")
+
     _render_lens_table(md, buffett_results, current_price, intrinsic_val, "Buffett")
 
     md.append(f"**Total Buffett Score**: **{buffett_results['score']}/{buffett_max}**")
@@ -382,6 +386,8 @@ def render_markdown_report(
         marks_max = marks_results.get("max_score", 14)
         md.append(f"All {marks_max} checks per Howard Marks's risk-first framework (frameworks/marks.md):")
         md.append("")
+        md.append("> **Summary:** " + build_lens_narrative("Howard Marks", marks_results, ticker))
+        md.append("")
         _render_lens_table(md, marks_results, current_price, intrinsic_val, "Marks")
         md.append(f"**Total Marks Score**: **{marks_results['score']}/{marks_max}**")
         md.append("")
@@ -393,6 +399,8 @@ def render_markdown_report(
         md.append("## 3.2 KKR Investor Lens")
         kkr_max = kkr_results.get("max_score", 18)
         md.append(f"All {kkr_max} checks per KKR's operating playbook framework (frameworks/kkr.md):")
+        md.append("")
+        md.append("> **Summary:** " + build_lens_narrative("KKR", kkr_results, ticker))
         md.append("")
         _render_lens_table(md, kkr_results, current_price, intrinsic_val, "KKR")
         md.append(f"**Total KKR Score**: **{kkr_results['score']}/{kkr_max}**")
@@ -406,6 +414,8 @@ def render_markdown_report(
         bx_max = blackstone_results.get("max_score", 14)
         md.append(f"All {bx_max} checks per Blackstone's thematic framework (frameworks/blackstone.md):")
         md.append("")
+        md.append("> **Summary:** " + build_lens_narrative("Blackstone", blackstone_results, ticker))
+        md.append("")
         _render_lens_table(md, blackstone_results, current_price, intrinsic_val, "Blackstone")
         md.append(f"**Total Blackstone Score**: **{blackstone_results['score']}/{bx_max}**")
         md.append("")
@@ -417,6 +427,8 @@ def render_markdown_report(
         md.append("## 3.4 Apollo Investor Lens")
         ap_max = apollo_results.get("max_score", 16)
         md.append(f"All {ap_max} checks per Apollo's credit & complexity framework (frameworks/apollo.md):")
+        md.append("")
+        md.append("> **Summary:** " + build_lens_narrative("Apollo", apollo_results, ticker))
         md.append("")
         _render_lens_table(md, apollo_results, current_price, intrinsic_val, "Apollo")
         md.append(f"**Total Apollo Score**: **{apollo_results['score']}/{ap_max}**")
@@ -660,47 +672,49 @@ def render_markdown_report(
 
 def _render_lens_table(md: list, lens_results: dict, current_price: float, intrinsic_val: float, lens_name: str):
     """
-    Renders a lens check table grouped by Part (A/B/C/D).
+    Renders a lens check list grouped by Part (A/B/C/D), using the 3-part explanation format.
     Each Part gets its own sub-header before its checks.
     """
+    from reports.explain import build_check_explanation
+    
     part_labels = {}
     if lens_name == "Buffett":
         part_labels = {
-            "A": "Part A — Business Quality",
-            "B": "Part B — Financial Health",
-            "C": "Part C — Management & Capital Allocation",
-            "D": "Part D — Margin of Safety & Holdability",
+            "A": "Part A \u2014 Business Quality",
+            "B": "Part B \u2014 Financial Health",
+            "C": "Part C \u2014 Management & Capital Allocation",
+            "D": "Part D \u2014 Margin of Safety & Holdability",
         }
     elif lens_name == "Marks":
         part_labels = {
-            "A": "Part A — Margin of Safety & Asymmetric Payoff",
-            "B": "Part B — Cycle Position",
-            "C": "Part C — Risk Architecture",
-            "D": "Part D — Second-Level Thinking & Contrarianism",
+            "A": "Part A \u2014 Margin of Safety & Asymmetric Payoff",
+            "B": "Part B \u2014 Cycle Position",
+            "C": "Part C \u2014 Risk Architecture",
+            "D": "Part D \u2014 Second-Level Thinking & Contrarianism",
         }
     elif lens_name == "KKR":
         part_labels = {
-            "A": "Part A — LBO Viability",
-            "B": "Part B — Operational Upside",
-            "C": "Part C — Strategic Fit",
-            "D": "Part D — Cycle Timing & Returns",
-            "E": "Part E — Defensibility vs Phalippou Bar",
+            "A": "Part A \u2014 LBO Viability",
+            "B": "Part B \u2014 Operational Upside",
+            "C": "Part C \u2014 Strategic Fit",
+            "D": "Part D \u2014 Cycle Timing & Returns",
+            "E": "Part E \u2014 Defensibility vs Phalippou Bar",
         }
     elif lens_name == "Blackstone":
         part_labels = {
-            "A": "Part A — Good Business Filter",
-            "B": "Part B — Good Neighborhood (Thematic)",
-            "C": "Part C — Downside Protection",
-            "D": "Part D — Scale Fit & Hold Economics",
-            "E": "Part E — Defensibility vs Phalippou Bar",
+            "A": "Part A \u2014 Good Business Filter",
+            "B": "Part B \u2014 Good Neighborhood (Thematic)",
+            "C": "Part C \u2014 Downside Protection",
+            "D": "Part D \u2014 Scale Fit & Hold Economics",
+            "E": "Part E \u2014 Defensibility vs Phalippou Bar",
         }
     elif lens_name == "Apollo":
         part_labels = {
-            "A": "Part A — Purchase Price & Capital Structure Entry",
-            "B": "Part B — Chaos, Complexity, Credit Edge",
-            "C": "Part C — Athene Permanent Capital Fit",
-            "D": "Part D — Credit Downside Quality",
-            "E": "Part E — Defensibility vs Phalippou Bar",
+            "A": "Part A \u2014 Purchase Price & Capital Structure Entry",
+            "B": "Part B \u2014 Chaos, Complexity, Credit Edge",
+            "C": "Part C \u2014 Athene Permanent Capital Fit",
+            "D": "Part D \u2014 Credit Downside Quality",
+            "E": "Part E \u2014 Defensibility vs Phalippou Bar",
         }
 
     checks = lens_results["checks"]
@@ -712,69 +726,39 @@ def _render_lens_table(md: list, lens_results: dict, current_price: float, intri
     for key, c in sorted_items:
         part = c.get("part", "A")
 
-        # Emit part header + table header when part changes
+        # Emit part header when part changes
         if part != current_part:
             if table_open:
                 md.append("")
                 # Show part subtotal
                 part_items = [item for item in sorted_items if item[1].get("part") == current_part]
-                part_pass = sum(1 for k, chk in part_items if chk["passed"])
+                part_pass = sum(1 for k, chk in part_items if chk.get("passed", False))
                 part_total = sum(1 for k, chk in part_items if chk.get("applicable", True))
                 md.append(f"_{part_labels.get(current_part, current_part)}: **{part_pass}/{part_total} passed**_")
                 md.append("")
             current_part = part
             md.append(f"### {part_labels.get(part, part)}")
             md.append("")
-            md.append("| Check | Status | Value | Threshold | Detail |")
-            md.append("| :--- | :---: | :--- | :--- | :--- |")
             table_open = True
 
-        applicable = c.get("applicable", True)
-        status = "⏸️" if not applicable else ("✅" if c["passed"] else "❌")
-        v = c["value"]
-
-        # Format value
-        if not applicable:
-            # Not-applicable check (e.g. margin of safety for banks — no valuation).
-            v_str = "N/A"
-        elif key == "12_margin_of_safety" and lens_name == "Buffett":
-            if intrinsic_val <= 0:
-                v_str = "Model failed"
-            elif intrinsic_val < current_price:
-                v_str = f"Trading at {current_price/intrinsic_val:.1f}x intrinsic"
-            else:
-                v_str = f"{(intrinsic_val - current_price)/intrinsic_val*100:.2f}%"
-        elif key == "1_deep_mos" and lens_name == "Marks":
-            if intrinsic_val <= 0:
-                v_str = "Model failed"
-            elif intrinsic_val < current_price:
-                v_str = f"Trading at {current_price/intrinsic_val:.1f}x intrinsic"
-            else:
-                v_str = f"{v*100:+.2f}%"
-        elif isinstance(v, float):
-            v_str = f"{v*100:.2f}%" if "%" in c.get("threshold_str", "") else f"{v:.3f}"
-        elif isinstance(v, tuple) and len(v) == 2:
-            v0, v1 = v
-            if isinstance(v0, float) and isinstance(v1, float):
-                v_str = f"{v0:.2f} / {v1:.2f}"
-            else:
-                v_str = f"{v0} / {v1}"
-        elif isinstance(v, list):
-            v_str = f"[{len(v)} values]"
-        elif v is None:
-            v_str = "N/A"
-        else:
-            v_str = str(v)
-
-        # Truncate long detail at 300 chars to keep table readable
-        detail_str = str(c.get("detail", ""))[:300]
-
-        md.append(f"| {c['name']} | {status} | {v_str} | {c['threshold_str']} | {detail_str} |")
+        expl = build_check_explanation(key, c)
+        
+        icon = "⏸️" if expl["status"] == "na" else ("✅" if expl["status"] == "pass" else "❌")
+        
+        md.append(f"#### {icon} {expl['title']}")
+        if expl['what_why']:
+            md.append(f"- **What this measures**: {expl['what_why']}")
+        if expl['finding']:
+            md.append(f"- **This company**: {expl['finding']}")
+        md.append(f"- **Verdict**: {expl['judgment']}")
+        md.append("")
 
     # Close last part
     if table_open and current_part:
         md.append("")
         part_items = [item for item in sorted_items if item[1].get("part") == current_part]
-        part_pass = sum(1 for k, chk in part_items if chk["passed"])
-        md.append(f"_{part_labels.get(current_part, current_part)}: **{part_pass}/{len(part_items)} passed**_")
+        part_pass = sum(1 for k, chk in part_items if chk.get("applicable", True) and chk.get("passed", False))
+        part_total = sum(1 for k, chk in part_items if chk.get("applicable", True))
+        md.append(f"_{part_labels.get(current_part, current_part)}: **{part_pass}/{part_total} passed**_")
         md.append("")
+

@@ -1,2 +1,10 @@
 [server]
 fileWatcherType = "none"
+
+[theme]
+base="light"
+primaryColor="#9c7c43"
+backgroundColor="#f2f1ec"
+secondaryBackgroundColor="#eae7df"
+textColor="#1a1815"
+font="sans serif"

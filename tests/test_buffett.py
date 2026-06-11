@@ -59,12 +59,28 @@ def get_perfect_dcf(intrinsic_value=100.0):
 # ---------------------------------------------------------------------------
 
 def test_buffett_lens_buy():
-    """Perfect company at 50% of intrinsic value → score 14, BUY."""
+    """Perfect company at 50% of intrinsic, no qualitative → soft checks 11 & 14
+    are N/A and excluded; scored 12/12 → BUY (ratio cutoff 12/14)."""
     financials = get_perfect_financials()
     dcf_res = get_perfect_dcf(100.0)
 
     res = evaluate_buffett_lens(financials, dcf_res)
 
+    assert res["max_score"] == 12   # 11 (coherence) & 14 (holdability) excluded — no qualitative
+    assert res["score"] == 12
+    assert res["verdict"] == "BUY"
+
+
+def test_buffett_lens_buy_full_data_scores_14():
+    """With qualitative available and positive, all 14 checks fire → 14/14, BUY.
+    Verifies the ratio cutoff reproduces the original absolute behavior on full data."""
+    financials = get_perfect_financials()
+    dcf_res = get_perfect_dcf(100.0)
+    qualitative = _make_available_qualitative()
+
+    res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
+
+    assert res["max_score"] == 14
     assert res["score"] == 14
     assert res["verdict"] == "BUY"
 
@@ -78,7 +94,8 @@ def test_buffett_lens_wait():
     res = evaluate_buffett_lens(financials, dcf_res)
 
     assert res["checks"]["12_margin_of_safety"]["passed"] is False
-    assert res["score"] == 13  # all pass except MoS
+    assert res["score"] == 11       # 12 applicable (11 & 14 N/A), all pass except MoS
+    assert res["max_score"] == 12
     assert res["verdict"] == "WAIT"
 
 
@@ -101,8 +118,8 @@ def test_buffett_lens_skip():
 
     res = evaluate_buffett_lens(financials, dcf_res)
 
-    assert res["score"] < 10
     assert res["verdict"] == "SKIP"
+    assert res["score"] < res["max_score"] * 10 / 14   # below WATCH ratio
 
 
 # ---------------------------------------------------------------------------
@@ -208,16 +225,17 @@ def test_check10_owner_orientation_both_fail():
     assert res["checks"]["10_owner_orientation"]["passed"] is False
 
 
-def test_check11_mgmt_coherence_passes_when_unavailable():
-    """When qualitative unavailable, check 11 defaults PASS."""
+def test_check11_mgmt_coherence_excluded_when_unavailable():
+    """When qualitative unavailable, check 11 is N/A and excluded from the denominator."""
     financials = get_perfect_financials()
     dcf_res = get_perfect_dcf(100.0)
     qualitative = _make_unavailable_qualitative()
 
     res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
     check11 = res["checks"]["11_mgmt_coherence"]
-    assert check11["passed"] is True
-    assert "SKIPPED" in check11["detail"]
+    assert check11["applicable"] is False
+    assert check11["passed"] is False
+    assert "excluded" in check11["detail"].lower()
 
 
 def test_check11_mgmt_coherence_fails_on_incoherent():
@@ -244,14 +262,16 @@ def test_check13_blacklist_fail():
     assert res["checks"]["13_hard_blacklist"]["passed"] is False
 
 
-def test_check14_holdability_passes_when_unavailable():
-    """When qualitative unavailable, check 14 defaults PASS."""
+def test_check14_holdability_excluded_when_unavailable():
+    """When qualitative unavailable, check 14 is N/A and excluded from the denominator."""
     financials = get_perfect_financials()
     dcf_res = get_perfect_dcf(100.0)
     qualitative = _make_unavailable_qualitative()
 
     res = evaluate_buffett_lens(financials, dcf_res, qualitative_results=qualitative)
-    assert res["checks"]["14_holdability"]["passed"] is True
+    check14 = res["checks"]["14_holdability"]
+    assert check14["applicable"] is False
+    assert check14["passed"] is False
 
 
 def test_check14_holdability_fails_on_not_holdable():

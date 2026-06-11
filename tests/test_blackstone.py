@@ -113,3 +113,16 @@ def test_unavailable_qualitative_graceful_degrade():
     qual = _make_unavailable_qualitative()
     res = evaluate_blackstone_lens(FIXTURE_INPUTS.copy(), dcf_res, qual)
     assert res["verdict"] in {"BUY", "WAIT", "WATCH", "SKIP"}
+
+
+def test_unavailable_qualitative_excludes_soft_checks_and_scales_gate():
+    """No qualitative → soft checks 6,7,12,13 are N/A (denominator 14-4=10);
+    Phalippou gate scales to >=2-of-3 applicable levers (2,3,5; soft 7,12,13 N/A)."""
+    dcf_res = {"current_price": 50.0, "intrinsic_value_per_share": 100.0,
+               "assumptions": {"target_industry": "Household Products"}}
+    qual = _make_unavailable_qualitative()
+    res = evaluate_blackstone_lens(FIXTURE_INPUTS.copy(), dcf_res, qual)
+    for cid in ("6_cycle_position", "7_structural_tailwind", "12_core_viability", "13_multi_product"):
+        assert res["checks"][cid]["applicable"] is False, cid
+    assert res["max_score"] == 10
+    assert res["checks"]["14_alpha_thesis"]["threshold_str"] == ">= 2 of 3 applicable"

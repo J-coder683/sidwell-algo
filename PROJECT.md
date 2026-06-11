@@ -30,15 +30,19 @@ OUTPUT (markdown report: valuation + lens verdicts + final recommendation + term
 ## Constraints
 - Python 3.11+, no Excel
 - Free data sources only — zero API costs
-- Deterministic: same input → same output (no LLM calls inside the pipeline)
+- **Deterministic valuation engine**: same input → same output. The DCF/comps/LBO math has no LLM calls.
+  (Updated since v0.2: a DeepSeek qualitative layer now produces structured signals consumed by lens
+  "soft" checks — see `analysis/qualitative.py`. The valuation math itself remains deterministic.)
 - Indian (NSE/BSE) + US markets supported from day one
 - Every assumption in the output report must be traceable to its source
 
 ## Non-goals
 - No portfolio management, position sizing, real-time monitoring
 - No backtesting framework (yet)
-- No web UI — CLI only
 - No automated trading, ever
+
+(Updated: the original "CLI only, no web UI" non-goal no longer holds — there is now a Streamlit
+frontend in `app.py` alongside the `value.py` CLI entry point.)
 
 ## User context
 Aspiring PE / investment banker, India-based, learning valuation end-to-end. This tool is both a decision-making system AND a learning vehicle — the act of encoding each investor's framework explicitly is the intellectual work that makes the analyst better, independent of whether the code ever ships.

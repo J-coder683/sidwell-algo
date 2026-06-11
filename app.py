@@ -146,13 +146,105 @@ def _peer_options() -> dict:
         
     return opts
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def _get_fun_fact(ticker: str) -> str:
+    import os
+    from openai import OpenAI
+    try:
+        api_key = st.secrets.get("DEEPSEEK_API_KEY")
+    except Exception:
+        api_key = None
+    api_key = api_key or os.getenv("DEEPSEEK_API_KEY")
+    
+    if not api_key:
+        return f"Did you know {ticker} has an interesting history? (Configure DEEPSEEK_API_KEY for real fun facts!)"
+    try:
+        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com", timeout=15.0)
+        resp = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[{"role": "user", "content": f"Give me exactly one very short, witty, and obscure financial fun fact about the company with ticker {ticker}. 1 sentence only. No intro, no quotes."}]
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception:
+        return f"Did you know {ticker} has an interesting history? (DeepSeek is too busy right now.)"
+
 
 # ---------------------------------------------------------------------------
-# CSS — max-width constraint + component polish
+# Theme State & CSS Setup
 # ---------------------------------------------------------------------------
 
-st.markdown("""
+if "theme" not in st.session_state:
+    st.session_state["theme"] = "light"
+
+theme = st.session_state["theme"]
+
+tokens = """
+:root {
+    /* Succession — boardroom at night: warm charcoal + champagne brass */
+    --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+    --font-ui: 'IBM Plex Sans', -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --bg: #161513;
+    --surface: #1f1d1a;
+    --surface-2: #2a2723;
+    --border: #38342e;
+    --ink: #ece7dd;
+    --muted: #b3ac9e;
+    --faint: #8a8275;
+    --accent: #c2a063;
+    --accent-ink: #1a1813;
+    --pos: #7fa987;
+    --neg: #c47a72;
+    --warn: #c2a063;
+    --info: #8fa6c0;
+
+    /* Native widget overrides */
+    --input-bg: #1a1815;
+    --input-border: #38342e;
+}
+""" if theme == "dark" else """
+:root {
+    /* Succession — old-money paper: warm bone + ink, restrained brass */
+    --font-display: 'Fraunces', Georgia, 'Times New Roman', serif;
+    --font-ui: 'IBM Plex Sans', -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --bg: #f2f1ec;
+    --surface: #fcfbf8;
+    --surface-2: #eae7df;
+    --border: #ddd8cd;
+    --ink: #1a1815;
+    --muted: #6b665b;
+    --faint: #9a958a;
+    --accent: #9c7c43;
+    --accent-ink: #fcfbf8;
+    --pos: #4a6f52;
+    --neg: #9a4a44;
+    --warn: #9c7c43;
+    --info: #46607f;
+
+    /* Native widget overrides */
+    --input-bg: #fcfbf8;
+    --input-border: #d3cdbf;
+}
+"""
+
+st.markdown(f"""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+{tokens}
+""" + """
+
+/* Base resets & typography */
+html, body, [class*="css"] {
+    font-family: var(--font-ui) !important;
+    color: var(--ink) !important;
+}
+
+.stApp {
+    background-color: var(--bg) !important;
+}
+
 /* Desktop-first: cap content width */
 .main .block-container {
     max-width: 1100px;
@@ -160,54 +252,407 @@ st.markdown("""
     padding-right: 2rem;
 }
 
-/* Verdict pills */
-.verdict-pill {
-    display: inline-block;
-    padding: 3px 14px;
-    border-radius: 14px;
-    font-weight: 700;
-    font-size: 0.85rem;
-    letter-spacing: 0.04em;
-}
-.verdict-buy   { background: #2d7a3e; color: #fff; }
-.verdict-wait  { background: #c08a1c; color: #fff; }
-.verdict-watch { background: #3b6ca8; color: #fff; }
-.verdict-skip  { background: #a43030; color: #fff; }
-
-/* Check rows */
-.check-pass { color: #2d7a3e; font-weight: bold; }
-.check-fail { color: #a43030; font-weight: bold; }
-.check-card {
-    border-left: 3px solid #e0e0e0;
-    padding: 4px 0 4px 12px;
-    margin-bottom: 6px;
-}
-.check-card-fail {
-    border-left-color: #e88;
-}
-.check-card-pass {
-    border-left-color: #5a5;
-}
-.framework-note {
-    font-style: italic;
-    color: #666;
-    font-size: 0.85rem;
-    padding: 4px 8px;
-    background: #f8f9fa;
-    border-left: 2px solid #ccc;
-    margin-top: 4px;
-}
-
-/* Metric label cleanup */
-.stMetric label {
-    font-size: 0.80rem;
-    color: #555;
-}
-
-/* Sidebar width */
+/* Sidebar styling */
 section[data-testid="stSidebar"] {
     min-width: 260px;
     max-width: 310px;
+    background-color: var(--surface) !important;
+    border-right: 1px solid var(--border) !important;
+}
+
+/* NATIVE TEXT OVERRIDES — force theme tokens to win over config.toml's fixed textColor
+   (this is what was breaking dark mode: native h-tags & labels kept the light textColor) */
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5, .stApp h6,
+[data-testid="stHeading"],
+[data-testid="stMarkdownContainer"] h1,
+[data-testid="stMarkdownContainer"] h2,
+[data-testid="stMarkdownContainer"] h3,
+[data-testid="stMarkdownContainer"] h4,
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stMarkdownContainer"] strong {
+    color: var(--ink) !important;
+}
+/* Editorial section headers in the display serif (carry the hero identity) */
+.stApp [data-testid="stMarkdownContainer"] h2,
+.stApp [data-testid="stMarkdownContainer"] h3 {
+    font-family: var(--font-display) !important;
+    font-weight: 500 !important;
+    letter-spacing: -0.01em;
+}
+[role="radiogroup"] label, [role="radiogroup"] label *,
+[data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] *,
+.stSlider label,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] .stMarkdown p {
+    color: var(--muted) !important;
+}
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] * {
+    color: var(--faint) !important;
+}
+
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input {
+    background-color: var(--input-bg) !important;
+    color: var(--ink) !important;
+    border-color: var(--input-border) !important;
+}
+/* Placeholder ("auto") was invisible on the dark input */
+[data-testid="stTextInput"] input::placeholder,
+[data-testid="stNumberInput"] input::placeholder {
+    color: var(--faint) !important;
+    opacity: 1 !important;
+}
+/* Number input wrapper + the white +/- stepper buttons */
+[data-testid="stNumberInput"] > div {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+}
+[data-testid="stNumberInput"] button,
+[data-testid="stNumberInputStepUp"],
+[data-testid="stNumberInputStepDown"] {
+    background-color: var(--surface-2) !important;
+    color: var(--ink) !important;
+    border-color: var(--input-border) !important;
+}
+[data-testid="stNumberInput"] button svg { fill: var(--ink) !important; }
+[data-baseweb="select"] > div {
+    background-color: var(--input-bg) !important;
+    border-color: var(--input-border) !important;
+}
+[data-baseweb="select"] * {
+    color: var(--ink) !important;
+}
+/* Dropdown popovers (multiselect / selectbox menus) — were rendering on the
+   light config theme, so options were invisible (light-on-light) in dark mode. */
+[data-baseweb="popover"] div,
+[data-baseweb="menu"],
+[data-baseweb="menu"] ul,
+[role="listbox"] {
+    background-color: var(--surface) !important;
+    border-color: var(--border) !important;
+}
+[data-baseweb="popover"] li,
+[data-baseweb="menu"] li,
+[role="option"], [role="option"] * {
+    color: var(--ink) !important;
+    background-color: var(--surface) !important;
+}
+[role="option"]:hover,
+[data-baseweb="menu"] li:hover,
+[aria-selected="true"][role="option"] {
+    background-color: var(--surface-2) !important;
+}
+/* Multiselect selected-value tags */
+[data-baseweb="tag"] {
+    background-color: var(--accent) !important;
+    color: var(--accent-ink) !important;
+}
+[data-baseweb="tag"] span { color: var(--accent-ink) !important; }
+[data-testid="stFileUploaderDropzone"] {
+    background-color: var(--surface-2) !important;
+    border-color: var(--border) !important;
+}
+[data-testid="stFileUploaderDropzone"] * {
+    color: var(--ink) !important;
+}
+[data-testid="stFileUploaderDropzone"] button,
+[data-testid="stBaseButton-secondary"] {
+    background-color: var(--surface) !important;
+    color: var(--ink) !important;
+    border: 1px solid var(--border) !important;
+}
+
+/* Top toolbar / header bar (was rendering white on the light base) */
+[data-testid="stHeader"] {
+    background-color: var(--bg) !important;
+}
+[data-testid="stToolbar"], [data-testid="stDecoration"] {
+    background: transparent !important;
+}
+[data-testid="stHeader"] button, [data-testid="stHeader"] a, [data-testid="stHeader"] span {
+    color: var(--ink) !important;
+}
+[data-testid="stExpander"] summary {
+    background-color: var(--surface) !important;
+    color: var(--ink) !important;
+    border-color: var(--border) !important;
+}
+[data-testid="stExpander"] {
+    border-color: var(--border) !important;
+    background-color: var(--surface) !important;
+}
+
+/* Buttons */
+.stButton button {
+    background-color: var(--surface-2) !important;
+    color: var(--ink) !important;
+    border-color: var(--border) !important;
+    transition: transform 160ms ease-out, background 160ms ease-out, border 160ms ease-out;
+}
+.stButton button:hover {
+    border-color: var(--accent) !important;
+}
+.stButton button:active {
+    transform: scale(0.98);
+}
+.stButton button[kind="primary"] {
+    background-color: var(--accent) !important;
+    color: var(--accent-ink) !important;
+    border-color: var(--accent) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    .stButton button {
+        transition: none;
+    }
+    .stButton button:active {
+        transform: none;
+    }
+}
+
+/* Tabs Segmented Control */
+[data-testid="stTabs"] button {
+    font-family: var(--font-ui) !important;
+    color: var(--muted) !important;
+    border-bottom-color: var(--border) !important;
+    background-color: transparent !important;
+}
+[data-testid="stTabs"] button[aria-selected="true"] {
+    color: var(--accent) !important;
+    border-bottom-color: var(--accent) !important;
+}
+[data-testid="stTabs"] button:hover {
+    color: var(--ink) !important;
+}
+
+/* DataFrames */
+.stDataFrame {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono) !important;
+}
+[data-testid="stDataFrame"] * {
+    color: var(--ink) !important;
+    background-color: var(--surface) !important;
+    border-color: var(--border) !important;
+}
+
+/* Custom HTML Tables */
+.custom-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+    text-align: right;
+}
+.custom-table th, .custom-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--ink);
+}
+.custom-table th:first-child, .custom-table td:first-child {
+    text-align: left;
+    font-family: var(--font-ui);
+}
+.custom-table th {
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--border);
+}
+
+/* CUSTOM COMPONENTS */
+
+/* Hero Band */
+.hero-band {
+    padding: 1.5rem 0 2.25rem 0;
+    margin-bottom: 2.25rem;
+    border-bottom: 1px solid var(--border);
+}
+.hero-eyebrow {
+    font-family: var(--font-ui);
+    font-size: 0.72rem;
+    color: var(--faint) !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    margin-bottom: 0.9rem;
+}
+.hero-title {
+    font-family: var(--font-display) !important;
+    font-size: 3.4rem;
+    font-weight: 500;
+    margin: 0;
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+    color: var(--ink) !important;
+}
+.hero-metrics {
+    display: flex;
+    gap: 32px;
+    margin-top: 1.5rem;
+}
+.hero-metric {
+    display: flex;
+    flex-direction: column;
+}
+.hero-metric-label {
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.hero-metric-val {
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--ink) !important;
+    font-family: var(--font-mono);
+}
+
+/* Verdict Scorecard */
+.scorecard-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 16px;
+    margin-bottom: 2rem;
+}
+.sc-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 18px 18px 16px;
+}
+.sc-title {
+    font-family: var(--font-ui);
+    font-size: 0.7rem;
+    color: var(--faint) !important;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-bottom: 12px;
+}
+.sc-body {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.sc-score {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 1.25rem;
+    color: var(--ink) !important;
+}
+.sc-bar-bg {
+    height: 3px;
+    background: var(--surface-2);
+    border-radius: 0;
+    overflow: hidden;
+}
+.sc-bar-fill {
+    height: 100%;
+    border-radius: 0;
+    background: var(--accent);
+}
+
+/* DCF Cards */
+.dcf-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 2rem;
+}
+.dcf-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 22px 22px 20px;
+}
+.dcf-label {
+    font-family: var(--font-ui);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--faint) !important;
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+.dcf-val {
+    font-family: var(--font-mono);
+    font-size: 2.1rem;
+    font-weight: 500;
+    color: var(--ink) !important;
+    letter-spacing: -0.01em;
+}
+.dcf-sub {
+    font-size: 0.9rem;
+    margin-top: 4px;
+}
+
+/* Verdict pills */
+.verdict-pill {
+    display: inline-block;
+    padding: 3px 11px;
+    border-radius: 2px;
+    font-family: var(--font-ui);
+    font-weight: 600;
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    background: var(--surface-2);
+    color: var(--ink);
+}
+.verdict-buy   { background: var(--pos); color: var(--accent-ink); }
+.verdict-wait  { background: var(--warn); color: var(--accent-ink); }
+.verdict-watch { background: var(--info); color: var(--accent-ink); }
+.verdict-skip  { background: var(--neg); color: var(--accent-ink); }
+
+/* Check rows */
+.check-row-container {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 8px 0;
+}
+.check-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.check-dot-pass { background-color: var(--pos); }
+.check-dot-fail { background-color: var(--neg); }
+.check-dot-na { background-color: transparent; border: 1.5px solid var(--text-muted, #888); opacity: 0.5; }
+
+.framework-note {
+    font-size: 0.85rem;
+    color: var(--muted);
+    padding: 8px 12px;
+    background: var(--surface-2);
+    border-radius: 8px;
+    margin-top: 6px;
+    max-width: 70ch;
+}
+
+/* Dividers */
+hr {
+    border-bottom-color: var(--border) !important;
+}
+/* Streamlit Spinner Visibility Fix */
+.stSpinner > div > div {
+    border-top-color: var(--accent) !important;
+    border-right-color: var(--surface-2) !important;
+    border-bottom-color: var(--surface-2) !important;
+    border-left-color: var(--surface-2) !important;
+}
+[data-testid="stStatusWidget"] [data-testid="stSpinner"] > div > div {
+    border-top-color: var(--accent) !important;
+    border-right-color: var(--surface-2) !important;
+    border-bottom-color: var(--surface-2) !important;
+    border-left-color: var(--surface-2) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -240,28 +685,42 @@ def _verdict_pill_html(verdict: str) -> str:
 
 
 def _render_check(check_id: str, check_dict: dict):
-    """Render a single check row with expander for detail."""
-    passed = check_dict.get("passed", False)
-    name = check_dict.get("name", check_id)
-    detail = check_dict.get("detail", "")
-    threshold = check_dict.get("threshold_str", "")
-    reasoning = check_dict.get("framework_reasoning", "")
+    """Render a single check row using the 3-part explanation card."""
+    from reports.explain import build_check_explanation
+    expl = build_check_explanation(check_id, check_dict)
 
-    icon = "✅" if passed else "❌"
-    card_class = "check-card check-card-pass" if passed else "check-card check-card-fail"
+    if expl["status"] == "na":
+        dot_class = "check-dot-na"
+        tag_pts = "not scored"
+        title_opacity = "0.6"
+    elif expl["status"] == "pass":
+        dot_class = "check-dot-pass"
+        tag_pts = "1 pt"
+        title_opacity = "1"
+    else:
+        dot_class = "check-dot-fail"
+        tag_pts = "0 pts"
+        title_opacity = "1"
 
-    with st.expander(f"{icon} **{name}**", expanded=False):
-        if threshold:
-            st.caption(f"Threshold: {threshold}")
-        if detail:
-            st.write(detail)
-        if not passed and reasoning:
-            st.markdown(
-                f'<div class="framework-note">'
-                f'<strong>Framework says:</strong> {reasoning}'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
+    st.markdown(
+        f'<div class="check-row-container">'
+        f'<div class="check-dot {dot_class}"></div>'
+        f'<div style="font-weight: 500; font-family: var(--font-ui); opacity: {title_opacity};">'
+        f'{expl["title"]} <span style="opacity:0.6; font-style:italic; font-weight:400; margin-left:6px;">— {tag_pts}</span></div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown('<div style="margin-left: 22px; margin-bottom: 16px;">', unsafe_allow_html=True)
+    if expl["what_why"]:
+        with st.expander("What this measures & why it matters", expanded=False):
+            st.markdown(f'<div class="framework-note">{expl["what_why"]}</div>', unsafe_allow_html=True)
+            
+    if expl["finding"]:
+        st.markdown(f"<div style='font-size:0.9rem; margin-bottom:4px;'><strong>This company:</strong> {expl['finding']}</div>", unsafe_allow_html=True)
+        
+    st.markdown(f"<div style='font-size:0.9rem;'><strong>Verdict:</strong> {expl['judgment']}</div>", unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 def _ajp_val(ajp, driver_id, default):
@@ -292,7 +751,11 @@ def _render_lens_tab(lens_results: dict, lens_key: str, financials: dict,
         return
 
     score = lens_results.get("score", 0)
-    max_score = _LENS_MAX_SCORES[lens_key]
+    # Use the lens's actual max_score (exclude-from-denominator may have dropped
+    # N/A checks); fall back to the static full count only if absent.
+    full_max = _LENS_MAX_SCORES[lens_key]
+    max_score = lens_results.get("max_score", full_max)
+    excluded = full_max - max_score
     verdict = lens_results.get("verdict", "SKIP")
     reason = lens_results.get("reason", "")
     checks = lens_results.get("checks", {})
@@ -302,12 +765,38 @@ def _render_lens_tab(lens_results: dict, lens_key: str, financials: dict,
     col_score, col_verdict, col_reason = st.columns([1, 1, 3])
     with col_score:
         st.metric(label="Score", value=f"{score} / {max_score}")
+        st.markdown(f"<div style='font-size:0.9rem; margin-top:4px;'>Passed {score} of {max_score} applicable checks &mdash; verdict: {verdict}.</div>", unsafe_allow_html=True)
+        if excluded > 0:
+            st.caption(f"{excluded} check{'s' if excluded != 1 else ''} N/A (excluded from {full_max})")
     with col_verdict:
         st.markdown("**Verdict**")
         st.markdown(_verdict_pill_html(verdict), unsafe_allow_html=True)
     with col_reason:
         st.markdown("**Reason**")
         st.write(reason)
+
+    # ---- Layer-C narrative (plain-English summary) ----
+    from reports.explain import build_lens_narrative
+    narrative = build_lens_narrative(
+        _LENS_NAMES[lens_key], lens_results, ticker
+    )
+    st.markdown(
+        f"<div style='"
+        f"background: rgba(255,255,255,0.04); "
+        f"border-left: 3px solid rgba(120,180,255,0.5); "
+        f"border-radius: 6px; "
+        f"padding: 12px 16px; "
+        f"margin-top: 12px; "
+        f"font-size: 0.92rem; "
+        f"line-height: 1.6; "
+        f"color: rgba(220,220,220,0.9);"
+        f"'>"
+        f"<strong style='font-size:0.78rem; letter-spacing:0.05em; "
+        f"opacity:0.7; text-transform:uppercase;'>In plain English</strong>"
+        f"<br><br>{narrative}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
     st.divider()
 
@@ -319,9 +808,12 @@ def _render_lens_tab(lens_results: dict, lens_key: str, financials: dict,
 
     for part_id in sorted(parts.keys()):
         part_checks = parts[part_id]
-        passed_count = sum(1 for _, c in part_checks if c["passed"])
-        total_count = len(part_checks)
-        st.markdown(f"**Part {part_id}** &nbsp; {passed_count}/{total_count} checks passed")
+        # Part totals exclude N/A checks so passed/total reflects the denominator.
+        passed_count = sum(1 for _, c in part_checks if c.get("applicable", True) and c["passed"])
+        total_count = sum(1 for _, c in part_checks if c.get("applicable", True))
+        na_count = len(part_checks) - total_count
+        na_suffix = f" &nbsp;·&nbsp; {na_count} N/A" if na_count else ""
+        st.markdown(f"**Part {part_id}** &nbsp; {passed_count}/{total_count} checks passed{na_suffix}")
         for check_id, check_dict in part_checks:
             _render_check(check_id, check_dict)
 
@@ -354,6 +846,22 @@ def _render_lens_tab(lens_results: dict, lens_key: str, financials: dict,
 # DCF tab
 # ---------------------------------------------------------------------------
 
+def _fmt_amount(v, currency: str, is_india: bool) -> str:
+    """Banker-compact money: crore for India, B/M for everything else. Display only."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return "—"
+    if is_india:
+        return f"{currency}{v / 1e7:,.0f} cr"   # 1 crore = 10,000,000
+    a = abs(v)
+    if a >= 1e9:
+        return f"{currency}{v / 1e9:,.2f}B"
+    if a >= 1e6:
+        return f"{currency}{v / 1e6:,.1f}M"
+    return f"{currency}{v:,.0f}"
+
+
 def _render_dcf_tab(results: dict):
     financials = results["financials"]
     dcf_results = results["dcf_results"]
@@ -381,15 +889,17 @@ def _render_dcf_tab(results: dict):
     upside = (intrinsic - price) / price if price > 0 else 0
 
     # ---- Key metrics ----
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Intrinsic Value", f"{currency}{intrinsic:,.2f}")
-    with col2:
-        st.metric("Current Price", f"{currency}{price:,.2f}")
-    with col3:
-        st.metric("Implied Upside", f"{upside:+.1%}")
-    with col4:
-        st.metric("WACC", f"{wacc:.2%}")
+    up_col = "var(--pos)" if upside > 0 else "var(--neg)"
+    up_sgn = "+" if upside > 0 else ""
+    st.markdown(
+        f'<div class="dcf-grid">'
+        f'<div class="dcf-card"><div class="dcf-label">Intrinsic Value</div><div class="dcf-val">{currency}{intrinsic:,.2f}</div></div>'
+        f'<div class="dcf-card"><div class="dcf-label">Current Price</div><div class="dcf-val">{currency}{price:,.2f}</div></div>'
+        f'<div class="dcf-card"><div class="dcf-label">Implied Upside</div><div class="dcf-val" style="color: {up_col};">{up_sgn}{upside:.1%}</div></div>'
+        f'<div class="dcf-card"><div class="dcf-label">WACC</div><div class="dcf-val">{wacc:.2%}</div></div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
 
     st.divider()
 
@@ -411,7 +921,7 @@ def _render_dcf_tab(results: dict):
             ("Industry (Beta source)", assumptions.get("target_industry", "—")),
         ]
         df = pd.DataFrame(rows, columns=["Assumption", "Value"])
-        st.dataframe(df, hide_index=True, width="stretch")
+        st.markdown(df.to_html(index=False, classes="custom-table", border=0), unsafe_allow_html=True)
 
     # ---- Projections table ----
     with st.expander("10-Year Cash Flow Projections", expanded=False):
@@ -422,12 +932,13 @@ def _render_dcf_tab(results: dict):
             for i, p in enumerate(projs[:10], start=1):
                 rows.append({
                     "Year": p.get("year", i),
-                    "Revenue": f"{currency}{p.get('revenue', 0):,.0f}",
-                    "FCF": f"{currency}{p.get('fcf', 0):,.0f}",
-                    "PV FCF": f"{currency}{p.get('pv_fcf', 0):,.2f}",
+                    "Revenue": _fmt_amount(p.get('revenue', 0), currency, is_india),
+                    "FCF": _fmt_amount(p.get('fcf', 0), currency, is_india),
+                    "PV FCF": _fmt_amount(p.get('pv_fcf', 0), currency, is_india),
                     "Stage": p.get("stage", "—"),
                 })
-            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+            df = pd.DataFrame(rows)
+            st.markdown(df.to_html(index=False, classes="custom-table", border=0), unsafe_allow_html=True)
         else:
             st.caption("Projection data unavailable.")
 
@@ -476,7 +987,7 @@ def _render_dcf_tab(results: dict):
 
     st.divider()
     with st.expander(
-        "\U0001f39b\ufe0f Live Sensitivity (what-if) \u2014 adjust assumptions, value updates live",
+        "Live Sensitivity (what-if) \u2014 adjust assumptions, value updates live",
         expanded=False,
     ):
         if st.button("Reset to base case", key=f"sens_reset_{ticker}"):
@@ -549,7 +1060,14 @@ def _render_dcf_tab(results: dict):
     _eng = dcf_results.get("engine_results")
     if _eng:
         st.divider()
-        st.markdown("### \U0001f4c8 Charts")
+        st.markdown("### Charts")
+
+        # Theme-aware colors for Altair
+        c_bg = "#0d1117" if theme == "dark" else "transparent"
+        c_text = "#adbac7" if theme == "dark" else "#4b5563"
+        c_grid = "#30363d" if theme == "dark" else "#e5e7eb"
+        c_act = "#58a6ff" if theme == "dark" else "#3b6ca8"
+        c_fcst = "#d29922" if theme == "dark" else "#c08a1c"
 
         h   = _eng.get("hist", {})
         pj  = _eng.get("proj", {})
@@ -572,16 +1090,17 @@ def _render_dcf_tab(results: dict):
             vals   = list(hvals[:nh])              + list(pvals[:npj])
             phase  = ["Actual"] * nh               + ["Forecast"] * npj
             df = pd.DataFrame({"Year": years, "Value": vals, "Phase": phase})
+            ax_spec = alt.Axis(labelColor=c_text, titleColor=c_text, gridColor=c_grid, domainColor=c_grid, tickColor=c_grid)
             return (
                 alt.Chart(df).mark_bar().encode(
-                    x=alt.X("Year:N", sort=years, title=None),
-                    y=alt.Y("Value:Q", title="Rs mm"),
+                    x=alt.X("Year:N", sort=years, title=None, axis=ax_spec),
+                    y=alt.Y("Value:Q", title=f"{currency} mm", axis=ax_spec),
                     color=alt.Color("Phase:N", scale=alt.Scale(
                         domain=["Actual", "Forecast"],
-                        range=["#3b6ca8", "#c08a1c"])),
+                        range=[c_act, c_fcst]), legend=alt.Legend(labelColor=c_text, titleColor=c_text)),
                     tooltip=["Year", "Phase",
                              alt.Tooltip("Value:Q", format=",.0f")],
-                ).properties(height=220, title=title)
+                ).properties(height=220, title=alt.TitleParams(text=title, color=c_text), background=c_bg)
             )
 
         with st.expander(
@@ -595,7 +1114,7 @@ def _render_dcf_tab(results: dict):
                 ch = _mk_chart(ttl, hy, hv, py, pvv)
                 if ch is not None:
                     st.altair_chart(ch, width="stretch")
-            st.caption("Blue = actuals, gold = Sidwell\u2019s forecast. Rs mm.")
+            st.caption(f"Blue = actuals, gold = Sidwell\u2019s forecast. {currency} mm.")
 
         with st.expander("Valuation vs a single driver", expanded=False):
             sweep_opts = {
@@ -648,18 +1167,19 @@ def _render_dcf_tab(results: dict):
                 else:
                     if data.get("errs"):
                         st.caption(f"{len(data['errs'])} of {len(data['xs'])} points failed and were dropped.")
+                    ax_spec = alt.Axis(labelColor=c_text, titleColor=c_text, gridColor=c_grid, domainColor=c_grid, tickColor=c_grid)
                     line = (alt.Chart(dfc).mark_line(point=True).encode(
-                                x=alt.X("Driver:Q", title=data["label"], scale=alt.Scale(zero=False)),
-                                y=alt.Y("Intrinsic:Q", title=f"Intrinsic ({currency})"),
+                                x=alt.X("Driver:Q", title=data["label"], scale=alt.Scale(zero=False), axis=ax_spec),
+                                y=alt.Y("Intrinsic:Q", title=f"Intrinsic ({currency})", axis=ax_spec),
                                 tooltip=[alt.Tooltip("Driver:Q", format=".4f"),
                                          alt.Tooltip("Intrinsic:Q", format=",.2f")]))
                     rule = (alt.Chart(pd.DataFrame({"price": [price]}))
                             .mark_rule(color="red", strokeDash=[4, 4]).encode(y="price:Q"))
-                    st.altair_chart((line + rule), width="stretch")
+                    st.altair_chart((line + rule).properties(background=c_bg), width="stretch")
                     st.caption("Red dashed line = current price. Each point re-runs the engine (offline).")
 
     st.divider()
-    st.markdown("### \U0001f3df\ufe0f Comps & Football Field")
+    st.markdown("### Comps & Football Field")
     with st.expander("Comparable companies (you choose the peers)", expanded=False):
         st.caption("Pick 2\u20135 peer companies \u2014 type a name and choose from the dropdown.")
         _opts = _peer_options()
@@ -689,12 +1209,13 @@ def _render_dcf_tab(results: dict):
             else:
                 pm = comps.get("peer_multiples", [])
                 if pm:
-                    st.dataframe(pd.DataFrame([{
+                    df = pd.DataFrame([{
                         "Peer": r.get("ticker"),
                         "EV/EBITDA": r.get("ev_ebitda"),
                         "EV/Sales": r.get("ev_sales"),
                         "P/E": r.get("pe"),
-                    } for r in pm]), hide_index=True, width="stretch")
+                    } for r in pm])
+                    st.markdown(df.to_html(index=False, classes="custom-table", border=0), unsafe_allow_html=True)
 
                 med = comps.get("medians", {})
                 def _fm(m): return (f"{m['med']:.1f}\u00d7 (min {m['min']:.1f} / max {m['max']:.1f})"
@@ -752,15 +1273,15 @@ def _render_dcf_tab(results: dict):
 
                 dff = pd.DataFrame(rows)
                 order = list(dff["Method"])
-                bars = alt.Chart(dff).mark_bar(height=14, color="#9ec5e8").encode(
-                    x=alt.X("low:Q", title=f"Value per share ({currency})"), x2="high:Q",
-                    y=alt.Y("Method:N", sort=order, title=None))
-                pts = alt.Chart(dff).mark_point(size=90, filled=True, color="#1f3a5f").encode(
+                bars = alt.Chart(dff).mark_bar(height=14, color=c_act).encode(
+                    x=alt.X("low:Q", title=f"Value per share ({currency})", axis=alt.Axis(labelColor=c_text, titleColor=c_text, gridColor=c_grid, domainColor=c_grid, tickColor=c_grid)), x2="high:Q",
+                    y=alt.Y("Method:N", sort=order, title=None, axis=alt.Axis(labelColor=c_text, titleColor=c_text, gridColor=c_grid, domainColor=c_grid, tickColor=c_grid)))
+                pts = alt.Chart(dff).mark_point(size=90, filled=True, color=c_fcst).encode(
                     x="mid:Q", y=alt.Y("Method:N", sort=order),
                     tooltip=["Method", alt.Tooltip("mid:Q", format=",.0f")])
                 rule = alt.Chart(pd.DataFrame({"price": [price]})).mark_rule(
                     color="red", strokeDash=[4, 4]).encode(x="price:Q")
-                st.altair_chart((bars + pts + rule).properties(height=28 * len(rows) + 40),
+                st.altair_chart((bars + pts + rule).properties(height=28 * len(rows) + 40, background=c_bg),
                                 width="stretch")
                 st.caption("Dots = point estimates, bars = ranges, red dashed line = current price.")
 
@@ -794,6 +1315,15 @@ def _render_dcf_tab(results: dict):
 with st.sidebar:
     st.markdown("## Sidwell")
     st.markdown("Personal investment decision engine")
+    
+    col_t, col_r = st.columns(2)
+    with col_t:
+        st.radio("Theme", ["light", "dark"], horizontal=True, key="theme", label_visibility="collapsed")
+    with col_r:
+        if st.button("Refresh data", help="Clear cache and re-run pipeline (ignores 24h cache)", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+            
     st.divider()
 
     # streamlit-searchbox needs a rerun on every keystroke to populate its live
@@ -813,11 +1343,44 @@ with st.sidebar:
         def _cached_search(query: str):
             return search_companies(query)
 
+        # Theme the searchbox iframe (CSS can't reach it) via style_overrides.
+        _d = theme == "dark"
+        _c = {
+            "bg":     "#1a1815" if _d else "#fcfbf8",
+            "surf":   "#1f1d1a" if _d else "#fcfbf8",
+            "border": "#38342e" if _d else "#d3cdbf",
+            "ink":    "#ece7dd" if _d else "#1a1815",
+            "muted":  "#b3ac9e" if _d else "#6b665b",
+            "hover":  "#2a2723" if _d else "#eae7df",
+        }
+        _sb_styles = {
+            # wrapper bg kills the white label band (iframe used config's light theme)
+            "wrapper":  {"backgroundColor": _c["surf"]},
+            "clear":    {"fill": _c["muted"]},
+            "dropdown": {"fill": _c["muted"]},
+            "searchbox": {
+                "control":     {"backgroundColor": _c["bg"], "borderColor": _c["border"], "color": _c["ink"]},
+                "input":       {"color": _c["ink"]},
+                "placeholder": {"color": _c["muted"]},
+                "singleValue": {"color": _c["ink"]},
+                "menu":        {"backgroundColor": _c["surf"], "borderColor": _c["border"]},
+                "menuList":    {"backgroundColor": _c["surf"]},
+                "option":      {"color": _c["ink"], "backgroundColor": _c["surf"]},
+            },
+        }
+        # Render the label ourselves (the in-iframe label renders dark-on-dark
+        # because the component pulls its text color from config.toml's light theme).
+        st.markdown(
+            '<div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.3rem;'
+            'font-weight:500;">Company Name or Ticker</div>',
+            unsafe_allow_html=True,
+        )
         ticker_input = st_searchbox(
             _cached_search,
             key="ticker_input",
             placeholder="Search company or ticker...",
-            label="Company Name or Ticker",
+            label="",
+            style_overrides=_sb_styles,
         )
         analyze_btn = st.button("Analyze", type="primary", width="stretch")
     else:
@@ -851,7 +1414,7 @@ with st.sidebar:
     research_tuple = tuple((f.name, f.getvalue()) for f in (research_files or []))
     if research_tuple:
         st.caption(
-            f"\U0001f4c4 {len(research_tuple)} research report(s) loaded "
+            f"{len(research_tuple)} research report(s) loaded "
             "\u2014 will use latest concall + your report(s)."
         )
 
@@ -887,9 +1450,14 @@ with st.sidebar:
 # Main content area
 # ---------------------------------------------------------------------------
 
-st.title("Sidwell — Investment Analysis")
-
 if not ticker_input:
+    st.markdown(
+        '<div class="hero-band">'
+        '<div class="hero-eyebrow">Sidwell \u2014 Personal investment decision engine</div>'
+        '<h2 class="hero-title">Investment Analysis</h2>'
+        '</div>',
+        unsafe_allow_html=True
+    )
     st.info(
         "Enter a **ticker or company name** in the sidebar and press **Enter** (or click **Analyze**) to run the full pipeline.\n\n"
         "Examples — names: `Reliance`, `Nestle India`. Tickers: `ASIANPAINT.NS`, `RELIANCE.NS`."
@@ -916,22 +1484,65 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
                        f"for {ticker}.")
 
     # ---- Run pipeline ----
-    with st.spinner(f"Running Sidwell pipeline for **{ticker}**…"):
-        try:
-            results = _run_pipeline(ticker, research_tuple)
-        except ValueError as e:
-            err_msg = str(e)
-            if "appears to be cyclical" in err_msg:
-                st.info(f"**Model Limitation:**\n\n{err_msg}")
-            elif "non-positive intrinsic value" in err_msg:
-                st.error(f"DCF model failed for {ticker} — non-positive intrinsic. See logs.")
-            else:
-                st.error(f"**Data error:** {err_msg}")
-            st.stop()
-        except Exception as e:
-            st.error(f"**Pipeline failed:** {e}")
-            logger.exception(f"Pipeline error for {ticker}")
-            st.stop()
+    import threading
+    import time
+    from streamlit.runtime.scriptrunner import add_script_run_ctx
+
+    fun_fact = _get_fun_fact(ticker)
+
+    status_ui = st.status(f"Running Sidwell pipeline for **{ticker}**…", expanded=True)
+    with status_ui:
+        st.markdown(f"**Meanwhile, read this:**\n\n{fun_fact}")
+        st.divider()
+        phrase_ui = st.empty()
+    
+    stop_event = threading.Event()
+    
+    def update_status():
+        messages = [
+            f"Getting documents and preparing parts for quality output...",
+            f"DeepSeek v4 Pro is analyzing {ticker}'s history...",
+            f"Our engine is trying to work faster for you...",
+            f"AI is working overtime because you didn't give enough inputs...",
+            f"Almost there, formatting the final verdict..."
+        ]
+        idx = 0
+        while not stop_event.is_set():
+            phrase_ui.caption(f"_{messages[idx % len(messages)]}_")
+            idx += 1
+            for _ in range(25):
+                if stop_event.is_set():
+                    break
+                time.sleep(0.1)
+
+    t = threading.Thread(target=update_status)
+    add_script_run_ctx(t)
+    t.start()
+
+    try:
+        results = _run_pipeline(ticker, research_tuple)
+        stop_event.set()
+        t.join()
+        status_ui.empty()
+    except ValueError as e:
+        stop_event.set()
+        t.join()
+        status_ui.update(label="Analysis failed", state="error", expanded=True)
+        err_msg = str(e)
+        if "appears to be cyclical" in err_msg:
+            st.info(f"**Model Limitation:**\n\n{err_msg}")
+        elif "non-positive intrinsic value" in err_msg:
+            st.error(f"DCF model failed for {ticker} — non-positive intrinsic. See logs.")
+        else:
+            st.error(f"**Data error:** {err_msg}")
+        st.stop()
+    except Exception as e:
+        stop_event.set()
+        t.join()
+        status_ui.update(label="Pipeline failed", state="error", expanded=True)
+        st.error(f"**Pipeline failed:** {e}")
+        logger.exception(f"Pipeline error for {ticker}")
+        st.stop()
 
     financials = results["financials"]
     dcf_results = results["dcf_results"]
@@ -973,6 +1584,68 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
                 f"Qualitative layer unavailable ({reason}). "
                 f"Soft checks default to their documented neutral values."
             )
+
+    # ---- Custom Header & Scorecard ----
+    is_india_hero = ticker.endswith(".NS") or ticker.endswith(".BO")
+    cur_str = "₹" if is_india_hero else "$"
+    price_val = dcf_results["current_price"]
+    mcap_val = financials.get("market_cap", 0) / 1e9
+
+    st.markdown(
+        f'<div class="hero-band">'
+        f'<div class="hero-eyebrow">Sidwell \u2014 Personal investment decision engine</div>'
+        f'<h2 class="hero-title">{financials.get("ticker")}</h2>'
+        f'<div class="hero-metrics">'
+        f'<div class="hero-metric"><span class="hero-metric-label">Current Price</span><span class="hero-metric-val">{cur_str}{price_val:,.2f}</span></div>'
+        f'<div class="hero-metric"><span class="hero-metric-label">Market Cap</span><span class="hero-metric-val">{cur_str}{mcap_val:,.1f}B</span></div>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+    intrinsic_val = dcf_results.get("intrinsic_value_per_share", 0)
+    upside_val = (intrinsic_val / price_val - 1) * 100 if price_val > 0 else 0
+    dcf_verdict = "BUY" if upside_val > 15 else "WAIT" if upside_val > -15 else "SKIP"
+    up_css = "var(--pos)" if upside_val > 0 else "var(--neg)"
+    up_sign = "+" if upside_val > 0 else ""
+
+    # Scorecard = the five investor lenses only. DCF is a valuation input, not a
+    # standalone recommendation, so it is shown in its own tab, not as a verdict card.
+    sc_html = '<div class="scorecard-strip">'
+
+    for name, res, key in [
+        ("Buffett", buffett_results, "buffett"),
+        ("Marks", marks_results, "marks"),
+        ("KKR", kkr_results, "kkr"),
+        ("Blackstone", blackstone_results, "blackstone"),
+        ("Apollo", apollo_results, "apollo")
+    ]:
+        if res:
+            sc = res.get("score", 0)
+            mx = _LENS_MAX_SCORES[key]
+            vd = res.get("verdict", "SKIP")
+            pct = (sc / mx) * 100
+            bar_color = "var(--pos)" if vd == "BUY" else "var(--info)" if vd == "WATCH" else "var(--warn)" if vd == "WAIT" else "var(--neg)"
+            sc_html += (
+                f'<div class="sc-card">'
+                f'<div class="sc-title">{name}</div>'
+                f'<div class="sc-body">'
+                f'<span class="sc-score">{sc}/{mx}</span>'
+                f'{_verdict_pill_html(vd)}'
+                f'</div>'
+                f'<div class="sc-bar-bg"><div class="sc-bar-fill" style="width: {pct}%; background: {bar_color};"></div></div>'
+                f'</div>'
+            )
+        else:
+            sc_html += (
+                f'<div class="sc-card">'
+                f'<div class="sc-title">{name}</div>'
+                f'<div class="sc-body"><span class="sc-score">-/-</span>{_verdict_pill_html("SKIP")}</div>'
+                f'<div class="sc-bar-bg"></div>'
+                f'</div>'
+            )
+    sc_html += '</div>'
+    st.markdown(sc_html, unsafe_allow_html=True)
 
     # ---- Tabs ----
     tabs = st.tabs([

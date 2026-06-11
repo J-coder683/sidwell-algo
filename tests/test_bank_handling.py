@@ -96,7 +96,7 @@ def test_dcf_runs_normally_for_non_bank():
 
 # ── Buffett lens ────────────────────────────────────────────────────────────
 
-def test_buffett_bank_mos_na_and_denominator_13():
+def test_buffett_bank_mos_na_and_denominator():
     dcf = run_dcf_valuation(_bank_financials(), _bank_macro(), 0.07)
     res = evaluate_buffett_lens(
         _bank_financials(), dcf, qualitative_results=_make_unavailable_qualitative()
@@ -104,17 +104,20 @@ def test_buffett_bank_mos_na_and_denominator_13():
     mos = res["checks"]["12_margin_of_safety"]
     assert mos["applicable"] is False
     assert mos["passed"] is False
-    assert res["max_score"] == 13
+    # 14 checks minus MoS (bank) minus soft 11 (coherence) & 14 (holdability),
+    # which are N/A with qualitative unavailable → denominator 11.
+    assert res["max_score"] == 11
     # A bank can never be BUY/WAIT without a valuation.
     assert res["verdict"] in ("WATCH", "SKIP")
 
 
-def test_buffett_non_bank_denominator_14():
+def test_buffett_non_bank_denominator():
     dcf = run_dcf_valuation(_non_bank_financials(), FIXTURE_MACRO, FIXTURE_RISK_FREE_RATE)
     res = evaluate_buffett_lens(
         _non_bank_financials(), dcf, qualitative_results=_make_unavailable_qualitative()
     )
-    assert res["max_score"] == 14
+    # MoS applicable (non-bank); soft 11 & 14 N/A with qualitative unavailable → 12.
+    assert res["max_score"] == 12
     assert "applicable" not in res["checks"]["12_margin_of_safety"]
 
 
@@ -129,26 +132,29 @@ def test_buffett_mos_activates_with_ddm_results():
     mos = res["checks"]["12_margin_of_safety"]
     assert mos.get("applicable", True) is True
     assert mos["passed"] is True          # 90% MoS > 25%
-    assert res["max_score"] == 14
+    # MoS re-activated by DDM; soft 11 & 14 still N/A (qualitative unavailable) → 12.
+    assert res["max_score"] == 12
 
 
 # ── Marks lens ──────────────────────────────────────────────────────────────
 
-def test_marks_bank_both_valuation_checks_na_denominator_12():
+def test_marks_bank_both_valuation_checks_na_denominator():
     dcf = run_dcf_valuation(_bank_financials(), _bank_macro(), 0.07)
     res = evaluate_marks_lens(
         _bank_financials(), dcf, qualitative_results=_make_unavailable_qualitative()
     )
     assert res["checks"]["1_deep_mos"]["applicable"] is False
     assert res["checks"]["2_asymmetric_payoff"]["applicable"] is False
-    assert res["max_score"] == 12
+    # 14 minus bank checks 1,2 minus soft 5,11,12,13,14 (N/A) → denominator 7.
+    assert res["max_score"] == 7
     assert res["verdict"] in ("WATCH", "SKIP")
 
 
-def test_marks_non_bank_denominator_14():
+def test_marks_non_bank_denominator():
     dcf = run_dcf_valuation(_non_bank_financials(), FIXTURE_MACRO, FIXTURE_RISK_FREE_RATE)
     res = evaluate_marks_lens(
         _non_bank_financials(), dcf, qualitative_results=_make_unavailable_qualitative()
     )
-    assert res["max_score"] == 14
+    # Soft 5,11,12,13,14 N/A with qualitative unavailable → 14 - 5 = 9.
+    assert res["max_score"] == 9
     assert "applicable" not in res["checks"]["1_deep_mos"]

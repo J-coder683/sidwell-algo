@@ -108,7 +108,7 @@ These checks answer: *which value-creation levers can KKR actually deploy at thi
 **Test (soft):** Gemini judges whether the company operates in a fragmented industry with consolidation upside, AND whether the company already has the infrastructure (M&A function, integration playbook, balance sheet headroom) to be a roll-up platform. Returns `platform_potential | bolt_on_only | not_applicable`. PASS if `platform_potential`.
 **Logic:** KKR's value creation increasingly comes from bolt-on M&A within a platform thesis. Weisenbeck's Bettcher → Fortifi Food Processing transformation is canonical: acquire a platform, then 33 sites worldwide via bolt-ons. *"We don't just slap together a lot of companies and then try to sell the new entity right away."* The thesis requires fragmented industries (food processing, specialty distribution, healthcare services, industrial coatings, regional consumer brands) where bolt-on multiples are 5-7× EBITDA against platform multiples of 10-12×.
 **Source:** Weisenbeck Bettcher / Fortifi case; Compendium Part 1.5 (Thoma Bravo / Vista buy-and-build math).
-**Determinism note:** LLM-dependent. Defaults to PASS if no contraindicating evidence — KKR is willing to underwrite a platform thesis at entry if the sector is fragmented enough.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear — a platform thesis must be evidenced, not assumed. A genuine `bolt_on_only`/`not_applicable` read counts as a failure.
 
 #### 9. Operational revamp + management/board upgrade potential (NEW — classic PE lever)
 **Test:**
@@ -123,7 +123,7 @@ These checks answer: *which value-creation levers can KKR actually deploy at thi
 **Test (soft):** Gemini reads transcripts and MD&A for indicators of large frontline hourly workforce — manufacturing, logistics, services, retail with significant non-managerial headcount. Returns one of `frontline_heavy | mixed | knowledge_worker_heavy | unclear`. PASS if `frontline_heavy | mixed`; FAIL if `knowledge_worker_heavy` (pure software, asset management, financial services without large frontline workforce).
 **Logic:** Stavros's Ownership Works model has been deployed at 80+ companies and produces measurable productivity gains (Ingersoll Rand: 90% quit rate reduction, engagement 19th → 91st percentile). The model requires a large frontline workforce to be impactful — companies with 80% knowledge workers benefit less from broad-based equity programs. *"Half of Americans earn an hourly wage…we don't talk about how stupid it is to compensate by hours instead of outcomes."* (Stavros).
 **Source:** Pete Stavros Goldman Sachs Talks Dec 2025; Ownership Works publications; Compendium Part 5.1.
-**Determinism note:** LLM-dependent. Defaults to `mixed` (PASS) when qualitative unavailable — most large-cap industrials/services have meaningful frontline headcount.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine `knowledge_worker_heavy` read counts as a failure.
 
 ---
 
@@ -160,7 +160,7 @@ KKR_PLAYBOOK_SECTORS = {
 Returns `willing_seller | strategic_holdout | unclear`. PASS if `willing_seller`; FAIL if `strategic_holdout`.
 **Logic:** The most analytically sound LBO is unbuyable if the seller won't sell. Asian Paints is canonical: family-controlled, no take-private signal, strong public-market premium — even if everything else worked, no deal exists.
 **Source:** Compendium Part 7.1 question #4; Stavros Dec 2025.
-**Determinism note:** LLM-dependent. Defaults to `unclear` (neutral, neither PASS nor FAIL) when qualitative unavailable.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine `strategic_holdout` read counts as a failure.
 
 #### 13. No regulatory blocker
 **Test:** Hard sector blacklist for control PE:
@@ -186,7 +186,7 @@ These checks answer: *why now, what's the return math, and can we extract interi
 **Test (soft, LLM-based):** Gemini reads transcripts and MD&A for sector cycle position. Returns one of `trough | early_recovery | mid_cycle | late_cycle | peak`. PASS if `trough | early_recovery | mid_cycle`; FAIL if `late_cycle | peak`.
 **Logic:** KKR is a buy-and-build PE shop, not a distressed shop. They want to enter at favorable cycle positions where they can grow EBITDA through both operating improvement (cycle-independent) AND cyclical recovery (cycle-dependent). Late-cycle and peak entries compress forward returns even with great execution.
 **Source:** Stavros Dec 2025; Master Compendium Part 7.6; Henry McVey KKR outlooks.
-**Determinism note:** LLM-dependent. Defaults to PASS (assume `mid_cycle`) when qualitative unavailable.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine `late_cycle`/`peak` read counts as a failure.
 
 #### 15. 7-year IRR feasibility (the math sanity check)
 **Test:** Projected 7-year IRR at base case > 18%.
@@ -219,7 +219,7 @@ check_15_passes = irr_7y > 0.18
 **Test (soft):** Gemini judges whether there is a specific catalyst making *now* the entry moment. Returns `catalyst_present | normal_cycle | unclear`. PASS if `catalyst_present` with specific event named (corporate divestiture, regulatory shift, founder succession event, sector inflection, take-private window opening, competitor exiting); FAIL otherwise.
 **Logic:** KKR is more flexible than Marks here. Marks requires *dislocation* (post-shock, distressed). KKR accepts *catalyst* (anything that creates a willing-seller or favorable-entry dynamic). *"Why now"* must be answerable in one specific sentence.
 **Source:** Master Compendium Part 7.6; KKR India travel notes (Feb 2024, Feb 2026) for examples of identified India-specific catalysts.
-**Determinism note:** LLM-dependent. Defaults to FAIL when qualitative unavailable.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine `normal_cycle` read counts as a failure. This check is one of the proportional Phalippou edge levers (#18).
 
 ---
 

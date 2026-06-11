@@ -110,3 +110,27 @@ def test_unavailable_qualitative_graceful_degrade():
     qual = _make_unavailable_qualitative()
     res = evaluate_kkr_lens(FIXTURE_INPUTS.copy(), dcf_res, qual)
     assert res["verdict"] in {"BUY", "WAIT", "WATCH", "SKIP"}
+
+
+def test_unavailable_qualitative_excludes_soft_checks_from_denominator():
+    """No qualitative → soft checks 8,10,12,14,17 are N/A → denominator 18-5=13."""
+    dcf_res = {"current_price": 50.0, "intrinsic_value_per_share": 100.0,
+               "assumptions": {"target_industry": "Household Products"}}
+    qual = _make_unavailable_qualitative()
+    res = evaluate_kkr_lens(FIXTURE_INPUTS.copy(), dcf_res, qual)
+    for cid in ("8_ma_platform", "10_workforce_fit", "12_willing_seller",
+                "14_cycle_position", "17_why_now"):
+        assert res["checks"][cid]["applicable"] is False, cid
+    assert res["max_score"] == 13
+
+
+def test_proportional_phalippou_gate_scales_to_applicable_levers():
+    """With soft levers 8 & 10 N/A, the >=4-of-6 gate becomes >=3-of-4 applicable."""
+    dcf_res = {"current_price": 50.0, "intrinsic_value_per_share": 100.0,
+               "assumptions": {"target_industry": "Chemical (Specialty)"}}
+    qual = _make_unavailable_qualitative()
+    res = evaluate_kkr_lens(FIXTURE_INPUTS.copy(), dcf_res, qual)
+    alpha = res["checks"]["18_alpha_thesis"]
+    # Levers 8 (M&A) and 10 (workforce) are N/A → 4 applicable, threshold ceil(4/6*4)=3.
+    assert "of 4 applicable" in alpha["threshold_str"]
+    assert alpha["threshold_str"] == ">= 3 of 4 applicable"

@@ -169,12 +169,14 @@ def test_check5_sector_cycle_fail():
     assert res["checks"]["5_sector_cycle"]["passed"] is False
 
 
-def test_check5_sector_cycle_unavailable_defaults_pass():
-    """No qualitative → sector cycle defaults PASS."""
+def test_check5_sector_cycle_unavailable_excluded():
+    """No qualitative → sector cycle is N/A and excluded from the denominator."""
     fin = get_base_financials()
     dcf = get_base_dcf()
     res = evaluate_marks_lens(fin, dcf)
-    assert res["checks"]["5_sector_cycle"]["passed"] is True
+    check5 = res["checks"]["5_sector_cycle"]
+    assert check5["applicable"] is False
+    assert check5["passed"] is False
 
 
 def test_check6_company_cycle_pass():
@@ -345,12 +347,14 @@ def test_check13_management_humility_fail():
     assert res["checks"]["13_management_humility"]["passed"] is False
 
 
-def test_check13_management_humility_unavailable_defaults_pass():
-    """No qualitative → humility defaults PASS."""
+def test_check13_management_humility_unavailable_excluded():
+    """No qualitative → humility is N/A and excluded from the denominator."""
     fin = get_base_financials()
     dcf = get_base_dcf()
     res = evaluate_marks_lens(fin, dcf)
-    assert res["checks"]["13_management_humility"]["passed"] is True
+    check13 = res["checks"]["13_management_humility"]
+    assert check13["applicable"] is False
+    assert check13["passed"] is False
 
 
 def test_check14_why_now_pass():

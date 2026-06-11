@@ -107,7 +107,7 @@ These checks answer: *does this company present one or more of Apollo's three co
 
 **Source:** Compendium Part 5.3 (Rowan defining quote and worldview); Compendium Part 1.2 (LyondellBasell mechanics); Compendium Part 2.9 (LyondellBasell as canonical proof point); Apollo founding identity (Drexel aftermath, 1990).
 
-**Determinism note:** LLM-dependent. Defaults to `moderate_stress` (FAIL) when qualitative unavailable — chaos is binary and must be evidenced, not assumed.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear — chaos must be evidenced, not assumed. A genuine "no dislocation" read counts as a failure. This check is one of the proportional Phalippou edge levers (#16).
 
 #### 6. Fulcrum security / structured entry opportunity
 
@@ -133,7 +133,7 @@ These checks answer: *does this company present one or more of Apollo's three co
 
 **Source:** Platform Origination Deep Dive (16 platforms, ABF characteristics, loss rates by platform over 15–22 year histories); Apollo 2025 Retirement Services Business Update (ABF thesis, 100–200bps excess spread); Apollo-Athene merger document (yield-on-assets composition: ~95% fixed income, ~5% alts).
 
-**Determinism note:** LLM-dependent. Defaults to FAIL when qualitative unavailable — ABF fit is specific enough that it cannot be assumed from generic business descriptions.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear — ABF fit is specific enough that it cannot be assumed from generic business descriptions. A genuine `not_credit_compatible` read counts as a failure. This check is one of the proportional Phalippou edge levers (#16).
 
 #### 8. Complexity moat (Apollo can price; others cannot)
 
@@ -202,7 +202,7 @@ These checks answer: *does this opportunity generate the type of long-duration, 
 
 **Source:** Apollo-Athene merger document ("6.6× economics" post-merger; permanent capital advantages vs. pure asset management model); Apollo 2024 Investor Day on long-duration hold strategy; Apollo 2025 Retirement Services Update on permanent capital deployment.
 
-**Determinism note:** LLM-dependent. Defaults to `unclear` (neutral — neither PASS nor FAIL) when qualitative unavailable.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine `requires_near_term_exit` read counts as a failure. This check is one of the proportional Phalippou edge levers (#16).
 
 ---
 
@@ -241,7 +241,7 @@ AND `mean(ebit_4y) / max(latest_gross_debt × 0.07, latest_interest_expense) > 1
 
 **Source:** Platform Origination Deep Dive (covenant characteristics of ABF structures, multiple covenants noted as a defining ABF attribute); Apollo 2024 Investor Day on private credit documentation advantages vs. public bonds.
 
-**Determinism note:** LLM-dependent. Defaults to `mixed` (neutral) when qualitative unavailable.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine `covenant_lite_existing`/`investment_grade_public` read counts as a failure.
 
 ---
 

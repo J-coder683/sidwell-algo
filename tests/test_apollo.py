@@ -116,6 +116,22 @@ def test_unavailable_qualitative_graceful_degrade():
     res = evaluate_apollo_lens(FIXTURE_INPUTS.copy(), dcf_res, qual)
     assert res["verdict"] in {"BUY", "WAIT", "WATCH", "SKIP"}
 
+
+def test_unavailable_qualitative_excludes_soft_checks_and_scales_gate():
+    """No qualitative → pure-soft checks 5,7,12,15 are N/A (denominator 16-4=12);
+    Phalippou gate scales to >=2-of-3 applicable levers (6,8,9; soft 5,7,12 N/A)."""
+    dcf_res = {"current_price": 50.0, "intrinsic_value_per_share": 100.0,
+               "assumptions": {"target_industry": "Chemical (Specialty)"}}
+    qual = _make_unavailable_qualitative()
+    res = evaluate_apollo_lens(FIXTURE_INPUTS.copy(), dcf_res, qual)
+    for cid in ("5_chaos_catalyst", "7_abf_fit", "12_hold_optionality", "15_covenant_control"):
+        assert res["checks"][cid]["applicable"] is False, cid
+    # Hybrid checks 6 (fulcrum) & 8 (complexity) stay applicable via their hard path.
+    assert res["checks"]["6_fulcrum_security"].get("applicable", True) is True
+    assert res["checks"]["8_complexity_moat"].get("applicable", True) is True
+    assert res["max_score"] == 12
+    assert res["checks"]["16_alpha_thesis"]["threshold_str"] == ">= 2 of 3 applicable"
+
 def test_sector_not_in_lookup_fails_check_1():
     dcf_res = {"current_price": 50.0, "intrinsic_value_per_share": 100.0, "assumptions": {"target_industry": "Alien Technology"}}
     fin = FIXTURE_INPUTS.copy()

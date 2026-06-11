@@ -6,6 +6,7 @@ Implementation of the KKR playbook for private equity evaluation.
 
 import numpy as np
 from analysis import framework_parser
+from lenses import _scoring
 
 KKR_PLAYBOOK_SECTORS = {
     "Household Products",
@@ -164,9 +165,15 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
     mean_rev = np.mean(rev_4y)
     hard_7 = sum_wc_change < -0.05 * mean_rev
     
-    wc_sig = q.get("wc_optimization_signal", {}).get("verdict", "unclear")
-    soft_7 = wc_sig in ["high", "wc_optimization_available", "present"]
+    wc_data = q.get("wc_optimization_signal", {}) or {}
+    wc_sig = wc_data.get("verdict", "unclear")
+    wc_conf = wc_data.get("confidence")
+    wc_quote = (wc_data.get("evidence_quote") or "")[:300]
+    # Soft branch only fires when confidence != 'low'
+    soft_7 = wc_sig in ["high", "wc_optimization_available", "present"] and wc_conf != "low"
     pass_7 = hard_7 or soft_7
+    wc_conf_str = f" (confidence: {wc_conf})" if wc_conf else ""
+    wc_quote_str = f' Evidence: "{wc_quote}"' if wc_quote else ""
     checks["7_wc_optimization"] = {
         "part": "B",
         "name": "WC Optimization",
@@ -174,18 +181,22 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": sum_wc_change / mean_rev if mean_rev > 0 else 0,
         "threshold_str": "< -5% or qualitative",
         "passed": pass_7,
-        "detail": f"Quantitative {'pass' if hard_7 else 'fail'}. Qualitative: {wc_sig}."
+        "detail": f"Quantitative {'pass' if hard_7 else 'fail'}. Signal: {wc_sig}{wc_conf_str}.{wc_quote_str}"
     }
     
-    # 8. M&A platform
-    ma_sig = q.get("ma_platform_potential", {}).get("verdict", "unclear")
-    # Defaults to pass if qualitative missing? The prompt says "Defaults to PASS if no contraindicating evidence"
-    if q_status != "available":
-        pass_8 = True
-        det_8 = "Defaulted PASS (qualitative unavailable)"
-    else:
-        pass_8 = ma_sig in ["high", "platform_potential"]
-        det_8 = f"Qualitative signal: {ma_sig}"
+    # 8. M&A platform — excluded (N/A) when qualitative unavailable/unclear or low-confidence.
+    ma_data = q.get("ma_platform_potential", {}) or {}
+    ma_sig = ma_data.get("verdict")
+    ma_conf = ma_data.get("confidence")
+    ma_quote = (ma_data.get("evidence_quote") or "")[:300]
+    ma_conf_str = f" (confidence: {ma_conf})" if ma_conf else ""
+    ma_quote_str = f' Evidence: "{ma_quote}"' if ma_quote else ""
+    pass_8, applic_8, det_8 = _scoring.resolve_soft(
+        q_status, ma_sig, {"high", "platform_potential"},
+        confidence=ma_conf,
+        pass_detail=f"Signal: {ma_sig}{ma_conf_str}.{ma_quote_str}",
+        fail_detail=f"Signal: {ma_sig}{ma_conf_str}.{ma_quote_str}",
+    )
     checks["8_ma_platform"] = {
         "part": "B",
         "name": "M&A Platform Potential",
@@ -193,15 +204,22 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": ma_sig,
         "threshold_str": "Qualitative high",
         "passed": pass_8,
+        "applicable": applic_8,
         "detail": det_8
     }
     
     # 9. Operational revamp / Mgmt upgrade
     latest_gm = financials["gross_profit"][-1] / latest_revenue if latest_revenue > 0 else 0
     hard_9 = (latest_gm - latest_ebit_margin) > 0.20
-    mgmt_sig = q.get("mgmt_upgrade_potential", {}).get("verdict", "unclear")
-    soft_9 = mgmt_sig in ["high", "upgrade_available"]
+    mgmt_data = q.get("mgmt_upgrade_potential", {}) or {}
+    mgmt_sig = mgmt_data.get("verdict", "unclear")
+    mgmt_conf = mgmt_data.get("confidence")
+    mgmt_quote = (mgmt_data.get("evidence_quote") or "")[:300]
+    # Soft branch only fires when confidence != 'low'
+    soft_9 = mgmt_sig in ["high", "upgrade_available"] and mgmt_conf != "low"
     pass_9 = hard_9 or soft_9
+    mgmt_conf_str = f" (confidence: {mgmt_conf})" if mgmt_conf else ""
+    mgmt_quote_str = f' Evidence: "{mgmt_quote}"' if mgmt_quote else ""
     checks["9_mgmt_upgrade"] = {
         "part": "B",
         "name": "Mgmt / Ops Upgrade",
@@ -209,17 +227,22 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": latest_gm - latest_ebit_margin,
         "threshold_str": "> 20% cost share",
         "passed": pass_9,
-        "detail": f"Opex share {(latest_gm - latest_ebit_margin)*100:.1f}%. Qualitative: {mgmt_sig}."
+        "detail": f"Opex share {(latest_gm - latest_ebit_margin)*100:.1f}%. Signal: {mgmt_sig}{mgmt_conf_str}.{mgmt_quote_str}"
     }
     
-    # 10. Workforce fit
-    wf_sig = q.get("workforce_stavros_fit", {}).get("verdict", "unclear")
-    if q_status != "available":
-        pass_10 = True
-        det_10 = "Defaulted PASS (qualitative unavailable, assumed mixed)"
-    else:
-        pass_10 = wf_sig in ["high_labor_intensity", "frontline_heavy", "mixed", "unclear"]
-        det_10 = f"Qualitative signal: {wf_sig}"
+    # 10. Workforce fit — excluded (N/A) when qualitative unavailable/unclear or low-confidence.
+    wf_data = q.get("workforce_stavros_fit", {}) or {}
+    wf_sig = wf_data.get("verdict")
+    wf_conf = wf_data.get("confidence")
+    wf_quote = (wf_data.get("evidence_quote") or "")[:300]
+    wf_conf_str = f" (confidence: {wf_conf})" if wf_conf else ""
+    wf_quote_str = f' Evidence: "{wf_quote}"' if wf_quote else ""
+    pass_10, applic_10, det_10 = _scoring.resolve_soft(
+        q_status, wf_sig, {"high_labor_intensity", "frontline_heavy", "mixed"},
+        confidence=wf_conf,
+        pass_detail=f"Signal: {wf_sig}{wf_conf_str}.{wf_quote_str}",
+        fail_detail=f"Signal: {wf_sig}{wf_conf_str}.{wf_quote_str}",
+    )
     checks["10_workforce_fit"] = {
         "part": "B",
         "name": "Stavros Workforce Fit",
@@ -227,6 +250,7 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": wf_sig,
         "threshold_str": "Frontline or mixed",
         "passed": pass_10,
+        "applicable": applic_10,
         "detail": det_10
     }
     
@@ -243,14 +267,19 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "detail": f"{target_industry} is {'in' if pass_11 else 'NOT in'} KKR playbook."
     }
     
-    # 12. Willing seller
-    ws_sig = q.get("willing_seller_signal", {}).get("verdict", "unclear")
-    if q_status != "available" or ws_sig == "unclear":
-        pass_12 = True
-        det_12 = "neutral default — qualitative unavailable; check counted as PASS"
-    else:
-        pass_12 = ws_sig in ["founder_succession", "corporate_carveout", "distress", "willing_seller"]
-        det_12 = f"Qualitative signal: {ws_sig}"
+    # 12. Willing seller — excluded (N/A) when qualitative unavailable/unclear or low-confidence.
+    ws_data = q.get("willing_seller_signal", {}) or {}
+    ws_sig = ws_data.get("verdict")
+    ws_conf = ws_data.get("confidence")
+    ws_quote = (ws_data.get("evidence_quote") or "")[:300]
+    ws_conf_str = f" (confidence: {ws_conf})" if ws_conf else ""
+    ws_quote_str = f' Evidence: "{ws_quote}"' if ws_quote else ""
+    pass_12, applic_12, det_12 = _scoring.resolve_soft(
+        q_status, ws_sig, {"founder_succession", "corporate_carveout", "distress", "willing_seller"},
+        confidence=ws_conf,
+        pass_detail=f"Signal: {ws_sig}{ws_conf_str}.{ws_quote_str}",
+        fail_detail=f"Signal: {ws_sig}{ws_conf_str}.{ws_quote_str}",
+    )
     checks["12_willing_seller"] = {
         "part": "C",
         "name": "Willing Seller",
@@ -258,6 +287,7 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": ws_sig,
         "threshold_str": "Positive catalyst",
         "passed": pass_12,
+        "applicable": applic_12,
         "detail": det_12
     }
     
@@ -274,14 +304,19 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
     }
     
     # --- PART D: Cycle Timing & Returns ---
-    # 14. Cycle position
-    cyc_sig = q.get("cycle_position", {}).get("sector_cycle", "unclear")
-    if q_status != "available":
-        pass_14 = True
-        det_14 = "Defaulted PASS (assumed mid_cycle)"
-    else:
-        pass_14 = cyc_sig in ["trough", "early_recovery", "mid_cycle", "unclear"]
-        det_14 = f"Cycle: {cyc_sig}"
+    # 14. Cycle position — excluded (N/A) when qualitative unavailable/unclear or low-confidence.
+    cyc_data = q.get("cycle_position", {}) or {}
+    cyc_sig = cyc_data.get("sector_cycle")
+    cyc_conf = cyc_data.get("confidence")
+    cyc_quote = (cyc_data.get("evidence_quote") or "")[:300]
+    cyc_conf_str = f" (confidence: {cyc_conf})" if cyc_conf else ""
+    cyc_quote_str = f' Evidence: "{cyc_quote}"' if cyc_quote else ""
+    pass_14, applic_14, det_14 = _scoring.resolve_soft(
+        q_status, cyc_sig, {"trough", "early_recovery", "mid_cycle"},
+        confidence=cyc_conf,
+        pass_detail=f"Signal: {cyc_sig}{cyc_conf_str}.{cyc_quote_str}",
+        fail_detail=f"Signal: {cyc_sig}{cyc_conf_str}.{cyc_quote_str}",
+    )
     checks["14_cycle_position"] = {
         "part": "D",
         "name": "Cycle Timing",
@@ -289,6 +324,7 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": cyc_sig,
         "threshold_str": "Not peak/late",
         "passed": pass_14,
+        "applicable": applic_14,
         "detail": det_14
     }
     
@@ -331,14 +367,19 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "detail": f"CV is {fcf_cv*100:.1f}%, min FCF {fcf_min:.1f}."
     }
     
-    # 17. Why now
-    wn_sig = q.get("why_now_signal", {}).get("verdict", "unclear")
-    if q_status != "available":
-        pass_17 = False
-        det_17 = "Defaulted FAIL (qualitative unavailable)"
-    else:
-        pass_17 = wn_sig in ["catalyst_present", "dislocation_present"]
-        det_17 = f"Signal: {wn_sig}"
+    # 17. Why now — excluded (N/A) when qualitative unavailable/unclear or low-confidence.
+    wn_data = q.get("why_now_signal", {}) or {}
+    wn_sig = wn_data.get("verdict")
+    wn_conf = wn_data.get("confidence")
+    wn_quote = (wn_data.get("evidence_quote") or "")[:300]
+    wn_conf_str = f" (confidence: {wn_conf})" if wn_conf else ""
+    wn_quote_str = f' Evidence: "{wn_quote}"' if wn_quote else ""
+    pass_17, applic_17, det_17 = _scoring.resolve_soft(
+        q_status, wn_sig, {"catalyst_present", "dislocation_present"},
+        confidence=wn_conf,
+        pass_detail=f"Signal: {wn_sig}{wn_conf_str}.{wn_quote_str}",
+        fail_detail=f"Signal: {wn_sig}{wn_conf_str}.{wn_quote_str}",
+    )
     checks["17_why_now"] = {
         "part": "D",
         "name": "Why Now Catalyst",
@@ -346,21 +387,31 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": wn_sig,
         "threshold_str": "Catalyst present",
         "passed": pass_17,
+        "applicable": applic_17,
         "detail": det_17
     }
     
     # --- PART E: Phalippou Bar ---
-    # 18. Alpha thesis (levers: 5, 7, 8, 9, 10, 16)
-    edge_passed = sum([pass_5, pass_7, pass_8, pass_9, pass_10, pass_16])
-    pass_18 = edge_passed >= 4
+    # 18. Alpha thesis (levers: 5, 7, 8, 9, 10, 16). Proportional gate: when some
+    # levers are N/A (soft signal unavailable), require >= ceil(4/6 * applicable).
+    edge_levers = [
+        (pass_5, True),            # margin improvement (quant)
+        (pass_7, True),            # wc optimization (hybrid — always applicable)
+        (pass_8, applic_8),        # M&A platform (soft)
+        (pass_9, True),            # mgmt upgrade (hybrid — always applicable)
+        (pass_10, applic_10),      # workforce fit (soft)
+        (pass_16, True),           # dividend recap (quant)
+    ]
+    edge_passed, edge_n, edge_threshold, pass_18 = _scoring.proportional_gate(edge_levers)
     checks["18_alpha_thesis"] = {
         "part": "E",
         "name": "Above-Average Alpha",
         "metric_name": "Edge Levers Passed",
         "value": edge_passed,
-        "threshold_str": ">= 4",
+        "threshold_str": f">= {edge_threshold} of {edge_n} applicable",
         "passed": pass_18,
-        "detail": f"{edge_passed} of 6 levers passed."
+        "detail": f"{edge_passed} of {edge_n} applicable levers passed (need {edge_threshold}; 2 N/A excluded)."
+                  if edge_n < 6 else f"{edge_passed} of 6 levers passed (need {edge_threshold})."
     }
     
     # --- SCORING ---
@@ -377,36 +428,41 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
             )
         check_dict["framework_reasoning"] = reasoning
 
-    score = sum(1 for c in checks.values() if c["passed"])
-    
+    # Exclude-from-denominator: soft checks with unavailable/unclear signals drop
+    # out of both score and max_score. Verdict thresholds are ratio-based against
+    # ORIG_MAX=18 (original 15/13 cutoffs). Preconditions are quant (1-4) and the
+    # proportional Phalippou gate (18), so missing data does not auto-SKIP.
+    ORIG_MAX = 18
+    score, max_score = _scoring.tally(checks)
+
     precond_1 = all([pass_1, pass_2, pass_3, pass_4])
     precond_2 = pass_18
-    
+
     if not (precond_1 and precond_2):
         verdict = "SKIP"
         if not precond_1:
             reason = "Failed Part A pre-condition: not LBO-viable."
         else:
             reason = "Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar)."
-    elif score >= 15:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 15):
         verdict = "BUY"
         reason = "High-conviction LBO target with strong alpha levers."
-    elif score >= 13 and not pass_12:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 13) and not pass_12:
         verdict = "WAIT"
         reason = "WAIT (seller not willing). Operationally sound but no deal available."
-    elif score >= 13 and not pass_14:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 13) and not pass_14:
         verdict = "WAIT"
         reason = "WAIT (wrong cycle moment). Better entry point required."
-    elif score >= 13:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 13):
         verdict = "WATCH"
         reason = "Mixed signals across strategic/timing checks; monitor for changes."
     else:
         verdict = "SKIP"
         reason = "Too many failed checks for an investable thesis."
-        
+
     return {
         "score": score,
-        "max_score": 18,
+        "max_score": max_score,
         "verdict": verdict,
         "reason": reason,
         "checks": checks

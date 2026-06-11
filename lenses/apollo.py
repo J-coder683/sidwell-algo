@@ -6,6 +6,7 @@ Implementation of the Apollo Global Management playbook for private credit / dis
 
 import numpy as np
 from analysis import framework_parser
+from lenses import _scoring
 
 SECTOR_MEDIAN_EV_EBITDA = {
     "Household Products":                          16.0,
@@ -154,14 +155,19 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
     }
     
     # --- PART B: Chaos, Complexity, Credit Edge ---
-    # 5. Chaos / dislocation catalyst
-    ch_sig = q.get("chaos_dislocation_catalyst", {}).get("verdict", "unclear")
-    if q_status != "available":
-        pass_5 = False
-        det_5 = "Defaulted FAIL (qualitative unavailable)"
-    else:
-        pass_5 = ch_sig in ["present", "chaos_present", "dislocation_present"]
-        det_5 = f"Signal: {ch_sig}"
+    # 5. Chaos / dislocation catalyst — excluded (N/A) when unavailable/unclear or low-confidence.
+    ch_data = q.get("chaos_dislocation_catalyst", {}) or {}
+    ch_sig = ch_data.get("verdict")
+    ch_conf = ch_data.get("confidence")
+    ch_quote = (ch_data.get("evidence_quote") or "")[:300]
+    ch_conf_str = f" (confidence: {ch_conf})" if ch_conf else ""
+    ch_quote_str = f' Evidence: "{ch_quote}"' if ch_quote else ""
+    pass_5, applic_5, det_5 = _scoring.resolve_soft(
+        q_status, ch_sig, {"present", "chaos_present", "dislocation_present"},
+        confidence=ch_conf,
+        pass_detail=f"Signal: {ch_sig}{ch_conf_str}.{ch_quote_str}",
+        fail_detail=f"Signal: {ch_sig}{ch_conf_str}.{ch_quote_str}",
+    )
     checks["5_chaos_catalyst"] = {
         "part": "B",
         "name": "Chaos/Dislocation Catalyst",
@@ -169,15 +175,24 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
         "value": ch_sig,
         "threshold_str": "Present",
         "passed": pass_5,
+        "applicable": applic_5,
         "detail": det_5
     }
     
     # 6. Fulcrum security
+    # Hybrid: hard conditions are always computable. Soft branch only fires when
+    # confidence != 'low' (low-confidence cannot rescue a hard FAIL).
     hard_6_a = (lev > 5.0 and ic < 2.0)
     hard_6_b = market_cap < 0.30 * debt
-    fl_sig = q.get("fulcrum_security_signal", {}).get("verdict", "unclear")
-    soft_6 = fl_sig in ["present", "fulcrum_identified", "multi_tranche_complex"]
+    fl_data = q.get("fulcrum_security_signal", {}) or {}
+    fl_sig = fl_data.get("verdict", "unclear")
+    fl_conf = fl_data.get("confidence")
+    fl_quote = (fl_data.get("evidence_quote") or "")[:300]
+    # Soft branch only fires when confidence != 'low'
+    soft_6 = fl_sig in ["present", "fulcrum_identified", "multi_tranche_complex"] and fl_conf != "low"
     pass_6 = hard_6_a or hard_6_b or soft_6
+    fl_conf_str = f" (confidence: {fl_conf})" if fl_conf else ""
+    fl_quote_str = f' Evidence: "{fl_quote}"' if fl_quote else ""
     checks["6_fulcrum_security"] = {
         "part": "B",
         "name": "Fulcrum Security",
@@ -185,17 +200,22 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
         "value": (lev, ic, market_cap / debt if debt > 0 else 999.0),
         "threshold_str": "Hard or Soft Fulcrum",
         "passed": pass_6,
-        "detail": f"Qual: {fl_sig}. Hard signals: A={hard_6_a}, B={hard_6_b}."
+        "detail": f"Signal: {fl_sig}{fl_conf_str}.{fl_quote_str} Hard: A={hard_6_a}, B={hard_6_b}."
     }
     
-    # 7. ABF / private credit fit
-    abf_sig = q.get("abf_credit_fit", {}).get("verdict", "unclear")
-    if q_status != "available":
-        pass_7 = False
-        det_7 = "Defaulted FAIL (qualitative unavailable)"
-    else:
-        pass_7 = abf_sig in ["high", "abf_primary_opportunity", "direct_lending_opportunity"]
-        det_7 = f"Signal: {abf_sig}"
+    # 7. ABF / private credit fit — excluded (N/A) when unavailable/unclear or low-confidence.
+    abf_data = q.get("abf_credit_fit", {}) or {}
+    abf_sig = abf_data.get("verdict")
+    abf_conf = abf_data.get("confidence")
+    abf_quote = (abf_data.get("evidence_quote") or "")[:300]
+    abf_conf_str = f" (confidence: {abf_conf})" if abf_conf else ""
+    abf_quote_str = f' Evidence: "{abf_quote}"' if abf_quote else ""
+    pass_7, applic_7, det_7 = _scoring.resolve_soft(
+        q_status, abf_sig, {"high", "abf_primary_opportunity", "direct_lending_opportunity"},
+        confidence=abf_conf,
+        pass_detail=f"Signal: {abf_sig}{abf_conf_str}.{abf_quote_str}",
+        fail_detail=f"Signal: {abf_sig}{abf_conf_str}.{abf_quote_str}",
+    )
     checks["7_abf_fit"] = {
         "part": "B",
         "name": "ABF/Credit Fit",
@@ -203,15 +223,23 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
         "value": abf_sig,
         "threshold_str": "Compatible",
         "passed": pass_7,
+        "applicable": applic_7,
         "detail": det_7
     }
     
     # 8. Complexity moat
+    # Hybrid: hard condition always computable. Soft branch only fires when confidence != 'low'.
     debt_to_assets = debt / latest_total_assets
     hard_8 = debt_to_assets > 0.55
-    cx_sig = q.get("complexity_moat_signal", {}).get("verdict", "unclear")
-    soft_8 = cx_sig in ["high", "complexity_premium_available"]
+    cx_data = q.get("complexity_moat_signal", {}) or {}
+    cx_sig = cx_data.get("verdict", "unclear")
+    cx_conf = cx_data.get("confidence")
+    cx_quote = (cx_data.get("evidence_quote") or "")[:300]
+    # Soft branch only fires when confidence != 'low'
+    soft_8 = cx_sig in ["high", "complexity_premium_available"] and cx_conf != "low"
     pass_8 = hard_8 or soft_8
+    cx_conf_str = f" (confidence: {cx_conf})" if cx_conf else ""
+    cx_quote_str = f' Evidence: "{cx_quote}"' if cx_quote else ""
     checks["8_complexity_moat"] = {
         "part": "B",
         "name": "Complexity Moat",
@@ -219,7 +247,7 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
         "value": debt_to_assets,
         "threshold_str": ">55% or High Qual",
         "passed": pass_8,
-        "detail": f"Debt/Assets {debt_to_assets*100:.1f}%. Qual: {cx_sig}."
+        "detail": f"Debt/Assets {debt_to_assets*100:.1f}%. Signal: {cx_sig}{cx_conf_str}.{cx_quote_str}"
     }
     
     # 9. Sector domain knowledge
@@ -262,14 +290,19 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
         "detail": f"FCF Margin Stdev {fcf_margin_stdev*100:.1f}pp."
     }
     
-    # 12. Hold-without-exit optionality
-    ph_sig = q.get("permanent_hold_viable", {}).get("verdict", "unclear")
-    if q_status != "available" or ph_sig == "unclear":
-        pass_12 = True
-        det_12 = "neutral default — qualitative unavailable; check counted as PASS"
-    else:
-        pass_12 = ph_sig in ["yes", "permanent_hold_viable"]
-        det_12 = f"Signal: {ph_sig}"
+    # 12. Hold-without-exit optionality — excluded (N/A) when unavailable/unclear or low-confidence.
+    ph_data = q.get("permanent_hold_viable", {}) or {}
+    ph_sig = ph_data.get("verdict")
+    ph_conf = ph_data.get("confidence")
+    ph_quote = (ph_data.get("evidence_quote") or "")[:300]
+    ph_conf_str = f" (confidence: {ph_conf})" if ph_conf else ""
+    ph_quote_str = f' Evidence: "{ph_quote}"' if ph_quote else ""
+    pass_12, applic_12, det_12 = _scoring.resolve_soft(
+        q_status, ph_sig, {"yes", "permanent_hold_viable"},
+        confidence=ph_conf,
+        pass_detail=f"Signal: {ph_sig}{ph_conf_str}.{ph_quote_str}",
+        fail_detail=f"Signal: {ph_sig}{ph_conf_str}.{ph_quote_str}",
+    )
     checks["12_hold_optionality"] = {
         "part": "C",
         "name": "Hold-Without-Exit",
@@ -277,6 +310,7 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
         "value": ph_sig,
         "threshold_str": "Viable",
         "passed": pass_12,
+        "applicable": applic_12,
         "detail": det_12
     }
     
@@ -310,14 +344,19 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
         "detail": f"Ratio {tangible_ratio*100:.1f}%."
     }
     
-    # 15. Covenant control
-    cc_sig = q.get("covenant_control_potential", {}).get("verdict", "unclear")
-    if q_status != "available":
-        pass_15 = True
-        det_15 = "Defaulted PASS (assumed mixed)"
-    else:
-        pass_15 = cc_sig in ["high", "covenant_rich_opportunity", "mixed", "unclear"]
-        det_15 = f"Signal: {cc_sig}"
+    # 15. Covenant control — excluded (N/A) when unavailable/unclear or low-confidence.
+    cc_data = q.get("covenant_control_potential", {}) or {}
+    cc_sig = cc_data.get("verdict")
+    cc_conf = cc_data.get("confidence")
+    cc_quote = (cc_data.get("evidence_quote") or "")[:300]
+    cc_conf_str = f" (confidence: {cc_conf})" if cc_conf else ""
+    cc_quote_str = f' Evidence: "{cc_quote}"' if cc_quote else ""
+    pass_15, applic_15, det_15 = _scoring.resolve_soft(
+        q_status, cc_sig, {"high", "covenant_rich_opportunity", "mixed"},
+        confidence=cc_conf,
+        pass_detail=f"Signal: {cc_sig}{cc_conf_str}.{cc_quote_str}",
+        fail_detail=f"Signal: {cc_sig}{cc_conf_str}.{cc_quote_str}",
+    )
     checks["15_covenant_control"] = {
         "part": "D",
         "name": "Covenant Control",
@@ -325,21 +364,32 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
         "value": cc_sig,
         "threshold_str": "High/Mixed",
         "passed": pass_15,
+        "applicable": applic_15,
         "detail": det_15
     }
     
     # --- PART E: Phalippou Bar ---
-    # 16. Apollo alpha thesis (levers: 5, 6, 7, 8, 9, 12)
-    edge_passed = sum([pass_5, pass_6, pass_7, pass_8, pass_9, pass_12])
-    pass_16 = edge_passed >= 4
+    # 16. Apollo alpha thesis (levers: 5, 6, 7, 8, 9, 12). Proportional gate: when
+    # some levers are N/A (soft signal unavailable), require >= ceil(4/6 * applicable).
+    edge_levers = [
+        (pass_5, applic_5),    # chaos (soft)
+        (pass_6, True),        # fulcrum (hybrid — always applicable)
+        (pass_7, applic_7),    # ABF (soft)
+        (pass_8, True),        # complexity moat (hybrid — always applicable)
+        (pass_9, True),        # domain knowledge (quant)
+        (pass_12, applic_12),  # hold optionality (soft)
+    ]
+    edge_passed, edge_n, edge_threshold, pass_16 = _scoring.proportional_gate(edge_levers)
     checks["16_alpha_thesis"] = {
         "part": "E",
         "name": "Above-Average Alpha",
         "metric_name": "Edge Levers Passed",
         "value": edge_passed,
-        "threshold_str": ">= 4",
+        "threshold_str": f">= {edge_threshold} of {edge_n} applicable",
         "passed": pass_16,
-        "detail": f"{edge_passed} of 6 levers passed."
+        "detail": (f"{edge_passed} of {edge_n} applicable levers passed (need {edge_threshold}; "
+                   f"{6 - edge_n} N/A excluded)." if edge_n < 6
+                   else f"{edge_passed} of 6 levers passed (need {edge_threshold}).")
     }
     
     # --- SCORING ---
@@ -356,36 +406,42 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
             )
         check_dict["framework_reasoning"] = reasoning
 
-    score = sum(1 for c in checks.values() if c["passed"])
-    
+    # Exclude-from-denominator: soft checks with unavailable/unclear signals drop
+    # out of both score and max_score. Verdict thresholds are ratio-based against
+    # ORIG_MAX=16 (original 12/10 cutoffs). precond_2 uses the lever booleans, which
+    # are False when N/A — and pass_6 (fulcrum) is always applicable, so missing soft
+    # signals never auto-SKIP on their own.
+    ORIG_MAX = 16
+    score, max_score = _scoring.tally(checks)
+
     precond_1 = pass_16
     precond_2 = pass_5 or pass_6 or pass_7
-    
+
     if not precond_1 or not precond_2:
         verdict = "SKIP"
         if not precond_1:
             reason = "Failed Part E pre-condition: lacks above-average alpha thesis (Phalippou bar)."
         else:
             reason = "Failed Part B pre-condition: no chaos, fulcrum, or ABF structural entry angle."
-    elif score >= 12:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 12):
         verdict = "BUY"
         reason = "High-conviction Apollo deployment with structural edge and entry discount."
-    elif score >= 10 and not pass_5:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 10) and not pass_5:
         verdict = "WAIT"
         reason = "WAIT (no chaos catalyst yet). Good structure, wait for dislocation."
-    elif score >= 10 and not pass_10 and not pass_11:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 10) and not pass_10 and not pass_11:
         verdict = "WAIT"
         reason = "WAIT (sub-Athene quality). Equity/opportunistic fit only."
-    elif score >= 10:
+    elif _scoring.meets(score, max_score, ORIG_MAX, 10):
         verdict = "WATCH"
         reason = "Mixed signals across edge checks; monitor."
     else:
         verdict = "SKIP"
         reason = "Too many failed checks. Generic credit/equity thesis."
-        
+
     return {
         "score": score,
-        "max_score": 16,
+        "max_score": max_score,
         "verdict": verdict,
         "reason": reason,
         "checks": checks

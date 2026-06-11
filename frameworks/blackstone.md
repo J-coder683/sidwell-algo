@@ -103,13 +103,13 @@ BLACKSTONE_AVOIDED_THEMES = {
 **Test (soft, LLM-based):** Reuses qualitative-layer `cycle_position.sector_cycle` field. Returns `trough | early_recovery | mid_cycle | late_cycle | peak`. PASS if `trough | early_recovery | mid_cycle`; FAIL if `late_cycle | peak`.
 **Logic:** Same logic as Marks #5 and KKR #14. Blackstone is willing to enter mid-cycle for thematic plays (they bought data centers in 2021 when many called late-cycle; thesis was correct because secular demand outpaced cycle). But entering at clear peak (2007 housing, 2021 SaaS) is forbidden. *"You should be thinking about what could go right…the most powerful investment moments come at moments of greatest dislocation."* (Gray, Columbia 2025).
 **Source:** Gray Columbia 2025 on Hilton 2007 lessons; Master Compendium Part 7.6.
-**Determinism note:** LLM-dependent. Defaults to PASS when qualitative unavailable.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine `late_cycle`/`peak` read counts as a failure.
 
 #### 7. Structural long-term tailwind (soft, LLM-based)
 **Test (soft):** Gemini judges whether the company is benefitting from a structural multi-decade tailwind (AI compute demand, India consumption growth, healthcare aging, energy transition, urbanization) vs facing a structural headwind (commodity disruption, technology obsolescence, regulatory tightening). Returns `tailwind | neutral | headwind`. PASS if `tailwind | neutral`; FAIL if `headwind`.
 **Logic:** Gray's "good neighborhood" framing is fundamentally about structural growth, not cyclical recovery. A company in a 20-year tailwind (data centers as AI compute scales, India middle-class formation, electricity demand from electrification) compounds for Blackstone's Core vehicle holding period. A company in a structural headwind (oil refining as EV transition, traditional cable as streaming wins, declining birth-rate education in some markets) is uninvestable for a long-hold thesis even if currently profitable. The check distinguishes secular (this check) from cyclical (Check 6) — both matter, separately.
 **Source:** Gray Columbia 2025 on AI/data-center thesis; Gray Norges Bank on Hilton's underlying global travel growth.
-**Determinism note:** LLM-dependent. Defaults to `neutral` (PASS) when qualitative unavailable.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine `headwind` read counts as a failure. This check is one of the proportional Phalippou edge levers (#14).
 
 ---
 
@@ -146,16 +146,16 @@ These checks answer: *is this a Blackstone-scale opportunity, and can we hold it
 **Source:** Gray Columbia 2025 on Airtrunk ($16B) deal; Gray Norges Bank on $3B-loan-alone capability; Blackstone fund sizes (Flagship Capital Partners VIII, BREIT, BCRED).
 
 #### 12. 20-year Core-vehicle viability (soft, LLM-based)
-**Test (soft):** Gemini judges whether the business model is viable for a 20-year hold. Returns `core_viable | mixed | not_core_viable`. PASS if `core_viable`.
+**Test (soft):** Reuses the shared `holdability_assessment` signal (the same one scored by Buffett #14). The LLM judges whether the business model is viable for a 20-year hold and returns `holdable_20y | uncertain | not_holdable_20y`. PASS if `holdable_20y`.
 **Logic:** Blackstone's Core vehicle ("tens of billions of dollars," per Stavros transcript) holds positions for 20+ years. The Core question is fundamentally different from a 7-year buyout: it requires durable customer need, no technology-obsolescence risk over the holding period, regulatory stability, and structural growth runway. Hilton qualifies (global travel demand for 20+ more years, capital-light franchise model, brand network effect). A specific drug compound near patent expiry doesn't (will be commoditized within the hold). Reuses the Buffett #14 (holdability) logic with similar semantics.
 **Source:** Stavros Dec 2025 on KKR Core vehicle (analog framework); Gray Columbia 2025 on long-hold thesis.
-**Determinism note:** LLM-dependent. Defaults to PASS when qualitative unavailable.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine non-holdable read counts as a failure. This check is one of the proportional Phalippou edge levers (#14).
 
 #### 13. Multi-product / multi-strategy engagement potential (soft, LLM-based)
 **Test (soft):** Gemini judges whether the company has complex enough capital structure or growth profile that Blackstone can engage across multiple products (senior debt, mezzanine, preferred, control equity, real estate, structured). Returns `multi_product_potential | single_product_only | unclear`. PASS if `multi_product_potential`.
 **Logic:** *"We've become increasingly a full-service capital solutions provider."* (Gray, Norges Bank 2024). Blackstone's competitive advantage isn't just deal selection — it's the ability to engage with corporates across products. Companies that naturally invite multi-product engagement: real estate-heavy businesses (RE financing + equity), capital-intensive growth companies (senior debt + minority equity), structured-deal opportunities (mezz + control later). A pure plain-vanilla equity-only investment is fine but doesn't leverage Blackstone's distinctive scale advantage. This check rewards complexity.
 **Source:** Gray Norges Bank on full-service capital solutions; Blackstone India portfolio (mix of RE, growth equity, structured deals, PIPE-style stakes).
-**Determinism note:** LLM-dependent. Defaults to `unclear` (neutral — neither PASS nor FAIL) when qualitative unavailable — Blackstone evaluates this on every deal but it's hard to assess from public data.
+**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear — Blackstone evaluates this on every deal but it's hard to assess from public data. A genuine `single_product_only` read counts as a failure. This check is one of the proportional Phalippou edge levers (#14).
 
 ---
 
