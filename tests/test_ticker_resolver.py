@@ -141,9 +141,12 @@ def test_resolve_ticker_offline(mock_set_json, mock_get_json, mock_stockanalysis
     assert source == "indian_name"
 
 
+@patch("data.ticker_resolver.requests.get", side_effect=ConnectionError("offline test"))
 @patch("data.ticker_resolver.get_local_index")
 @patch("data.ticker_resolver._resolve_via_screener_search", return_value=None)
-def test_search_companies_offline(mock_screener, mock_get_index, mock_index):
+def test_search_companies_offline(mock_screener, mock_get_index, mock_requests, mock_index):
+    # requests.get mocked to fail: the <5-results screener-live fallback must not
+    # make a real network call (was a real 5s timeout hit).
     mock_get_index.return_value = mock_index
     
     # Search dual

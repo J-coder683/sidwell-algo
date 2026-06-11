@@ -139,12 +139,13 @@ def test_qualitative_url_hash_cache_key_stable_under_url_reorder(
     assert mock_call.call_count == 1
 
 
-def test_missing_deepseek_key_returns_unavailable(monkeypatch):
+@patch("analysis.qualitative.requests.get", side_effect=ConnectionError("offline test"))
+def test_missing_deepseek_key_returns_unavailable(mock_get, monkeypatch):
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
 
     result = extract_qualitative("MOCK", MOCK_DOCUMENTS[:1])
-    # requests.get isn't mocked, so PDF fetch fails first → unavailable regardless;
-    # the explicit no-key path is covered hermetically in test_qualitative.py.
+    # PDF fetch is mocked to fail immediately → unavailable, with zero live network
+    # (was a real ~7s network failure). The no-key path is covered in test_qualitative.py.
     assert result["status"] == "unavailable"
 
 
