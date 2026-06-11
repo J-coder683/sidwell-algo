@@ -25,6 +25,21 @@ logging.basicConfig(
 logger = logging.getLogger("sidwell.cli")
 
 
+_PROGRESS_CALLBACK = None
+
+def set_progress_callback(cb):
+    """Register a UI progress callback: cb(step:int, total:int, label:str). Pass None to clear."""
+    global _PROGRESS_CALLBACK
+    _PROGRESS_CALLBACK = cb
+
+def _emit_progress(step, total, label):
+    if _PROGRESS_CALLBACK is not None:
+        try:
+            _PROGRESS_CALLBACK(step, total, label)
+        except Exception:
+            pass  # progress reporting must never break the pipeline
+
+
 def load_dotenv():
     """
     Manually load .env file if it exists to avoid external library dependencies.
@@ -82,6 +97,7 @@ def analyze(
 
     logger.info(f"Starting Sidwell analysis pipeline for {ticker} (lenses: {lenses_to_run})")
 
+    _emit_progress(1, 5, "Fetching financial data")
     # Step 1: Fetch Financials and Market Pricing
     financials = public.fetch_financials(ticker)
 
@@ -95,6 +111,7 @@ def analyze(
     if not financials.get("statements", {}).get("years_annual"):
         raise ValueError(f"Insufficient historical data to run projections for {ticker}. The company may have no usable statements on screener.")
 
+    _emit_progress(2, 5, "Reading filings & qualitative signals")
     # Step 4: Discover documents and run qualitative analysis (graceful degrade)
     # DCF Engine now requires the Assumption Justification Pack (AJP) built from docs
     docs = doc_module.discover_documents(ticker)
@@ -145,9 +162,11 @@ def analyze(
         ticker, docs, historical_context=hist_ctx, research_docs=(research_docs or None)
     )
 
+    _emit_progress(3, 5, "Running DCF valuation")
     # Step 5: Run DCF Valuation Engine
     dcf_results = dcf.run_dcf_valuation(financials, damodaran_data, rf_rate, qualitative_results)
 
+    _emit_progress(4, 5, "Scoring investor lenses")
     # Step 6-10: Evaluate requested lenses
     buffett_results = None
     marks_results = None
@@ -180,6 +199,7 @@ def analyze(
             financials, dcf_results, qualitative_results=qualitative_results
         )
 
+    _emit_progress(5, 5, "Finalizing")
     # Step 11: Render Markdown Report and Save
     report_path = render.render_markdown_report(
         dcf_results, buffett_results if buffett_results else {},

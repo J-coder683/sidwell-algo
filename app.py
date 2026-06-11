@@ -277,9 +277,10 @@ section[data-testid="stSidebar"] {
 .stApp [data-testid="stMarkdownContainer"] h2,
 .stApp [data-testid="stMarkdownContainer"] h3 {
     font-family: var(--font-display) !important;
-    font-weight: 500 !important;
-    letter-spacing: -0.01em;
+    font-weight: 600 !important;
+    letter-spacing: -0.02em;
 }
+.stApp [data-testid="stMarkdownContainer"] h3 { font-size: 1.6rem !important; }
 [role="radiogroup"] label, [role="radiogroup"] label *,
 [data-testid="stWidgetLabel"], [data-testid="stWidgetLabel"] *,
 .stSlider label,
@@ -483,11 +484,11 @@ section[data-testid="stSidebar"] {
 }
 .hero-title {
     font-family: var(--font-display) !important;
-    font-size: 3.4rem;
-    font-weight: 500;
+    font-size: 4.2rem;
+    font-weight: 600;
     margin: 0;
-    line-height: 1.04;
-    letter-spacing: -0.02em;
+    line-height: 1.0;
+    letter-spacing: -0.028em;
     color: var(--ink) !important;
 }
 .hero-metrics {
@@ -587,6 +588,16 @@ section[data-testid="stSidebar"] {
     color: var(--ink) !important;
     letter-spacing: -0.01em;
 }
+/* Hero moment: intrinsic value is the one number that drives the call */
+.dcf-card-hero {
+    border-top: 2px solid var(--accent);
+}
+.dcf-card-hero .dcf-label { color: var(--muted) !important; }
+.dcf-card-hero .dcf-val {
+    font-size: 2.7rem;
+    font-weight: 600;
+    color: var(--accent) !important;
+}
 .dcf-sub {
     font-size: 0.9rem;
     margin-top: 4px;
@@ -625,7 +636,7 @@ section[data-testid="stSidebar"] {
 }
 .check-dot-pass { background-color: var(--pos); }
 .check-dot-fail { background-color: var(--neg); }
-.check-dot-na { background-color: transparent; border: 1.5px solid var(--text-muted, #888); opacity: 0.5; }
+.check-dot-na { background-color: transparent; border: 1.5px solid var(--faint); opacity: 0.5; }
 
 .framework-note {
     font-size: 0.85rem;
@@ -641,6 +652,18 @@ section[data-testid="stSidebar"] {
 hr {
     border-bottom-color: var(--border) !important;
 }
+
+/* Running spinners (st.status + st.spinner) — default icon is invisible on the
+   dark background; brass reads in both themes. */
+[data-testid="stExpanderIconSpinner"],
+[data-testid="stExpanderIconSpinner"] svg,
+[data-testid="stSpinnerIcon"],
+[data-testid="stSpinner"] svg,
+[data-testid="stSpinner"] i {
+    color: var(--accent) !important;
+    fill: var(--accent) !important;
+    border-top-color: var(--accent) !important;
+}
 /* Streamlit Spinner Visibility Fix */
 .stSpinner > div > div {
     border-top-color: var(--accent) !important;
@@ -653,6 +676,19 @@ hr {
     border-right-color: var(--surface-2) !important;
     border-bottom-color: var(--surface-2) !important;
     border-left-color: var(--surface-2) !important;
+}
+
+/* Custom Alert Theme (Calm & Semantic) */
+/* Approach: Single uniform calm style targeting standard attributes */
+/* Leaves the existing SVG icon to carry the semantic meaning (info/warn/error) */
+[data-testid="stAlert"], [data-testid="stAlertContainer"] {
+    background-color: var(--surface-2) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 6px !important;
+    color: var(--ink) !important;
+}
+[data-testid="stAlert"] p, [data-testid="stAlert"] span, [data-testid="stAlert"] div {
+    color: var(--ink) !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -705,7 +741,7 @@ def _render_check(check_id: str, check_dict: dict):
     st.markdown(
         f'<div class="check-row-container">'
         f'<div class="check-dot {dot_class}"></div>'
-        f'<div style="font-weight: 500; font-family: var(--font-ui); opacity: {title_opacity};">'
+        f'<div style="font-weight: 500; font-family: var(--font-ui); color: var(--ink); opacity: {title_opacity};">'
         f'{expl["title"]} <span style="opacity:0.6; font-style:italic; font-weight:400; margin-left:6px;">— {tag_pts}</span></div>'
         f'</div>',
         unsafe_allow_html=True
@@ -717,9 +753,9 @@ def _render_check(check_id: str, check_dict: dict):
             st.markdown(f'<div class="framework-note">{expl["what_why"]}</div>', unsafe_allow_html=True)
             
     if expl["finding"]:
-        st.markdown(f"<div style='font-size:0.9rem; margin-bottom:4px;'><strong>This company:</strong> {expl['finding']}</div>", unsafe_allow_html=True)
-        
-    st.markdown(f"<div style='font-size:0.9rem;'><strong>Verdict:</strong> {expl['judgment']}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div style='font-size:0.9rem; color:var(--ink); margin-bottom:4px;'><strong>This company:</strong> {expl['finding']}</div>", unsafe_allow_html=True)
+
+    st.markdown(f"<div style='font-size:0.9rem; color:var(--ink);'><strong>Verdict:</strong> {expl['judgment']}</div>", unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -761,19 +797,27 @@ def _render_lens_tab(lens_results: dict, lens_key: str, financials: dict,
     checks = lens_results.get("checks", {})
     ticker = financials["ticker"]
 
-    # ---- Score header ----
-    col_score, col_verdict, col_reason = st.columns([1, 1, 3])
-    with col_score:
-        st.metric(label="Score", value=f"{score} / {max_score}")
-        st.markdown(f"<div style='font-size:0.9rem; margin-top:4px;'>Passed {score} of {max_score} applicable checks &mdash; verdict: {verdict}.</div>", unsafe_allow_html=True)
-        if excluded > 0:
-            st.caption(f"{excluded} check{'s' if excluded != 1 else ''} N/A (excluded from {full_max})")
-    with col_verdict:
-        st.markdown("**Verdict**")
-        st.markdown(_verdict_pill_html(verdict), unsafe_allow_html=True)
-    with col_reason:
-        st.markdown("**Reason**")
-        st.write(reason)
+    # ---- Score header (custom brand card) ----
+    _excl_note = (
+        f"<div style='font-size:0.8rem; color:var(--faint); margin-top:6px;'>"
+        f"{excluded} check{'s' if excluded != 1 else ''} N/A (excluded from {full_max})"
+        f"</div>"
+        if excluded > 0 else ""
+    )
+    st.markdown(
+        f"<div style='"
+        f"background:var(--surface); border:1px solid var(--border); border-radius:4px;"
+        f"padding:18px 20px; margin-bottom:12px;'>"
+        f"<div style='display:flex; align-items:center; gap:16px; flex-wrap:wrap;'>"
+        f"<span style='font-family:var(--font-mono); font-size:1.6rem; color:var(--ink);'>{score}&thinsp;/&thinsp;{max_score}</span>"
+        f"{_verdict_pill_html(verdict)}"
+        f"</div>"
+        f"<div style='font-size:0.9rem; color:var(--muted); margin-top:8px;'>{reason}</div>"
+        f"<div style='font-size:0.82rem; color:var(--faint); margin-top:4px;'>Passed {score} of {max_score} applicable checks</div>"
+        f"{_excl_note}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
     # ---- Layer-C narrative (plain-English summary) ----
     from reports.explain import build_lens_narrative
@@ -782,17 +826,17 @@ def _render_lens_tab(lens_results: dict, lens_key: str, financials: dict,
     )
     st.markdown(
         f"<div style='"
-        f"background: rgba(255,255,255,0.04); "
-        f"border-left: 3px solid rgba(120,180,255,0.5); "
-        f"border-radius: 6px; "
-        f"padding: 12px 16px; "
-        f"margin-top: 12px; "
-        f"font-size: 0.92rem; "
-        f"line-height: 1.6; "
-        f"color: rgba(220,220,220,0.9);"
+        f"background:var(--surface-2); "
+        f"border:1px solid var(--border); "
+        f"border-radius:8px; "
+        f"padding:14px 18px; "
+        f"margin-top:4px; "
+        f"font-size:0.92rem; "
+        f"line-height:1.6; "
+        f"color:var(--ink);"
         f"'>"
-        f"<strong style='font-size:0.78rem; letter-spacing:0.05em; "
-        f"opacity:0.7; text-transform:uppercase;'>In plain English</strong>"
+        f"<strong style='font-size:0.76rem; letter-spacing:0.08em; "
+        f"color:var(--faint); text-transform:uppercase;'>In plain English</strong>"
         f"<br><br>{narrative}"
         f"</div>",
         unsafe_allow_html=True,
@@ -893,7 +937,7 @@ def _render_dcf_tab(results: dict):
     up_sgn = "+" if upside > 0 else ""
     st.markdown(
         f'<div class="dcf-grid">'
-        f'<div class="dcf-card"><div class="dcf-label">Intrinsic Value</div><div class="dcf-val">{currency}{intrinsic:,.2f}</div></div>'
+        f'<div class="dcf-card dcf-card-hero"><div class="dcf-label">Intrinsic Value</div><div class="dcf-val">{currency}{intrinsic:,.2f}</div></div>'
         f'<div class="dcf-card"><div class="dcf-label">Current Price</div><div class="dcf-val">{currency}{price:,.2f}</div></div>'
         f'<div class="dcf-card"><div class="dcf-label">Implied Upside</div><div class="dcf-val" style="color: {up_col};">{up_sgn}{upside:.1%}</div></div>'
         f'<div class="dcf-card"><div class="dcf-label">WACC</div><div class="dcf-val">{wacc:.2%}</div></div>'
@@ -986,6 +1030,7 @@ def _render_dcf_tab(results: dict):
             st.session_state[sk[name]] = val
 
     st.divider()
+    st.markdown("### Sensitivity")
     with st.expander(
         "Live Sensitivity (what-if) \u2014 adjust assumptions, value updates live",
         expanded=False,
@@ -1063,11 +1108,12 @@ def _render_dcf_tab(results: dict):
         st.markdown("### Charts")
 
         # Theme-aware colors for Altair
-        c_bg = "#0d1117" if theme == "dark" else "transparent"
-        c_text = "#adbac7" if theme == "dark" else "#4b5563"
-        c_grid = "#30363d" if theme == "dark" else "#e5e7eb"
-        c_act = "#58a6ff" if theme == "dark" else "#3b6ca8"
-        c_fcst = "#d29922" if theme == "dark" else "#c08a1c"
+        c_bg   = "#161513" if theme == "dark" else "transparent"
+        c_text = "#b3ac9e" if theme == "dark" else "#6b665b"
+        c_grid = "#38342e" if theme == "dark" else "#ddd8cd"
+        c_act  = "#b3ac9e" if theme == "dark" else "#6b665b"
+        c_fcst = "#c2a063" if theme == "dark" else "#9c7c43"
+        c_neg  = "#c47a72" if theme == "dark" else "#9a4a44"
 
         h   = _eng.get("hist", {})
         pj  = _eng.get("proj", {})
@@ -1114,7 +1160,7 @@ def _render_dcf_tab(results: dict):
                 ch = _mk_chart(ttl, hy, hv, py, pvv)
                 if ch is not None:
                     st.altair_chart(ch, width="stretch")
-            st.caption(f"Blue = actuals, gold = Sidwell\u2019s forecast. {currency} mm.")
+            st.caption(f"History vs Sidwell\u2019s forecast (highlighted). {currency} mm.")
 
         with st.expander("Valuation vs a single driver", expanded=False):
             sweep_opts = {
@@ -1168,13 +1214,13 @@ def _render_dcf_tab(results: dict):
                     if data.get("errs"):
                         st.caption(f"{len(data['errs'])} of {len(data['xs'])} points failed and were dropped.")
                     ax_spec = alt.Axis(labelColor=c_text, titleColor=c_text, gridColor=c_grid, domainColor=c_grid, tickColor=c_grid)
-                    line = (alt.Chart(dfc).mark_line(point=True).encode(
+                    line = (alt.Chart(dfc).mark_line(color=c_fcst, point=True).encode(
                                 x=alt.X("Driver:Q", title=data["label"], scale=alt.Scale(zero=False), axis=ax_spec),
                                 y=alt.Y("Intrinsic:Q", title=f"Intrinsic ({currency})", axis=ax_spec),
                                 tooltip=[alt.Tooltip("Driver:Q", format=".4f"),
                                          alt.Tooltip("Intrinsic:Q", format=",.2f")]))
                     rule = (alt.Chart(pd.DataFrame({"price": [price]}))
-                            .mark_rule(color="red", strokeDash=[4, 4]).encode(y="price:Q"))
+                            .mark_rule(color=c_neg, strokeDash=[4, 4]).encode(y="price:Q"))
                     st.altair_chart((line + rule).properties(background=c_bg), width="stretch")
                     st.caption("Red dashed line = current price. Each point re-runs the engine (offline).")
 
@@ -1280,7 +1326,7 @@ def _render_dcf_tab(results: dict):
                     x="mid:Q", y=alt.Y("Method:N", sort=order),
                     tooltip=["Method", alt.Tooltip("mid:Q", format=",.0f")])
                 rule = alt.Chart(pd.DataFrame({"price": [price]})).mark_rule(
-                    color="red", strokeDash=[4, 4]).encode(x="price:Q")
+                    color=c_neg, strokeDash=[4, 4]).encode(x="price:Q")
                 st.altair_chart((bars + pts + rule).properties(height=28 * len(rows) + 40, background=c_bg),
                                 width="stretch")
                 st.caption("Dots = point estimates, bars = ranges, red dashed line = current price.")
@@ -1322,6 +1368,8 @@ with st.sidebar:
     with col_r:
         if st.button("Refresh data", help="Clear cache and re-run pipeline (ignores 24h cache)", use_container_width=True):
             st.cache_data.clear()
+            st.session_state.pop("_pl_key", None)
+            st.session_state.pop("_pl_result", None)
             st.rerun()
             
     st.divider()
@@ -1484,65 +1532,51 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
                        f"for {ticker}.")
 
     # ---- Run pipeline ----
-    import threading
-    import time
-    from streamlit.runtime.scriptrunner import add_script_run_ctx
+    import value
+    from value import analyze
 
     fun_fact = _get_fun_fact(ticker)
 
-    status_ui = st.status(f"Running Sidwell pipeline for **{ticker}**…", expanded=True)
-    with status_ui:
-        st.markdown(f"**Meanwhile, read this:**\n\n{fun_fact}")
-        st.divider()
-        phrase_ui = st.empty()
-    
-    stop_event = threading.Event()
-    
-    def update_status():
-        messages = [
-            f"Getting documents and preparing parts for quality output...",
-            f"DeepSeek v4 Pro is analyzing {ticker}'s history...",
-            f"Our engine is trying to work faster for you...",
-            f"AI is working overtime because you didn't give enough inputs...",
-            f"Almost there, formatting the final verdict..."
-        ]
-        idx = 0
-        while not stop_event.is_set():
-            phrase_ui.caption(f"_{messages[idx % len(messages)]}_")
-            idx += 1
-            for _ in range(25):
-                if stop_event.is_set():
-                    break
-                time.sleep(0.1)
+    status_ui = st.status(f"Step 1/5 — starting analysis for **{ticker}**…", expanded=True)
+    status_ui.markdown(f"**Meanwhile, read this:**\n\n{fun_fact}")
 
-    t = threading.Thread(target=update_status)
-    add_script_run_ctx(t)
-    t.start()
+    def _on_progress(step, total, label):
+        status_ui.update(label=f"Step {step}/{total} — {label}")
 
-    try:
-        results = _run_pipeline(ticker, research_tuple)
-        stop_event.set()
-        t.join()
-        status_ui.empty()
-    except ValueError as e:
-        stop_event.set()
-        t.join()
-        status_ui.update(label="Analysis failed", state="error", expanded=True)
-        err_msg = str(e)
-        if "appears to be cyclical" in err_msg:
-            st.info(f"**Model Limitation:**\n\n{err_msg}")
-        elif "non-positive intrinsic value" in err_msg:
-            st.error(f"DCF model failed for {ticker} — non-positive intrinsic. See logs.")
-        else:
-            st.error(f"**Data error:** {err_msg}")
-        st.stop()
-    except Exception as e:
-        stop_event.set()
-        t.join()
-        status_ui.update(label="Pipeline failed", state="error", expanded=True)
-        st.error(f"**Pipeline failed:** {e}")
-        logger.exception(f"Pipeline error for {ticker}")
-        st.stop()
+    # Run analyze() directly (NOT through the @st.cache_data wrapper) so the stage
+    # callbacks flush to the UI live. The cached wrapper both skipped emits on a
+    # cache hit and buffered UI updates on a miss, so stages never animated. A
+    # session-state cache keeps repeat runs of the same ticker instant; the backend's
+    # own file caches (prices 24h, qualitative 30d) still prevent re-scrape / re-LLM.
+    _pl_key = (ticker, research_tuple)
+    if st.session_state.get("_pl_key") == _pl_key and st.session_state.get("_pl_result") is not None:
+        results = st.session_state["_pl_result"]
+        status_ui.update(label=f"Analysis complete — {ticker}", state="complete", expanded=False)
+    else:
+        value.set_progress_callback(_on_progress)
+        try:
+            research_docs = [{"filename": n, "bytes": b} for n, b in research_tuple] or None
+            results = analyze(ticker, research_docs=research_docs)
+            st.session_state["_pl_key"] = _pl_key
+            st.session_state["_pl_result"] = results
+            status_ui.update(label=f"Analysis complete — {ticker}", state="complete", expanded=False)
+        except ValueError as e:
+            status_ui.update(label="Analysis failed", state="error", expanded=True)
+            err_msg = str(e)
+            if "appears to be cyclical" in err_msg:
+                st.info(f"**Model Limitation:**\n\n{err_msg}")
+            elif "non-positive intrinsic value" in err_msg:
+                st.error(f"DCF model failed for {ticker} — non-positive intrinsic. See logs.")
+            else:
+                st.error(f"**Data error:** {err_msg}")
+            st.stop()
+        except Exception as e:
+            status_ui.update(label="Pipeline failed", state="error", expanded=True)
+            st.error(f"**Pipeline failed:** {e}")
+            logger.exception(f"Pipeline error for {ticker}")
+            st.stop()
+        finally:
+            value.set_progress_callback(None)
 
     financials = results["financials"]
     dcf_results = results["dcf_results"]
