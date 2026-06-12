@@ -43,6 +43,9 @@ def _no_live_calls(monkeypatch):
         "data.scrapers.macrotrends._get_sic_from_sec",
         lambda t: (2911, "Petroleum Refining"),
     )
+    # macrotrends lazily imports fetch_stockanalysis_beta and hits the live stats
+    # page; patch the source symbol so it resolves to a stub at call time.
+    monkeypatch.setattr("data.scrapers.stockanalysis.fetch_stockanalysis_beta", lambda t: 1.2)
     import yfinance
     monkeypatch.setattr(yfinance, "Ticker", lambda *a, **k: MagicMock(info={}))
 
@@ -57,6 +60,7 @@ def mock_requests():
     """
     def _mock_get(url, *args, **kwargs):
         resp = MagicMock()
+        resp.status_code = 200
         resp.raise_for_status = MagicMock()
 
         # MacroTrends pages
@@ -95,13 +99,14 @@ def mock_requests():
 
         return resp
 
-    with patch("data.scrapers.macrotrends.requests.get", side_effect=_mock_get) as mock:
+    with patch("data.scrapers.macrotrends.requests.Session", return_value=type("MockSession", (), {"headers": {}, "get": lambda self, url, **kwargs: _mock_get(url, **kwargs)})()) as mock:
         yield mock
 
 
 def test_macrotrends_parser(mock_requests):
     """Core parser: shape, scale, and key values from XOM fixtures."""
-    fin = fetch_macrotrends_financials("XOM")
+    with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials", return_value=None):
+        fin = fetch_macrotrends_financials("XOM")
 
     assert fin is not None, "fetch_macrotrends_financials returned None"
     assert fin["source"] == "macrotrends"
@@ -174,25 +179,25 @@ def test_fetch_financials_uses_macrotrends_primary(mock_requests):
     assert fin["source"] == "macrotrends"
 
 
-def test_fetch_financials_falls_back_to_stockanalysis():
-    """If macrotrends returns None, fetch_financials falls back to stockanalysis."""
-    with patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None):
-        with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials",
-                   return_value={"source": "stockanalysis", "statements": {"years_annual": ["2024"]}}) as mock_sa:
-            fin = fetch_financials("XOM")
-            assert fin["source"] == "stockanalysis"
-            mock_sa.assert_called_once_with("XOM")
-
-
 def test_fetch_financials_falls_back_to_edgar():
-    """If both macrotrends and stockanalysis return None, fetch_financials falls back to EDGAR."""
+    """If macrotrends returns None, fetch_financials falls back to EDGAR."""
     with patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None):
-        with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials", return_value=None):
-            with patch("data.scrapers.edgar.fetch_edgar_financials",
-                       return_value={"source": "sec_edgar"}) as mock_edgar:
+        with patch("data.scrapers.edgar.fetch_edgar_financials",
+                   return_value={"source": "sec_edgar", "statements": {"years_annual": ["2024"]}}) as mock_edgar:
+            fin = fetch_financials("XOM")
+            assert fin["source"] == "sec_edgar"
+            mock_edgar.assert_called_once_with("XOM")
+
+
+def test_fetch_financials_falls_back_to_stockanalysis():
+    """If both macrotrends and EDGAR return None, fetch_financials falls back to stockanalysis."""
+    with patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None):
+        with patch("data.scrapers.edgar.fetch_edgar_financials", return_value=None):
+            with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials",
+                       return_value={"source": "stockanalysis"}) as mock_sa:
                 fin = fetch_financials("XOM")
-                assert fin["source"] == "sec_edgar"
-                mock_edgar.assert_called_once_with("XOM")
+                assert fin["source"] == "stockanalysis"
+                mock_sa.assert_called_once_with("XOM")
 
 
 def test_engine_smoke(mock_requests):

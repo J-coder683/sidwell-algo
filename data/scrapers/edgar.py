@@ -19,9 +19,31 @@ import logging
 import requests
 from typing import Optional
 
+def _edgar_data_quality_warnings(fin: dict) -> list[str]:
+    """Return human-readable warnings about implausible extracted financials."""
+    warnings = []
+    bs = fin.get("statements", {}).get("annual", {}).get("balance_sheet", {})
+    bor = bs.get("borrowings", []) or []
+    # (a) INTERIOR ZEROS in a stock series: debt doesn't vanish then reappear.
+    nz = [i for i, v in enumerate(bor) if isinstance(v, (int, float)) and v not in (0, 0.0)]
+    if nz:
+        gaps = [i for i in range(nz[0], nz[-1] + 1)
+                if not (isinstance(bor[i], (int, float)) and bor[i] not in (0, 0.0))]
+        if gaps:
+            warnings.append(
+                f"borrowings has interior zero/missing years (indices {gaps}) -- debt "
+                f"extraction likely incomplete; leverage metrics unreliable for this ticker.")
+    # (b) MAGNITUDE: debt implausibly small vs total liabilities.
+    tl = bs.get("total liabilities", []) or []
+    tl_max = max([abs(v) for v in tl if isinstance(v, (int, float))] or [0])
+    bor_max = max([abs(v) for v in bor if isinstance(v, (int, float))] or [0])
+    if tl_max > 0 and bor_max < 0.01 * tl_max:
+        warnings.append("borrowings implausibly small vs total liabilities -- leverage data unreliable.")
+    return warnings
+
 # Module-level imports so they can be patched in tests
 try:
-    from edgar import Company, set_identity
+    from edgar import Company, set_identity, MultiFinancials
 except ImportError:  # pragma: no cover
     Company = None  # type: ignore
     set_identity = None  # type: ignore
@@ -396,17 +418,18 @@ def fetch_edgar_financials(ticker: str) -> dict:
     cached_fin = cache.get_json(cache_key_fin, TTL_FINANCIALS)
     cached_price = cache.get_json(cache_key_price, TTL_PRICES)
 
+    _HIST_NUMERIC_KEYS = (
+        "revenue", "gross_profit", "ebit", "interest_expense",
+        "tax_provision", "pretax_income", "net_income",
+        "total_assets", "total_equity", "cash", "debt",
+        "capex", "depreciation", "working_capital_change", "fcf",
+        "historical_shares",
+    )
+
     if cached_fin and cached_price:
         logger.info(f"Loaded EDGAR financials for {ticker_upper} from cache.")
         cached_fin["current_price"] = cached_price.get("current_price")
         # Normalize None → 0.0 for legacy numeric arrays (same as screener.py)
-        _HIST_NUMERIC_KEYS = (
-            "revenue", "gross_profit", "ebit", "interest_expense",
-            "tax_provision", "pretax_income", "net_income",
-            "total_assets", "total_equity", "cash", "debt",
-            "capex", "depreciation", "working_capital_change", "fcf",
-            "historical_shares",
-        )
         for k in _HIST_NUMERIC_KEYS:
             if k in cached_fin and isinstance(cached_fin[k], list):
                 cached_fin[k] = [(v if v is not None else 0.0) for v in cached_fin[k]]
@@ -445,6 +468,48 @@ def fetch_edgar_financials(ticker: str) -> dict:
         or _is_financial_sector(scraped_sector, scraped_industry)
     )
 
+    try:
+        fin = _fetch_edgar_multifinals(c, ticker_upper, scraped_sector, scraped_industry, is_bank, is_financial)
+        warnings = _edgar_data_quality_warnings(fin)
+        if warnings:
+            logger.warning(f"MultiFinancials yielded implausible data for {ticker_upper}: {warnings}. Falling back to companyfacts.")
+            try:
+                fin_cf = _fetch_edgar_companyfacts(c, ticker_upper, scraped_sector, scraped_industry, is_bank, is_financial)
+                cf_warnings = _edgar_data_quality_warnings(fin_cf)
+                if not cf_warnings:
+                    fin = fin_cf
+                else:
+                    fin["data_quality_warnings"] = warnings
+                    for w in warnings:
+                        logger.warning(f"{ticker_upper}: {w}")
+            except Exception as e_cf:
+                logger.warning(f"companyfacts fallback also failed for {ticker_upper} ({e_cf}). Keeping MultiFinancials.")
+                fin["data_quality_warnings"] = warnings
+                for w in warnings:
+                    logger.warning(f"{ticker_upper}: {w}")
+    except Exception as e:
+        logger.warning(f"MultiFinancials failed for {ticker_upper} ({e}), falling back to companyfacts")
+        fin = _fetch_edgar_companyfacts(c, ticker_upper, scraped_sector, scraped_industry, is_bank, is_financial)
+        warnings = _edgar_data_quality_warnings(fin)
+        if warnings:
+            fin["data_quality_warnings"] = warnings
+            for w in warnings:
+                logger.warning(f"{ticker_upper}: {w}")
+
+    # Normalize None → 0.0 in legacy numeric arrays
+    for k in _HIST_NUMERIC_KEYS:
+        if k in fin and isinstance(fin[k], list):
+            fin[k] = [(v if v is not None else 0.0) for v in fin[k]]
+
+    # Cache separately (price has shorter TTL)
+    price_dict = {"current_price": fin["current_price"]}
+    cache.set_json(cache_key_fin, fin)
+    cache.set_json(cache_key_price, price_dict)
+
+    return fin
+
+
+def _fetch_edgar_companyfacts(c, ticker_upper: str, scraped_sector: str, scraped_industry: str, is_bank: bool, is_financial: bool) -> dict:
     # ------------------------------------------------------------------
     # 2. Load company facts (XBRL us-gaap)
     # ------------------------------------------------------------------
@@ -467,12 +532,12 @@ def fetch_edgar_financials(ticker: str) -> dict:
     pl_maps = {label: _concept_annual_map(usgaap, concepts) for label, concepts in _PL_CONCEPTS}
     bs_maps = {label: _concept_annual_map(usgaap, concepts) for label, concepts in _BS_CONCEPTS if concepts}
     cf_maps = {label: _concept_annual_map(usgaap, concepts) for label, concepts in _CF_CONCEPTS}
-    
+
     debt_lt = _concept_annual_map(usgaap, _DEBT_LT_CONCEPTS)
     debt_cur= _concept_annual_map(usgaap, _DEBT_CURRENT_CONCEPTS)
     lease_nc= _concept_annual_map(usgaap, ["OperatingLeaseLiabilityNoncurrent", "FinanceLeaseLiabilityNoncurrent"])
     lease_c = _concept_annual_map(usgaap, _LEASE_CURRENT_CONCEPTS)
-    
+
     shares_map = _concept_annual_map(dei, ["EntityCommonStockSharesOutstanding"])
     if not shares_map:
         shares_map = _concept_annual_map(usgaap, _SHARES_CONCEPTS)
@@ -500,14 +565,14 @@ def fetch_edgar_financials(ticker: str) -> dict:
 
     # Build statements dict (screener shape)
     pl_stmt = {label: _scale(_row(pl_maps.get(label, {}))) for label, _ in _PL_CONCEPTS}
-    
+
     bs_stmt = {}
     for label, _ in _BS_CONCEPTS:
         if label == "equity capital":
             bs_stmt[label] = [None] * len(fys)
         else:
             bs_stmt[label] = _scale(_row(bs_maps.get(label, {})))
-            
+        
     bs_stmt["borrowings"] = _scale(_row(total_debt))
     bs_stmt["lease liabilities"] = _scale(_row(lease_total))
 
@@ -555,7 +620,7 @@ def fetch_edgar_financials(ticker: str) -> dict:
     debt_abs_series = _abs_series(total_debt)
     depreciation_abs = _abs_series(pl_maps.get("depreciation", {}))
     cfo_abs = _abs_series(cf_maps.get("cash from operating activity", {}))
-    
+
     capex_raw_abs = _abs_series(cf_maps.get("fixed assets purchased", {}))
     capex_abs = [abs(v) if v is not None else None for v in capex_raw_abs]
 
@@ -699,10 +764,340 @@ def fetch_edgar_financials(ticker: str) -> dict:
         if k in fin and isinstance(fin[k], list):
             fin[k] = [(v if v is not None else 0.0) for v in fin[k]]
 
-    # Cache separately (price has shorter TTL)
-    price_dict = {"current_price": current_price}
-    cache.set_json(cache_key_fin, fin)
-    cache.set_json(cache_key_price, price_dict)
+    return fin
+
+
+def _fetch_edgar_multifinals(c, ticker_upper: str, scraped_sector: str, scraped_industry: str, is_bank: bool, is_financial: bool) -> dict:
+    from edgar import MultiFinancials
+    import pandas as pd
+    
+    filings = c.get_filings(form='10-K').head(12)
+    mf = MultiFinancials.extract(filings)
+    
+    inc = mf.income_statement().to_dataframe()
+    bal = mf.balance_sheet().to_dataframe()
+    cf = mf.cash_flow_statement().to_dataframe()
+    
+    date_cols = set()
+    for df in (inc, bal, cf):
+        if df is not None and not df.empty:
+            date_cols.update([col for col in df.columns if '-' in str(col) and str(col)[:4].isdigit()])
+            
+    if not date_cols:
+        raise ValueError('No date columns found in MultiFinancials dataframes')
+        
+    date_cols = sorted(list(date_cols))
+    year_to_col = {}
+    for col in date_cols:
+        year = str(col)[:4]
+        year_to_col[year] = col  # keeps the latest date col for each year
+        
+    years_annual = sorted(list(year_to_col.keys()))[-12:]
+    
+    def _normalize_concept(concept_series):
+        return concept_series.astype(str).apply(lambda x: x.split('_')[-1] if '_' in x else x)
+        
+    _STD_CONCEPT_MAP = {
+        "sales": ["Revenue"],
+        "cogs": ["CostOfGoodsAndServicesSold", "CostOfRevenue"],
+        "operating profit": ["OperatingIncomeLoss"],
+        "interest": ["InterestExpense"],
+        "profit before tax": ["PretaxIncomeLoss"],
+        "tax": ["IncomeTaxes"],
+        "net profit": ["ProfitLoss", "NetIncome"],
+        "cash equivalents": ["CashAndCashEquivalents"],
+        "trade receivables": ["TradeReceivables"],
+        "inventories": ["Inventories"],
+        "fixed assets": ["PlantPropertyEquipmentNet"],
+        "trade payables": ["TradePayables"],
+        "total assets": ["Assets"],
+        "total liabilities": ["Liabilities"],
+        "reserves": ["AllEquityBalance", "StockholdersEquity"],
+        "cash from operating activity": ["NetCashFromOperatingActivities"],
+        "fixed assets purchased": ["CapitalExpenses"],
+        "depreciation": ["DepreciationExpense", "DepreciationAmortization", "DepreciationDepletionAndAmortization"]
+    }
+
+    def _extract_row(df, concepts, label=None):
+        if df is None or df.empty or 'concept' not in df.columns:
+            return {y: None for y in years_annual}
+        norm_concepts = _normalize_concept(df['concept'])
+        for concept in concepts:
+            mask = norm_concepts == concept
+            if mask.any():
+                row = df[mask].iloc[0]
+                res = {}
+                for yr in years_annual:
+                    col = year_to_col[yr]
+                    if col in df.columns:
+                        val = row[col]
+                        res[yr] = _safe_float(val) if pd.notna(val) else None
+                    else:
+                        res[yr] = None
+                return res
+                
+        # Fallback to standard_concept
+        if label and label in _STD_CONCEPT_MAP and 'standard_concept' in df.columns:
+            std_candidates = [c.lower() for c in _STD_CONCEPT_MAP[label]]
+            norm_std = df['standard_concept'].astype(str).str.lower()
+            for cand in std_candidates:
+                mask = norm_std.apply(lambda x: cand == x or cand in x if pd.notna(x) else False)
+                if mask.any():
+                    row = df[mask].iloc[0]
+                    res = {}
+                    for yr in years_annual:
+                        col = year_to_col[yr]
+                        val = row[col] if col in df.columns else None
+                        res[yr] = _safe_float(val) if pd.notna(val) else None
+                    return res
+
+        return {y: None for y in years_annual}
+
+    def _extract_sum(df, concepts):
+        if df is None or df.empty or 'concept' not in df.columns:
+            return {y: None for y in years_annual}
+        norm_concepts = _normalize_concept(df['concept'])
+        mask = norm_concepts.isin(concepts)
+        if not mask.any():
+            return {y: None for y in years_annual}
+        matched = df[mask]
+        res = {}
+        for yr in years_annual:
+            col = year_to_col[yr]
+            if col in matched.columns:
+                vals = pd.to_numeric(matched[col], errors='coerce')
+                s = vals.sum()
+                res[yr] = float(s) if s != 0 or not vals.isna().all() else None
+            else:
+                res[yr] = None
+        return res
+        
+    pl_maps = {label: _extract_row(inc, concepts, label=label) for label, concepts in _PL_CONCEPTS}
+    bs_maps = {label: _extract_row(bal, concepts, label=label) for label, concepts in _BS_CONCEPTS if concepts}
+    cf_maps = {label: _extract_row(cf, concepts, label=label) for label, concepts in _CF_CONCEPTS}
+    
+    # D&A logic: prefer combined tag, else sum
+    da_combined = _extract_row(inc, ['DepreciationDepletionAndAmortization', 'DepreciationAndAmortization'], label='depreciation')
+    if any(v is not None for v in da_combined.values()):
+        pl_maps['depreciation'] = da_combined
+    else:
+        da_combined_cf = _extract_row(cf, ['DepreciationDepletionAndAmortization', 'DepreciationAndAmortization'], label='depreciation')
+        if any(v is not None for v in da_combined_cf.values()):
+            pl_maps['depreciation'] = da_combined_cf
+        else:
+            da_sum = _extract_sum(inc, ['Depreciation', 'AmortizationOfIntangibleAssets'])
+            pl_maps['depreciation'] = da_sum
+            
+    # Debt logic
+    debt_lt = _extract_sum(bal, _DEBT_LT_CONCEPTS)
+    debt_cur = _extract_sum(bal, _DEBT_CURRENT_CONCEPTS)
+    
+    # Leases
+    lease_nc = _extract_sum(bal, ['OperatingLeaseLiabilityNoncurrent', 'FinanceLeaseLiabilityNoncurrent'])
+    lease_c = _extract_sum(bal, _LEASE_CURRENT_CONCEPTS)
+
+    # Convert to aligned lists
+    def _row(m):
+        return [m.get(fy) for fy in years_annual]
+        
+    total_debt = {fy: (debt_lt.get(fy) or 0) + (debt_cur.get(fy) or 0) for fy in years_annual}
+    
+    # standard_concept fallback for debt
+    debt_coverage = sum(1 for v in total_debt.values() if v > 1e-5)
+    if debt_coverage < len(years_annual) * 0.5:
+        fallback_debt = {fy: 0.0 for fy in years_annual}
+        has_fallback_debt = False
+        if bal is not None and not bal.empty and 'standard_concept' in bal.columns:
+            norm_std = bal['standard_concept'].astype(str).str.lower()
+            for std_cand in ["longtermdebt", "shorttermdebt"]:
+                mask = norm_std.apply(lambda x: std_cand == x or std_cand in x if pd.notna(x) else False)
+                if mask.any():
+                    matched = bal[mask]
+                    best_row = None
+                    best_count = -1
+                    for _, row in matched.iterrows():
+                        count = sum(pd.notna(row[year_to_col[yr]]) for yr in years_annual if year_to_col[yr] in bal.columns)
+                        if count > best_count:
+                            best_count = count
+                            best_row = row
+                    if best_row is not None:
+                        has_fallback_debt = True
+                        for yr in years_annual:
+                            col = year_to_col[yr]
+                            if col in bal.columns:
+                                val = best_row[col]
+                                if pd.notna(val):
+                                    fallback_debt[yr] += _safe_float(val)
+        if has_fallback_debt:
+            total_debt = {fy: max(total_debt.get(fy) or 0.0, fallback_debt.get(fy) or 0.0) for fy in years_annual}
+
+    lease_total = {fy: (lease_nc.get(fy) or 0) + (lease_c.get(fy) or 0) for fy in years_annual}
+
+    def _scale(row):
+        return [(v / 1e7) if v is not None else None for v in row]
+
+    pl_stmt = {label: _scale(_row(pl_maps.get(label, {}))) for label, _ in _PL_CONCEPTS}
+    
+    bs_stmt = {}
+    for label, _ in _BS_CONCEPTS:
+        if label == 'equity capital':
+            bs_stmt[label] = [None] * len(years_annual)
+        else:
+            bs_stmt[label] = _scale(_row(bs_maps.get(label, {})))
+    bs_stmt['borrowings'] = _scale(_row(total_debt))
+    bs_stmt['lease liabilities'] = _scale(_row(lease_total))
+    
+    cf_stmt = {label: _scale(_row(cf_maps.get(label, {}))) for label, _ in _CF_CONCEPTS}
+    if "fixed assets purchased" in cf_stmt:
+        cf_stmt["fixed assets purchased"] = [abs(v) if v is not None else None for v in cf_stmt["fixed assets purchased"]]
+    
+    # Working capital days
+    ca_map = _extract_row(bal, ['AssetsCurrent'])
+    cl_map = _extract_row(bal, ['LiabilitiesCurrent'])
+    cash_map = bs_maps.get('cash equivalents', {})
+    sales_map = pl_maps.get('sales', {})
+    
+    _wc_days = []
+    for fy in years_annual:
+        ca = ca_map.get(fy); cl = cl_map.get(fy); s = sales_map.get(fy)
+        if ca is None or cl is None or not s:
+            _wc_days.append(None); continue
+        cash = cash_map.get(fy) or 0.0
+        cdebt = debt_cur.get(fy) or 0.0
+        op_nwc = (ca - cash) - (cl - cdebt)
+        _wc_days.append((op_nwc / s) * 365.0)
+    ratios_stmt = {'working capital days': _wc_days}
+    
+    # Top-level legacy arrays (absolute USD)
+    def _abs_series(m):
+        return [m.get(fy) for fy in years_annual[-4:]]
+        
+    revenue_abs = _abs_series(pl_maps.get('sales', {}))
+    _cogs_abs = _abs_series(pl_maps.get('cogs', {}))
+    gross_profit_abs = [
+        (s - c) if (s is not None and c is not None) else None
+        for s, c in zip(revenue_abs, _cogs_abs)
+    ]
+    ebit_abs = _abs_series(pl_maps.get('operating profit', {}))
+    interest_abs = _abs_series(pl_maps.get('interest', {}))
+    tax_abs = _abs_series(pl_maps.get('tax', {}))
+    pretax_abs = _abs_series(pl_maps.get('profit before tax', {}))
+    net_income_abs = _abs_series(pl_maps.get('net profit', {}))
+    total_assets_abs = _abs_series(bs_maps.get('total assets', {}))
+    equity_abs = _abs_series(bs_maps.get('reserves', {}))
+    cash_abs = _abs_series(bs_maps.get('cash equivalents', {}))
+    debt_abs_series = _abs_series(total_debt)
+    depreciation_abs = _abs_series(pl_maps.get('depreciation', {}))
+    cfo_abs = _abs_series(cf_maps.get('cash from operating activity', {}))
+    capex_raw_abs = _abs_series(cf_maps.get('fixed assets purchased', {}))
+    capex_abs = [abs(v) if v is not None else None for v in capex_raw_abs]
+
+    wc_change_abs = []
+    for o, ni, d in zip(cfo_abs, net_income_abs, depreciation_abs):
+        if o is not None and ni is not None and d is not None:
+            wc_change_abs.append(o - ni - d)
+        else:
+            wc_change_abs.append(None)
+
+    fcf_abs = []
+    for o, cx in zip(cfo_abs, capex_abs):
+        if o is not None and cx is not None:
+            fcf_abs.append(o - cx)
+        else:
+            fcf_abs.append(None)
+            
+    # Shares/Price
+    shares_outstanding = None
+    try:
+        if globals().get("yf") is not None:
+            info = globals()["yf"].Ticker(ticker_upper).fast_info
+            shares_outstanding = _safe_float(getattr(info, "shares", None))
+    except Exception:
+        pass
+        
+    if not shares_outstanding:
+        shares_map = _extract_row(inc, ["EntityCommonStockSharesOutstanding"] + _SHARES_CONCEPTS)
+        _vals = [v for v in shares_map.values() if v]
+        if _vals: shares_outstanding = _vals[-1]
+
+    current_price = _us_price(ticker_upper)
+    market_cap = (current_price * shares_outstanding) if (current_price and shares_outstanding) else None
+    historical_shares = [shares_outstanding] * 4 if shares_outstanding else [None] * 4
+    latest_debt = total_debt.get(years_annual[-1], 0.0) if years_annual else 0.0
+    
+    last_equity = equity_abs[-1] if equity_abs else None
+    book_value_per_share = (last_equity / shares_outstanding) if last_equity is not None and shares_outstanding and shares_outstanding > 0 else 0.0
+
+    trailing_pe = None
+    dividend_yield = 0.0
+    try:
+        if globals().get("yf") is not None:
+            info = globals()["yf"].Ticker(ticker_upper).info
+            trailing_pe = _safe_float(info.get("trailingPE"))
+            div_yield = _safe_float(info.get("dividendYield"))
+            dividend_yield = div_yield if div_yield is not None else 0.0
+    except Exception:
+        pass
+
+    fin = {
+        "ticker": ticker_upper,
+        "source": "sec_edgar",
+        "statements": {
+            "years_annual": years_annual,
+            "quarters": [],
+            "annual": {
+                "profit_loss": pl_stmt,
+                "balance_sheet": bs_stmt,
+                "cash_flow": cf_stmt,
+            },
+            "quarterly": {"profit_loss": {}},
+            "ratios": ratios_stmt,
+            "shareholding": {},
+            "top_ratios": {},
+            "peers": [],
+        },
+        "years": years_annual[-4:] if len(years_annual) >= 4 else years_annual,
+        "revenue": revenue_abs,
+        "gross_profit": gross_profit_abs,
+        "ebit": ebit_abs,
+        "interest_expense": [abs(v) if v is not None else None for v in interest_abs],
+        "tax_provision": tax_abs,
+        "pretax_income": pretax_abs,
+        "net_income": net_income_abs,
+        "total_assets": total_assets_abs,
+        "total_equity": equity_abs,
+        "cash": cash_abs,
+        "debt": debt_abs_series,
+        "capex": capex_abs,
+        "depreciation": depreciation_abs,
+        "working_capital_change": wc_change_abs,
+        "fcf": fcf_abs,
+        "historical_shares": historical_shares,
+        "current_price": current_price,
+        "market_cap": market_cap,
+        "shares_outstanding": shares_outstanding,
+        "trailing_pe": trailing_pe,
+        "dividend_yield": dividend_yield,
+        "stock_beta": 1.0,
+        "recommendation_mean": None,
+        "insider_ownership": 0.0,
+        "book_value_per_share": book_value_per_share,
+        "debt_latest": latest_debt,
+        "scraped_sector": scraped_sector,
+        "scraped_broad_industry": None,
+        "scraped_industry": scraped_industry,
+        "is_bank": is_bank,
+        "is_financial": is_financial,
+    }
+    
+    # Partial failure validation
+    fin_sales = fin["statements"]["annual"]["profit_loss"].get("sales", [])
+    if not any(v for v in fin_sales if v):
+        raise ValueError("MultiFinancials partial failure: missing sales")
+        
+    fin_cfo = fin["statements"]["annual"]["cash_flow"].get("cash from operating activity", [])
+    if not any(v for v in fin_cfo if v):
+        raise ValueError("MultiFinancials partial failure: missing CFO")
 
     return fin
 

@@ -296,15 +296,17 @@ def fetch_financials(ticker: str) -> dict:
         if fin and fin.get("statements", {}).get("years_annual"):
             logger.info(f"fetch_financials: served {ticker} from macrotrends")
             return fin
-        logger.warning(f"macrotrends failed for {ticker}; falling back to stockanalysis")
-        from data.scrapers.stockanalysis import fetch_stockanalysis_financials
-        fin = fetch_stockanalysis_financials(ticker)
-        if fin and fin.get("statements", {}).get("years_annual"):
-            logger.info(f"fetch_financials: served {ticker} from stockanalysis")
-            return fin
-        logger.warning(f"stockanalysis failed for {ticker}; falling back to EDGAR")
+        logger.warning(f"macrotrends failed for {ticker}; falling back to EDGAR")
+        
         from data.scrapers.edgar import fetch_edgar_financials
-        return fetch_edgar_financials(ticker)
+        fin = fetch_edgar_financials(ticker)
+        if fin and fin.get("statements", {}).get("years_annual"):
+            logger.info(f"fetch_financials: served {ticker} from EDGAR")
+            return fin
+        logger.warning(f"EDGAR failed for {ticker}; falling back to stockanalysis")
+        
+        from data.scrapers.stockanalysis import fetch_stockanalysis_financials
+        return fetch_stockanalysis_financials(ticker)
 
 def fetch_risk_free_rate(ticker: str) -> float:
     """

@@ -11,10 +11,10 @@ class WorkbookRenderer:
         self.ajp = ajp
         self.wb = openpyxl.Workbook()
         self.wb.remove(self.wb.active) # Remove default sheet
-        _t = str(self.ajp.meta.ticker).upper()
-        _is_india = _t.endswith(".NS") or _t.endswith(".BO")
-        self._cur  = "Rs" if _is_india else "$"
-        self._unit = "Rs mm" if _is_india else "$ mm"
+        self._ticker = str(self.results.get("meta", {}).get("ticker", self.ajp.meta.ticker)).upper()
+        _is_india = self._ticker.endswith(".NS") or self._ticker.endswith(".BO")
+        self._cur  = "Rs" if _is_india else "USD"
+        self._unit = f"{self._cur} mm"
         
     def _create_sheet(self, title: str):
         ws = self.wb.create_sheet(title)
@@ -113,7 +113,7 @@ class WorkbookRenderer:
         ws = self._create_sheet("1_Cover")
         ws.cell(row=2, column=2, value="Sidwell DCF Valuation").font = Formats.FONT_BOLD
         ws.cell(row=4, column=2, value="Ticker:")
-        ws.cell(row=4, column=3, value=self.ajp.meta.ticker).font = Formats.FONT_BOLD
+        ws.cell(row=4, column=3, value=self._ticker).font = Formats.FONT_BOLD
         ws.cell(row=5, column=2, value=f"Intrinsic Value ({self._cur}):")
         ws.cell(row=5, column=3, value="='11_Valuation_Bridge'!C13").font = Formats.FONT_LINK
         
@@ -881,7 +881,11 @@ class WorkbookRenderer:
         r = self._kv(ws, r, "After-tax cost of debt",         "=C7*(1-C6)",               pct)             # C8
         r = self._kv(ws, r, "Equity weight (market value)",   w["current_equity_weight"], pct,  blue=True)  # C9
         r = self._kv(ws, r, "Debt weight (book)",             "=1-C9",                    pct)             # C10
-        r = self._kv(ws, r, "Current levered beta",           "=C5*(1+(1-C6)*(C10/C9))", '0.00')          # C11
+        stock_beta = w.get("stock_beta")
+        if stock_beta:
+            r = self._kv(ws, r, "Current levered beta",       stock_beta,                 '0.00', blue=True)  # C11
+        else:
+            r = self._kv(ws, r, "Current levered beta",       "=C5*(1+(1-C6)*(C10/C9))", '0.00')          # C11
         r = self._kv(ws, r, "Cost of equity (CAPM)",          "=C3+C11*C4",               pct)             # C12
         r = self._kv(ws, r, "WACC (current structure)",       "=C9*C12+C10*C8",           pct)             # C13
         r = self._kv(ws, r, "Target debt-to-cap",             w["target_debt_to_cap"],    pct,  blue=True)  # C14

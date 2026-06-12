@@ -139,7 +139,8 @@ def test_fetch_edgar_returns_correct_structure():
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
          patch("data.scrapers.edgar._us_price", return_value=189.50), \
-         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
+         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()), \
+         patch("edgar.MultiFinancials.extract", side_effect=Exception("mocked multifinancials fallback")):
 
         from data.scrapers.edgar import fetch_edgar_financials
         fin = fetch_edgar_financials("AAPL")
@@ -201,7 +202,8 @@ def test_statement_values_are_usd_divided_by_1e7():
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
          patch("data.scrapers.edgar._us_price", return_value=189.50), \
-         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
+         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()), \
+         patch("edgar.MultiFinancials.extract", side_effect=Exception("mocked multifinancials fallback")):
 
         from data.scrapers.edgar import fetch_edgar_financials
         fin = fetch_edgar_financials("AAPL")
@@ -229,7 +231,8 @@ def test_top_level_market_cap_and_debt_are_absolute_usd():
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
          patch("data.scrapers.edgar._us_price", return_value=189.50), \
-         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
+         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()), \
+         patch("edgar.MultiFinancials.extract", side_effect=Exception("mocked multifinancials fallback")):
 
         from data.scrapers.edgar import fetch_edgar_financials
         fin = fetch_edgar_financials("AAPL")
@@ -256,7 +259,8 @@ def test_is_bank_and_is_financial_flags():
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
          patch("data.scrapers.edgar._us_price", return_value=189.50), \
-         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
+         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()), \
+         patch("edgar.MultiFinancials.extract", side_effect=Exception("mocked multifinancials fallback")):
 
         from data.scrapers.edgar import fetch_edgar_financials
         fin = fetch_edgar_financials("AAPL")
@@ -279,7 +283,8 @@ def test_bank_sic_sets_is_bank_true():
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
          patch("data.scrapers.edgar._us_price", return_value=189.50), \
-         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
+         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()), \
+         patch("edgar.MultiFinancials.extract", side_effect=Exception("mocked multifinancials fallback")):
 
         from data.scrapers.edgar import fetch_edgar_financials
         fin = fetch_edgar_financials("JPM")
@@ -299,7 +304,8 @@ def test_run_engine_on_mocked_aapl_yields_positive_intrinsic():
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
          patch("data.scrapers.edgar._us_price", return_value=189.50), \
-         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
+         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()), \
+         patch("edgar.MultiFinancials.extract", side_effect=Exception("mocked multifinancials fallback")):
 
         from data.scrapers.edgar import fetch_edgar_financials
         fin = fetch_edgar_financials("AAPL")
@@ -350,7 +356,8 @@ def test_cache_is_written_on_fetch():
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
          patch("data.scrapers.edgar._us_price", return_value=189.50), \
-         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
+         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()), \
+         patch("edgar.MultiFinancials.extract", side_effect=Exception("mocked multifinancials fallback")):
 
         from data.scrapers.edgar import fetch_edgar_financials
         fetch_edgar_financials("AAPL")
@@ -438,7 +445,8 @@ def test_wc_days_and_gross_profit():
          patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
          patch("data.scrapers.edgar.set_identity"), \
          patch("data.scrapers.edgar._us_price", return_value=189.50), \
-         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()):
+         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()), \
+         patch("edgar.MultiFinancials.extract", side_effect=Exception("mocked multifinancials fallback")):
 
         from data.scrapers.edgar import fetch_edgar_financials
         fin = fetch_edgar_financials("AAPL")
@@ -502,3 +510,244 @@ def test_sic_narrowest_match_and_mapping():
     sector, industry = _sic_to_sector_industry(3674, "Semiconductors and Related Devices")
     assert industry == "Semiconductors"
 
+
+
+def test_multifinals_standard_concept_rescue():
+    import pandas as pd
+    from unittest.mock import patch, MagicMock
+    from data.scrapers.edgar import fetch_edgar_financials
+    
+    inc_df = pd.DataFrame({
+        'label': ['Sales', 'Interest'],
+        'concept': ['us-gaap_Revenue', 'us-gaap_InterestExpense'],
+        'standard_concept': ['Revenue', 'InterestExpense'],
+        '2023-12-31': [1e11, 5e9],
+        '2024-12-31': [1.1e11, 4e9],
+        '2025-12-31': [1.2e11, 3e9],
+    })
+    bal_df = pd.DataFrame({
+        'label': ['Debt', 'Short Term Debt'],
+        'concept': ['us-gaap_UnknownDebt1', 'us-gaap_UnknownDebt2'],
+        'standard_concept': ['LongTermDebt', 'ShortTermDebt'],
+        '2023-12-31': [5e10, 1e10],
+        '2024-12-31': [6e10, 2e10],
+        '2025-12-31': [7e10, 3e10],
+    })
+    cf_df = pd.DataFrame({
+        'label': ['Operating Cash', 'Capex'],
+        'concept': ['us-gaap_NetCashFromOperatingActivities', 'us-gaap_PaymentsToAcquireProductiveAssets'],
+        'standard_concept': ['NetCashFromOperatingActivities', 'CapitalExpenses'],
+        '2023-12-31': [2e10, -1e10],
+        '2024-12-31': [3e10, -1e10],
+        '2025-12-31': [4e10, -1e10],
+    })
+    
+    mock_extract = MagicMock()
+    mock_extract.income_statement.return_value.to_dataframe.return_value = inc_df
+    mock_extract.balance_sheet.return_value.to_dataframe.return_value = bal_df
+    mock_extract.cash_flow_statement.return_value.to_dataframe.return_value = cf_df
+    
+    with patch("data.scrapers.edgar.cache.get_json", return_value=None), \
+         patch("data.scrapers.edgar.cache.set_json"), \
+         patch("data.scrapers.edgar.Company", return_value=_make_mock_company()), \
+         patch("data.scrapers.edgar.set_identity"), \
+         patch("data.scrapers.edgar._us_price", return_value=189.50), \
+         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()), \
+         patch("edgar.MultiFinancials.extract", return_value=mock_extract):
+         
+         fin = fetch_edgar_financials("FORD")
+         
+         cf_stmt = fin["statements"]["annual"]["cash_flow"]
+         bs_stmt = fin["statements"]["annual"]["balance_sheet"]
+         
+         assert cf_stmt["fixed assets purchased"] == [1e10/1e7, 1e10/1e7, 1e10/1e7]
+         assert bs_stmt["borrowings"] == [6e10/1e7, 8e10/1e7, 10e10/1e7]
+         
+def test_multifinals_hard_failure():
+    import pandas as pd
+    from unittest.mock import patch, MagicMock
+    from data.scrapers.edgar import fetch_edgar_financials
+    
+    inc_df = pd.DataFrame({
+        'label': ['Sales', 'Interest'],
+        'concept': ['us-gaap_Revenue', 'us-gaap_InterestExpense'],
+        'standard_concept': ['Revenue', 'InterestExpense'],
+        '2023-12-31': [0, 5e9],
+        '2024-12-31': [0, 4e9],
+        '2025-12-31': [0, 3e9],
+    })
+    bal_df = pd.DataFrame()
+    cf_df = pd.DataFrame({
+        'label': ['Operating Cash'],
+        'concept': ['us-gaap_NetCashFromOperatingActivities'],
+        'standard_concept': ['NetCashFromOperatingActivities'],
+        '2023-12-31': [0],
+        '2024-12-31': [0],
+        '2025-12-31': [0],
+    })
+    
+    mock_extract = MagicMock()
+    mock_extract.income_statement.return_value.to_dataframe.return_value = inc_df
+    mock_extract.balance_sheet.return_value.to_dataframe.return_value = bal_df
+    mock_extract.cash_flow_statement.return_value.to_dataframe.return_value = cf_df
+    
+    with patch("data.scrapers.edgar.cache.get_json", return_value=None), \
+         patch("data.scrapers.edgar.cache.set_json"), \
+         patch("data.scrapers.edgar.Company", return_value=_make_mock_company()), \
+         patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
+         patch("data.scrapers.edgar.set_identity"), \
+         patch("data.scrapers.edgar._us_price", return_value=189.50), \
+         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()), \
+         patch("edgar.MultiFinancials.extract", return_value=mock_extract) as mf_mock, \
+         patch("data.scrapers.edgar._fetch_edgar_companyfacts", return_value={"source": "sec_edgar", "current_price": 189.50, "statements": {"years_annual": ["2023"], "annual": {"profit_loss": {}, "balance_sheet": {}, "cash_flow": {}}}}) as cfacts_mock:
+         
+         fin = fetch_edgar_financials("FORD")
+         
+         # mf_mock is called, then it raises and falls back to cfacts_mock
+         mf_mock.assert_called_once()
+         cfacts_mock.assert_called_once()
+
+
+def test_edgar_data_quality_warnings():
+    from data.scrapers.edgar import _edgar_data_quality_warnings
+    
+    # 1. Ford-like interior zeros
+    fin1 = {
+        "statements": {
+            "annual": {
+                "balance_sheet": {
+                    "borrowings": [0, 47, 29, 0, 0, 0, 0, 16333]
+                }
+            }
+        }
+    }
+    w1 = _edgar_data_quality_warnings(fin1)
+    assert len(w1) == 1
+    assert "interior zero" in w1[0]
+    
+    # 2. Clean borrowings
+    fin2 = {
+        "statements": {
+            "annual": {
+                "balance_sheet": {
+                    "borrowings": [100, 110, 120, 130]
+                }
+            }
+        }
+    }
+    assert _edgar_data_quality_warnings(fin2) == []
+    
+    # 3. Magnitude warning
+    fin3 = {
+        "statements": {
+            "annual": {
+                "balance_sheet": {
+                    "borrowings": [5, 0, 0],
+                    "total liabilities": [9000, 9000, 9000]
+                }
+            }
+        }
+    }
+    w3 = _edgar_data_quality_warnings(fin3)
+    assert len(w3) == 1
+    assert "implausibly small" in w3[0]
+
+def test_edgar_guard_integration():
+    from unittest.mock import patch, MagicMock
+    from data.scrapers.edgar import fetch_edgar_financials
+    
+    # We will mock the output of _fetch_edgar_multifinals and _fetch_edgar_companyfacts
+    
+    # Case 1: MultiFinancials implausible + companyfacts clean
+    fin_mf_implausible = {
+        "source": "sec_edgar",
+        "current_price": 100,
+        "statements": {"annual": {"balance_sheet": {"borrowings": [0, 47, 29, 0, 0, 0, 0, 16333], "total liabilities": [1e5]*8}}},
+    }
+    fin_cf_clean = {
+        "source": "sec_edgar",
+        "current_price": 100,
+        "statements": {"annual": {"balance_sheet": {"borrowings": [50000]*8, "total liabilities": [1e5]*8}}},
+    }
+    
+    with patch("data.scrapers.edgar.cache.get_json", return_value=None), \
+         patch("data.scrapers.edgar.cache.set_json"), \
+         patch("data.scrapers.edgar.Company", return_value=_make_mock_company()), \
+         patch("data.scrapers.edgar._fetch_edgar_multifinals", return_value=fin_mf_implausible), \
+         patch("data.scrapers.edgar._fetch_edgar_companyfacts", return_value=fin_cf_clean):
+         
+         fin_res = fetch_edgar_financials("FORD")
+         assert "data_quality_warnings" not in fin_res
+         assert fin_res["statements"]["annual"]["balance_sheet"]["borrowings"] == [50000]*8
+         
+    # Case 2: Both implausible
+    fin_cf_implausible = {
+        "source": "sec_edgar",
+        "current_price": 100,
+        "statements": {"annual": {"balance_sheet": {"borrowings": [0, 1, 0, 0, 0, 0, 0, 100], "total liabilities": [1e5]*8}}},
+    }
+    
+    with patch("data.scrapers.edgar.cache.get_json", return_value=None), \
+         patch("data.scrapers.edgar.cache.set_json"), \
+         patch("data.scrapers.edgar.Company", return_value=_make_mock_company()), \
+         patch("data.scrapers.edgar._fetch_edgar_multifinals", return_value=fin_mf_implausible), \
+         patch("data.scrapers.edgar._fetch_edgar_companyfacts", return_value=fin_cf_implausible):
+         
+         fin_res2 = fetch_edgar_financials("FORD")
+         assert "data_quality_warnings" in fin_res2
+         assert len(fin_res2["data_quality_warnings"]) > 0
+         # It keeps the MultiFinancials result
+         assert fin_res2["statements"]["annual"]["balance_sheet"]["borrowings"] == [0, 47, 29, 0, 0, 0, 0, 16333]
+
+
+def test_multifinals_capex_sign():
+    import pandas as pd
+    from unittest.mock import patch, MagicMock
+    from data.scrapers.edgar import fetch_edgar_financials
+    
+    inc_df = pd.DataFrame({
+        'label': ['Sales', 'Interest'],
+        'concept': ['us-gaap_Revenue', 'us-gaap_InterestExpense'],
+        'standard_concept': ['Revenue', 'InterestExpense'],
+        '2023-12-31': [1e11, 5e9],
+        '2024-12-31': [1.1e11, 4e9],
+        '2025-12-31': [1.2e11, 3e9],
+    })
+    bal_df = pd.DataFrame({
+        'label': ['Debt', 'Short Term Debt'],
+        'concept': ['us-gaap_UnknownDebt1', 'us-gaap_UnknownDebt2'],
+        'standard_concept': ['LongTermDebt', 'ShortTermDebt'],
+        '2023-12-31': [5e10, 1e10],
+        '2024-12-31': [6e10, 2e10],
+        '2025-12-31': [7e10, 3e10],
+    })
+    cf_df = pd.DataFrame({
+        'label': ['Operating Cash', 'Capex'],
+        'concept': ['us-gaap_NetCashFromOperatingActivities', 'us-gaap_PaymentsToAcquireProductiveAssets'],
+        'standard_concept': ['NetCashFromOperatingActivities', 'CapitalExpenses'],
+        '2023-12-31': [2e10, -1e10],
+        '2024-12-31': [3e10, -2e10],
+        '2025-12-31': [4e10, -3e10],
+    })
+    
+    mock_extract = MagicMock()
+    mock_extract.income_statement.return_value.to_dataframe.return_value = inc_df
+    mock_extract.balance_sheet.return_value.to_dataframe.return_value = bal_df
+    mock_extract.cash_flow_statement.return_value.to_dataframe.return_value = cf_df
+    
+    with patch("data.scrapers.edgar.cache.get_json", return_value=None), \
+         patch("data.scrapers.edgar.cache.set_json"), \
+         patch("data.scrapers.edgar.Company", return_value=_make_mock_company()), \
+         patch("data.scrapers.edgar.requests.get", new_callable=_make_mock_requests_get), \
+         patch("data.scrapers.edgar.set_identity"), \
+         patch("data.scrapers.edgar._us_price", return_value=189.50), \
+         patch("data.scrapers.edgar.yf", new=_make_mock_yf_module()), \
+         patch("edgar.MultiFinancials.extract", return_value=mock_extract) as mf_mock:
+         
+         fin = fetch_edgar_financials("FORD")
+         
+         cf_stmt = fin["statements"]["annual"]["cash_flow"]
+         
+         # Assert capex is POSITIVE despite being negative in the mock DataFrame
+         assert cf_stmt["fixed assets purchased"] == [1e10/1e7, 2e10/1e7, 3e10/1e7]
+         assert fin["capex"] == [1e10, 2e10, 3e10]

@@ -48,7 +48,12 @@ class WACCEngine:
         
         current_d_e = current_debt / current_equity if current_equity > 0 else 0.0
         
-        current_levered_beta = median_asset_beta * (1 + (1 - tax_rate) * current_d_e)
+        stock_beta = fin.get("stock_beta")
+        if stock_beta is not None and stock_beta != 1.0:
+            current_levered_beta = float(stock_beta)
+        else:
+            current_levered_beta = median_asset_beta * (1 + (1 - tax_rate) * current_d_e)
+            
         current_ke = rf_val + current_levered_beta * total_erp
         
         # Target structure
@@ -96,5 +101,6 @@ class WACCEngine:
                                       if (current_debt + current_equity) > 0 else 1.0,
             "current_debt_weight": (current_debt / (current_debt + current_equity))
                                     if (current_debt + current_equity) > 0 else 0.0,
+            "stock_beta": stock_beta if stock_beta is not None and stock_beta != 1.0 else None,
         }
 

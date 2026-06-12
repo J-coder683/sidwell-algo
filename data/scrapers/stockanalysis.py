@@ -331,7 +331,7 @@ def fetch_stockanalysis_financials(ticker: str) -> dict | None:
             "shares_outstanding": shares_outstanding,
             "trailing_pe": trailing_pe,
             "dividend_yield": dividend_yield,
-            "stock_beta": 1.0,
+            "stock_beta": fetch_stockanalysis_beta(ticker) or 1.0,
             "recommendation_mean": None,
             "insider_ownership": 0.0,
             "book_value_per_share": book_value_per_share,
@@ -361,3 +361,28 @@ def fetch_stockanalysis_financials(ticker: str) -> dict | None:
     except Exception as e:
         logger.warning(f"stockanalysis fetch failed for {ticker}: {e}")
         return None
+
+def fetch_stockanalysis_beta(ticker: str) -> float | None:
+    t = ticker.upper()
+    cache_key = f"beta_stockanalysis_{t}.json"
+    cached = cache.get_json(cache_key, TTL_FINANCIALS)
+    if cached is not None:
+        return cached.get("beta")
+        
+    url = f"https://stockanalysis.com/stocks/{t.lower()}/statistics/"
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=30)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.text, "html.parser")
+        for td in soup.find_all("td"):
+            if "Beta" in td.text:
+                nxt = td.find_next_sibling("td")
+                if nxt:
+                    val = _parse_float(nxt.text)
+                    cache.set_json(cache_key, {"beta": val})
+                    return val
+    except Exception as e:
+        logger.warning(f"stockanalysis beta fetch failed for {ticker}: {e}")
+        
+    cache.set_json(cache_key, {"beta": None})
+    return None

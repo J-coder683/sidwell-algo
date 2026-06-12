@@ -20,6 +20,8 @@ import re
 import json
 import logging
 import requests
+import time
+import random
 from typing import Optional
 
 from data import cache
@@ -30,7 +32,19 @@ logger = logging.getLogger(__name__)
 TTL_FINANCIALS = 7 * 24 * 3600
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Referer": "https://www.macrotrends.net/",
+    "Upgrade-Insecure-Requests": "1",
+    "sec-ch-ua": '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1"
 }
 
 _SEC_IDENTITY = "Sidwell research contact@example.com"
@@ -554,11 +568,38 @@ def fetch_macrotrends_financials(ticker: str) -> dict | None:
     }
 
     try:
+        session = requests.Session()
+        session.headers.update(HEADERS)
+        
+        # Warm the session to get Cloudflare cookies
+        try:
+            session.get("https://www.macrotrends.net/", timeout=15)
+        except Exception:
+            pass  # Best effort warmup
+            
         pages = {}
         for key, url in urls.items():
-            r = requests.get(url, headers=HEADERS, timeout=30, allow_redirects=True)
-            r.raise_for_status()
-            pages[key] = r.text
+            success = False
+            base_sleeps = [0.5, 1.5, 3.0]
+            for attempt in range(3):
+                try:
+                    r = session.get(url, timeout=30, allow_redirects=True)
+                    if r.status_code in (403, 429) or r.status_code >= 500:
+                        raise requests.exceptions.RequestException(f"Status {r.status_code}")
+                    r.raise_for_status()
+                    pages[key] = r.text
+                    success = True
+                    break
+                except requests.exceptions.RequestException as e:
+                    if attempt < 2:
+                        sleep_time = base_sleeps[attempt] * (1.0 + random.random() * 0.5)
+                        logger.debug(f"macrotrends fetch {key} failed ({e}), retrying in {sleep_time:.2f}s")
+                        time.sleep(sleep_time)
+                    else:
+                        logger.warning(f"macrotrends fetch {key} failed after 3 attempts: {e}")
+                        
+            if not success:
+                return None
 
         inc_rows = _extract_originaldata(pages["income"])
         bal_rows = _extract_originaldata(pages["balance"])
@@ -869,6 +910,13 @@ def fetch_macrotrends_financials(ticker: str) -> dict | None:
         # ---------------------------------------------------------------
         # Assemble the fin dict (screener / stockanalysis contract)
         # ---------------------------------------------------------------
+        # Lazy fetch beta from stockanalysis
+        try:
+            from data.scrapers.stockanalysis import fetch_stockanalysis_beta
+            beta_val = fetch_stockanalysis_beta(t)
+        except ImportError:
+            beta_val = None
+
         fin = {
             "statements": {
                 "years_annual": years_annual,
@@ -900,7 +948,7 @@ def fetch_macrotrends_financials(ticker: str) -> dict | None:
             "shares_outstanding":     shares_outstanding,
             "trailing_pe":            trailing_pe,
             "dividend_yield":         dividend_yield,
-            "stock_beta":             1.0,
+            "stock_beta":             beta_val or 1.0,
             "recommendation_mean":    None,
             "insider_ownership":      0.0,
             "book_value_per_share":   book_value_per_share,

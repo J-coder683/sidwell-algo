@@ -192,7 +192,51 @@ class StatementsEngine:
         # ── Data-derived defaults (company-specific; used when the AJP is silent).
         # Growth/tax/capex/margins reflect the company's own history instead of
         # fixed constants. The AJP (Gemini forward judgment) overrides any of them.
-        is_h, bs_h, cf_h, r_h = hist["is"], hist["bs"], hist["cf"], hist["ratios"]
+        def _clean_window_start(sales_series) -> int:
+            '''Index where the current entity's history begins, after the last divestiture
+            break. A divestiture break = a year with a single-year revenue drop > 40%, OR
+            revenue falling below 50% of its trailing max and not recovering. Return the index
+            of the most-recent such break; if none, return 0. Guarantee >= 3 post-break years
+            (if the break leaves fewer, start = len-3, capped at 0).'''
+            if not sales_series or len(sales_series) < 4:
+                return 0
+            break_idx = 0
+            n = len(sales_series)
+            trailing_max = sales_series[0] if sales_series[0] else 0.0
+            for i in range(1, n):
+                prev = sales_series[i-1] if sales_series[i-1] else 0.0
+                curr = sales_series[i] if sales_series[i] else 0.0
+                
+                drop_40 = (prev > 0) and (curr < prev * 0.60)
+                drop_50_max = (trailing_max > 0) and (curr < trailing_max * 0.50)
+                
+                if drop_40 or drop_50_max:
+                    break_idx = i
+                
+                if curr > trailing_max:
+                    trailing_max = curr
+                    
+            if n - break_idx < 3:
+                break_idx = max(0, n - 3)
+            return break_idx
+
+        raw_sales_series = hist["is"].get("sales") or []
+        if not any(raw_sales_series):
+            raw_sales_series = hist["is"].get("revenue") or []
+            
+        clean_idx = _clean_window_start(raw_sales_series)
+        
+        is_h = {k: v[clean_idx:] for k, v in hist["is"].items() if isinstance(v, list)}
+        bs_h = {k: v[clean_idx:] for k, v in hist["bs"].items() if isinstance(v, list)}
+        cf_h = {k: v[clean_idx:] for k, v in hist["cf"].items() if isinstance(v, list)}
+        r_h = {k: v[clean_idx:] for k, v in hist["ratios"].items() if isinstance(v, list)}
+        
+        window_caveat = None
+        if clean_idx > 0 and len(raw_sales_series) > clean_idx:
+            drop_pct = (raw_sales_series[clean_idx] / raw_sales_series[clean_idx-1]) - 1.0 if raw_sales_series[clean_idx-1] > 0 else 0
+            fy_start = hist["years_annual"][clean_idx]
+            fy_last = hist["years_annual"][-1]
+            window_caveat = f"historical window truncated to {fy_start}-{fy_last} (structural break: revenue fell {abs(drop_pct):.0%} -- likely divestiture)"
 
         def _avg(xs):
             xs = [x for x in xs if x is not None]
@@ -354,15 +398,19 @@ class StatementsEngine:
         _engine_normalized_margin = None
         ebit_margin_peak_normalized = False
         ebit_margin_peak_caveat = ""
+        _ai_target_margin = AJPLoader.get_assumption_or_fallback(ajp, "ebit_margin_target", None, "").value
         if _norm_margin is None and len(_hist_ebit_margins) >= EBIT_MIN_HIST_YEARS:
             _med_margin = statistics.median(_hist_ebit_margins)
             if _med_margin > 0 and _last_actual_margin > EBIT_PEAK_MULTIPLE * _med_margin:
-                _engine_normalized_margin = _clamp(_med_margin, 0.02, 0.50)
+                _engine_normalized_margin = _med_margin
+                if _ai_target_margin is not None:
+                    _engine_normalized_margin = max(_engine_normalized_margin, float(_ai_target_margin))
+                _engine_normalized_margin = _clamp(_engine_normalized_margin, 0.02, 0.50)
                 ebit_margin_peak_normalized = True
                 ebit_margin_peak_caveat = (
                     f"Latest EBIT margin ({_last_actual_margin:.1%}) is over {EBIT_PEAK_MULTIPLE:.1f}x the "
                     f"historical median ({_med_margin:.1%}) — likely a cyclical peak. Fade start normalized "
-                    f"to the median ({_engine_normalized_margin:.1%}). Engine guardrail; AI supplied no "
+                    f"to the median/target ({_engine_normalized_margin:.1%}). Engine guardrail; AI supplied no "
                     f"normalized_ebit_margin."
                 )
 
@@ -471,6 +519,7 @@ class StatementsEngine:
             "debt_ebitda_ratio": debt_ebitda_ratio,
             "cap_years": stage1_years,
             "cap_years_source": cap_source,
+            "historical_window_caveat": window_caveat,
         }
         
         # Initial values from hist

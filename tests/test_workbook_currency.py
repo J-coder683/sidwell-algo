@@ -19,6 +19,6 @@ def test_workbook_currency_geography():
     mock_ajp_us = MagicMock()
     mock_ajp_us.meta.ticker = "AAPL"
     wb_us = WorkbookRenderer(engine_results, mock_ajp_us)
-    assert wb_us._cur == "$"
-    assert wb_us._unit == "$ mm"
+    assert wb_us._cur == "USD"
+    assert wb_us._unit == "USD mm"
 

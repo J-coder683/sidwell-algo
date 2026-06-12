@@ -6,7 +6,7 @@
 > [!WARNING]
 > **DCF COVERAGE GAP WARNING**: The computed DCF intrinsic value
 > deviates significantly from the current market price (intrinsic
-> at 63879094% of price).
+> at 66583042% of price).
 >
 > Even this v0.4 2-stage DCF (Stage 1 high-growth + Stage 2 fade +
 > sector-aware terminal) may understate premium businesses because:
@@ -25,7 +25,7 @@
 | Metric | Value | Source / Detail |
 | :--- | :--- | :--- |
 | **Current Price** | ₹50.00 | Yahoo Finance |
-| **Intrinsic Value (DCF)** | ₹31.94M | Sidwell DCF Engine |
+| **Intrinsic Value (DCF)** | ₹33.29M | Sidwell DCF Engine |
 | **Margin of Safety** | 100.00% margin of safety | Current Discount to Intrinsic |
 | **Buffett Score** | **14/14** | Buffett Lens (14 checks) |
 | **Buffett Verdict** | **BUY** ✅ | Buffett Lens Rules |
@@ -69,13 +69,13 @@ Every component of the Weighted Average Cost of Capital (WACC) is explicitly sou
 | **Country Risk Premium** | 0.00% | Damodaran NYU Stern (Country default spread adjusted) |
 | **Total Equity Risk Premium** | 5.00% | Damodaran mature ERP + country premium = 5.00% |
 | **Industry Unlevered Beta** | 1.00 | Damodaran 'Unknown' (hardcoded fallback (Damodaran lookup failed)) |
-| **Beta ($\beta$)** | 1.03 | Direct $\beta$ from stockanalysis.com |
-| **Cost of Equity ($K_e$)** | 12.15% | CAPM: $R_f + \beta \times ERP$ = 12.15% |
+| **Beta ($\beta$)** | 0.85 | Direct $\beta$ from stockanalysis.com |
+| **Cost of Equity ($K_e$)** | 11.25% | CAPM: $R_f + \beta \times ERP$ = 11.25% |
 | **Cost of Debt ($K_d$)** | 6.00% | AJP Engine Fallback |
 | **Effective Tax Rate ($t$)** | 25.00% | 4-year historical average from filings |
 | **Equity Weight ($W_e$)** | 96.15% | Market Cap / (Market Cap + Total Debt) |
 | **Debt Weight ($W_d$)** | 3.85% | Total Debt / (Market Cap + Total Debt) |
-| **Computed WACC** | **11.73%** | Weighted cost of capital = **11.73%** |
+| **Computed WACC** | **11.30%** | Weighted cost of capital = **11.30%** |
 
 ### 5-Year High-Growth Forecast (Stage 1)
 Projections are based on historical averages relative to Revenue. Revenue growth is projected at **10.00%** (historical 4y CAGR capped between 5% and 20%).
@@ -89,8 +89,8 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 | CapEx | ₹10.30M | ₹10.51M | ₹10.66M | ₹10.74M | ₹10.72M |
 | NWC Change (CF) | ₹1.33M | ₹1.46M | ₹1.61M | ₹1.77M | ₹1.95M |
 | Free Cash Flow | ₹14.32M | ₹16.55M | ₹19.04M | ₹21.82M | ₹24.92M |
-| Discount Factor | 0.8950 | 0.8010 | 0.7169 | 0.6416 | 0.5743 |
-| PV of Cash Flow | ₹13.55M | ₹14.02M | ₹14.43M | ₹14.80M | ₹15.13M |
+| Discount Factor | 0.8985 | 0.8073 | 0.7253 | 0.6517 | 0.5855 |
+| PV of Cash Flow | ₹13.58M | ₹14.10M | ₹14.57M | ₹15.00M | ₹15.39M |
 
 ### 5-Year Fade Forecast (Stage 2) — growth fading from 10.00% to 2.00%
 
@@ -103,25 +103,25 @@ Projections are based on historical averages relative to Revenue. Revenue growth
 | CapEx | ₹10.47M | ₹9.91M | ₹9.06M | ₹7.92M | ₹6.52M |
 | NWC Change (CF) | ₹1.86M | ₹1.71M | ₹1.50M | ₹1.24M | ₹924,624.61 |
 | Free Cash Flow | ₹28.37M | ₹31.91M | ₹35.46M | ₹38.88M | ₹42.07M |
-| Discount Factor | 0.5140 | 0.4600 | 0.4117 | 0.3685 | 0.3298 |
-| PV of Cash Flow | ₹15.41M | ₹15.52M | ₹15.43M | ₹15.15M | ₹14.67M |
+| Discount Factor | 0.5261 | 0.4727 | 0.4247 | 0.3816 | 0.3428 |
+| PV of Cash Flow | ₹15.74M | ₹15.91M | ₹15.89M | ₹15.65M | ₹15.22M |
 
 ### Terminal Value
 - Final fade year (Year 10) FCF: ₹42.07M
 - Terminal growth (Gordon): 2.00%
 - Sector mapping: AJP Engine Fallback
-- Terminal Value: ₹539.72M
-- PV of Terminal Value (discounted from Year 10): ₹177.99M
+- Terminal Value: ₹549.98M
+- PV of Terminal Value (discounted from Year 10): ₹188.55M
 
 ### Valuation Bridge
-- **PV of Explicit FCFs**: ₹148.09M
-- **PV of Terminal Value (g = 2.00%)**: ₹177.99M
-- **Enterprise Value**: ₹326.09M
+- **PV of Explicit FCFs**: ₹151.05M
+- **PV of Terminal Value (g = 2.00%)**: ₹188.55M
+- **Enterprise Value**: ₹339.61M
 - **Add: Cash & Equivalents**: ₹13.31M
 - **Less: Total Debt**: ₹20.00M
-- **Equity Value**: ₹319.40M
+- **Equity Value**: ₹332.92M
 - **Shares Outstanding**: 10
-- **Intrinsic Value per Share**: **₹31.94M**
+- **Intrinsic Value per Share**: **₹33.29M**
 
 ## 3. Buffett Investor Lens
 All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.md):
@@ -202,7 +202,7 @@ _Part C — Management & Capital Allocation: **4/4 passed**_
 
 #### ✅ 12. Margin of safety
 - **What this measures**: Graham's 25% discount to intrinsic value, retained by Buffett throughout. This is the price gate. A wonderful business is still a bad investment if you overpay. Buffett's preferred margin is wider than Graham's in many cases, but 25% is the published floor.
-- **This company**: mos = 100.00% (Price: 50.00, Intrinsic: 31939547.11)
+- **This company**: mos = 100.00% (Price: 50.00, Intrinsic: 33291521.00)
 - **Verdict**: Passed — the result clears the bar (> 25.0%).
 
 #### ✅ 13. Understandable business (hard blacklist)
@@ -684,7 +684,7 @@ _Numeric claims tie out across documents and strategy is consistent._
 
 ## 4. Margin-of-Safety Check
 Current Stock Price: **₹50.00**
-DCF Intrinsic Value: **₹31.94M**
+DCF Intrinsic Value: **₹33.29M**
 Required Margin of Safety: **25.00%** (Graham & Dodd standard — Buffett lens)
 Computed Margin of Safety: 100.00% margin of safety
 ### Status: [PASS] ✅

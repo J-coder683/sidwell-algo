@@ -451,7 +451,9 @@ def test_peak_margin_guardrail_fires():
     
     assert au["ebit_margin_peak_normalized"] is True
     assert au["ebit_margin_peak_caveat"] != ""
-    assert abs(au["ebit_margin_start"] - 0.10) < 1e-4
+    # The guardrail computes a median of ~0.10, but the AJP has ebit_margin_target=0.20.
+    # The new floor logic max(median, target) kicks in and floors it at 0.20.
+    assert abs(au["ebit_margin_start"] - 0.20) < 1e-4
 
 
 def test_peak_margin_guardrail_no_peak():

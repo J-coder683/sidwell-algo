@@ -46,6 +46,9 @@ def _no_live_calls(monkeypatch):
         "data.scrapers.macrotrends._get_sic_from_sec",
         lambda t: (2911, "Petroleum Refining"),
     )
+    # macrotrends lazily imports fetch_stockanalysis_beta and hits the live stats
+    # page; patch the source symbol so it resolves to a stub at call time.
+    monkeypatch.setattr("data.scrapers.stockanalysis.fetch_stockanalysis_beta", lambda t: 1.2)
     import yfinance
     monkeypatch.setattr(yfinance, "Ticker", lambda *a, **k: MagicMock(info={}))
 
@@ -154,6 +157,7 @@ def _make_mock_requests(
     """Route requests.get by URL substring to the appropriate fixture."""
     def mock_get(url, *args, **kwargs):
         resp = MagicMock()
+        resp.status_code = 200
         resp.raise_for_status = MagicMock()
 
         if "macrotrends" in url:
@@ -242,7 +246,7 @@ def test_integration_phase3_xom(xom_fixtures):
         sa_overview_html=xom_fixtures["sa_income"],
     )
 
-    with patch("data.scrapers.macrotrends.requests.get", side_effect=mock_fn), \
+    with patch("data.scrapers.macrotrends.requests.Session", return_value=type("MockSession", (), {"headers": {}, "get": lambda self, url, **kwargs: mock_fn(url, **kwargs)})()), \
          patch("data.scrapers.stockanalysis.requests.get", side_effect=mock_fn):
         fin = fetch_macrotrends_financials("XOM")
 
@@ -360,7 +364,7 @@ def test_integration_source_still_macrotrends(xom_fixtures):
         sa_overview_html=xom_fixtures["sa_income"],
     )
 
-    with patch("data.scrapers.macrotrends.requests.get", side_effect=mock_fn), \
+    with patch("data.scrapers.macrotrends.requests.Session", return_value=type("MockSession", (), {"headers": {}, "get": lambda self, url, **kwargs: mock_fn(url, **kwargs)})()), \
          patch("data.scrapers.stockanalysis.requests.get", side_effect=mock_fn):
         fin = fetch_macrotrends_financials("XOM")
 
@@ -387,7 +391,7 @@ def test_integration_merge_fails_gracefully():
             raise RuntimeError("SA is down")
         return mock_fn(url, *args, **kwargs)
 
-    with patch("data.scrapers.macrotrends.requests.get", side_effect=bad_sa), \
+    with patch("data.scrapers.macrotrends.requests.Session", return_value=type("MockSession", (), {"headers": {}, "get": lambda self, url, **kwargs: bad_sa(url, **kwargs)})()), \
          patch("data.scrapers.stockanalysis.requests.get", side_effect=bad_sa):
         fin = fetch_macrotrends_financials("XOMFAIL")
 
@@ -416,7 +420,7 @@ def test_engine_smoke_phase3(xom_fixtures):
         sa_overview_html=xom_fixtures["sa_income"],
     )
 
-    with patch("data.scrapers.macrotrends.requests.get", side_effect=mock_fn), \
+    with patch("data.scrapers.macrotrends.requests.Session", return_value=type("MockSession", (), {"headers": {}, "get": lambda self, url, **kwargs: mock_fn(url, **kwargs)})()), \
          patch("data.scrapers.stockanalysis.requests.get", side_effect=mock_fn):
         fin = fetch_macrotrends_financials("XOM")
 
