@@ -121,6 +121,7 @@ def analyze(
     # For US tickers: augment research_docs with the latest 10-K text (MD&A / Risk / Business).
     # India path is untouched — .NS/.BO tickers skip this branch entirely.
     research_docs = list(research_docs) if research_docs else []
+    _user_supplied_research = bool(research_docs)  # did the caller upload their own research PDFs?
 
     try:
         from data.public import fetch_damodaran_industry_fundamentals, format_industry_benchmark_doc
@@ -133,7 +134,16 @@ def analyze(
     except Exception as e:
         logger.warning(f"Damodaran industry fundamentals unavailable for {ticker}: {e}")
 
-    if not (ticker.endswith(".NS") or ticker.endswith(".BO")):
+    # Auto-fetch SEC docs (10-K / 8-K / transcripts / calendar) ONLY when the user did NOT
+    # upload their own research. With uploaded research PDFs, DeepSeek sees only those (+ the
+    # industry benchmark) -- honoring the docstring and matching the India path, which never
+    # auto-augments. (Previously the US branch appended the 10-K/8-K/transcripts unconditionally,
+    # so user-supplied research was drowned out by SEC filings.)
+    _is_us = not (ticker.endswith(".NS") or ticker.endswith(".BO"))
+    if _is_us and _user_supplied_research:
+        logger.info(f"{ticker}: user-supplied research detected; skipping auto-fetch of "
+                    f"10-K/8-K/transcripts so DeepSeek uses only the uploaded research.")
+    if _is_us and not _user_supplied_research:
         try:
             from data.scrapers.edgar import fetch_edgar_filings_text
             research_docs += fetch_edgar_filings_text(ticker)
