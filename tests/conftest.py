@@ -1,5 +1,11 @@
 import pytest
+from unittest.mock import patch
 from tests.fixture_company import FIXTURE_INPUTS
+
+@pytest.fixture(autouse=True)
+def mock_analyst_consensus():
+    with patch("data.scrapers.yfinance_consensus.fetch_analyst_consensus", return_value=None) as m:
+        yield m
 
 @pytest.fixture
 def mock_financials():

@@ -241,20 +241,20 @@ from data.documents import discover_documents
 from pathlib import Path
 
 @patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None)
-@patch("data.scrapers.edgar.fetch_edgar_financials")
-def test_fetch_financials_us_dispatches_to_edgar(mock_edgar, mock_mt):
+@patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials", return_value=None)
+@patch("data.scrapers.edgar.fetch_edgar_companyfacts_financials")
+def test_fetch_financials_us_dispatches_to_edgar(mock_edgar, mock_sa, mock_mt):
     mock_edgar.return_value = {"ticker": "AAPL", "statements": {"years_annual": ["2024", "2025"]}}
     res = public.fetch_financials("AAPL")
     assert res["ticker"] == "AAPL"
     mock_edgar.assert_called_once_with("AAPL")
 
 
-@patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials")
-@patch("data.scrapers.edgar.fetch_edgar_financials")
 @patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None)
-def test_fetch_financials_us_falls_back_to_stockanalysis(mock_mt, mock_edgar, mock_sa):
+@patch("data.scrapers.edgar.fetch_edgar_companyfacts_financials", return_value=None)
+@patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials")
+def test_fetch_financials_us_falls_back_to_stockanalysis(mock_sa, mock_edgar, mock_mt):
     # macrotrends + EDGAR miss (None) -> stockanalysis fallback
-    mock_edgar.return_value = None
     mock_sa.return_value = {"ticker": "AAPL"}
     res = public.fetch_financials("AAPL")
     assert res["ticker"] == "AAPL"

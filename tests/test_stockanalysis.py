@@ -52,18 +52,19 @@ def test_stockanalysis_parser(mock_requests_get):
     assert fin["scraped_industry"] == "Oil & Gas Integrated" or fin["scraped_industry"] == "By Industry"
 
 def test_fetch_financials_fallback(mock_requests_get):
-    # macrotrends is now primary; if it fails, falls back to EDGAR
+    # macrotrends + stockanalysis both fail -> EDGAR companyfacts
     with patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None):
-        with patch("data.scrapers.edgar.fetch_edgar_financials", return_value={"source": "sec_edgar", "statements": {"years_annual": ["2024"]}}):
-            fin = fetch_financials("XOM")
-            assert fin is not None
-            assert fin["source"] == "sec_edgar"
+        with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials", return_value=None):
+            with patch("data.scrapers.edgar.fetch_edgar_companyfacts_financials", return_value={"source": "sec_edgar", "statements": {"years_annual": ["2024"], "annual": {"profit_loss": {}, "balance_sheet": {}, "cash_flow": {}}}}):
+                fin = fetch_financials("XOM")
+                assert fin is not None
+                assert fin["source"] == "sec_edgar"
     
 def test_fetch_financials_failure_fallback():
-    # If both macrotrends and EDGAR return None, it should fallback to stockanalysis
+    # If macrotrends and EDGAR both return None, it should fallback to stockanalysis
     with patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None):
-        with patch("data.scrapers.edgar.fetch_edgar_financials", return_value=None):
-            with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials", return_value={"source": "stockanalysis"}) as mock_sa:
+        with patch("data.scrapers.edgar.fetch_edgar_companyfacts_financials", return_value=None):
+            with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials", return_value={"source": "stockanalysis", "statements": {"years_annual": ["2024"]}}) as mock_sa:
                 fin = fetch_financials("XOM")
                 assert fin["source"] == "stockanalysis"
                 mock_sa.assert_called_once_with("XOM")

@@ -509,6 +509,53 @@ def fetch_edgar_financials(ticker: str) -> dict:
     return fin
 
 
+def fetch_edgar_companyfacts_financials(ticker: str) -> dict | None:
+    """Depth path: Company(ticker) -> SIC -> _fetch_edgar_companyfacts (10-15y raw XBRL).
+    Runs _edgar_data_quality_warnings on the result and attaches data_quality_warnings.
+    Cached like the other adapters. Returns None on any failure."""
+    ticker_upper = ticker.upper()
+    cache_key_fin = f"financials_edgar_cf_{ticker_upper}.json"
+    cached_fin = cache.get_json(cache_key_fin, TTL_FINANCIALS)
+    if cached_fin:
+        logger.info(f"Loaded EDGAR companyfacts financials for {ticker_upper} from cache.")
+        return cached_fin
+
+    try:
+        if Company is None or set_identity is None:
+            raise ImportError("edgartools is required")
+        set_identity(_EDGAR_IDENTITY)
+        c = Company(ticker_upper)
+        if c is None:
+            return None
+        
+        sic = None
+        sic_description = None
+        try:
+            sic = int(c.sic) if c.sic else None
+            sic_description = c.sic_description if hasattr(c, "sic_description") else None
+        except (AttributeError, ValueError, TypeError):
+            pass
+
+        scraped_sector, scraped_industry = _sic_to_sector_industry(sic, sic_description)
+        is_bank = bool(sic and _BANK_SIC_RANGE[0] <= sic <= _BANK_SIC_RANGE[1])
+        is_financial = bool(
+            (sic and _FINANCIAL_SIC_RANGE[0] <= sic <= _FINANCIAL_SIC_RANGE[1])
+            or _is_financial_sector(scraped_sector, scraped_industry)
+        )
+        
+        fin = _fetch_edgar_companyfacts(c, ticker_upper, scraped_sector, scraped_industry, is_bank, is_financial)
+        warnings = _edgar_data_quality_warnings(fin)
+        if warnings:
+            fin["data_quality_warnings"] = warnings
+            for w in warnings:
+                logger.warning(f"{ticker_upper} (companyfacts): {w}")
+                
+        cache.set_json(cache_key_fin, fin)
+        return fin
+    except Exception as e:
+        logger.warning(f"companyfacts fetch failed for {ticker_upper}: {e}")
+        return None
+
 def _fetch_edgar_companyfacts(c, ticker_upper: str, scraped_sector: str, scraped_industry: str, is_bank: bool, is_financial: bool) -> dict:
     # ------------------------------------------------------------------
     # 2. Load company facts (XBRL us-gaap)
@@ -546,7 +593,7 @@ def _fetch_edgar_companyfacts(c, ticker_upper: str, scraped_sector: str, scraped
     anchor_fys = set()
     for m in (pl_maps.get("sales", {}), pl_maps.get("net profit", {}), bs_maps.get("total assets", {})):
         anchor_fys |= set(m.keys())
-    fys = sorted(anchor_fys)[-10:]
+    fys = sorted(anchor_fys)[-15:]
     years_annual = [str(fy) for fy in fys]
 
     def _row(m: dict) -> list:

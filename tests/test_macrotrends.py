@@ -180,24 +180,52 @@ def test_fetch_financials_uses_macrotrends_primary(mock_requests):
 
 
 def test_fetch_financials_falls_back_to_edgar():
-    """If macrotrends returns None, fetch_financials falls back to EDGAR."""
+    """If macrotrends and stockanalysis return None, fetch_financials falls back to EDGAR."""
     with patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None):
-        with patch("data.scrapers.edgar.fetch_edgar_financials",
-                   return_value={"source": "sec_edgar", "statements": {"years_annual": ["2024"]}}) as mock_edgar:
-            fin = fetch_financials("XOM")
-            assert fin["source"] == "sec_edgar"
-            mock_edgar.assert_called_once_with("XOM")
+        with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials", return_value=None):
+            with patch("data.scrapers.edgar.fetch_edgar_companyfacts_financials",
+                       return_value={"source": "sec_edgar", "statements": {"years_annual": ["2024"], "annual": {"profit_loss": {}, "balance_sheet": {}, "cash_flow": {}}}}) as mock_edgar:
+                fin = fetch_financials("XOM")
+                assert fin["source"] == "sec_edgar"
+                mock_edgar.assert_called_once_with("XOM")
 
 
 def test_fetch_financials_falls_back_to_stockanalysis():
-    """If both macrotrends and EDGAR return None, fetch_financials falls back to stockanalysis."""
+    """If macrotrends and EDGAR return None, fetch_financials falls back to stockanalysis."""
     with patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None):
-        with patch("data.scrapers.edgar.fetch_edgar_financials", return_value=None):
+        with patch("data.scrapers.edgar.fetch_edgar_companyfacts_financials", return_value=None):
             with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials",
-                       return_value={"source": "stockanalysis"}) as mock_sa:
+                       return_value={"source": "stockanalysis", "statements": {"years_annual": ["2024"]}}) as mock_sa:
                 fin = fetch_financials("XOM")
                 assert fin["source"] == "stockanalysis"
                 mock_sa.assert_called_once_with("XOM")
+
+def test_fetch_financials_falls_back_to_merged():
+    """If macrotrends is None, and both SA and EDGAR succeed, it merges."""
+    with patch("data.scrapers.macrotrends.fetch_macrotrends_financials", return_value=None):
+        with patch("data.scrapers.stockanalysis.fetch_stockanalysis_financials", return_value={
+            "source": "stockanalysis",
+            "statements": {
+                "years_annual": ["2023", "2024"],
+                "annual": {"profit_loss": {"sales": [100, 110]}, "balance_sheet": {}, "cash_flow": {}},
+                "quarters": ["Q1", "Q2"],
+                "shareholding": {}
+            }
+        }):
+            with patch("data.scrapers.edgar.fetch_edgar_companyfacts_financials", return_value={
+                "source": "sec_edgar",
+                "statements": {
+                    "years_annual": ["2022", "2023"],
+                    "annual": {"profit_loss": {"sales": [90, 95]}, "balance_sheet": {}, "cash_flow": {}}
+                }
+            }):
+                fin = fetch_financials("XOM")
+                assert fin["source"] == "stockanalysis+edgar"
+                assert fin["statements"]["years_annual"] == ["2022", "2023", "2024"]
+                # SA is preferred, so 2023 sales should be 100, not 95
+                assert fin["statements"]["annual"]["profit_loss"]["sales"] == [90, 100, 110]
+                assert "quarters" in fin["statements"]
+                assert "shareholding" in fin["statements"]
 
 
 def test_engine_smoke(mock_requests):

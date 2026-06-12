@@ -282,6 +282,72 @@ def get_fred_api_key() -> str:
         logger.warning("FRED_API_KEY not found in environment variables.")
     return api_key
 
+def _merge_us_cloud_financials(ticker: str) -> dict | None:
+    from data.scrapers.stockanalysis import fetch_stockanalysis_financials
+    from data.scrapers.edgar import fetch_edgar_companyfacts_financials
+    import copy
+    
+    sa = fetch_stockanalysis_financials(ticker)
+    ed = fetch_edgar_companyfacts_financials(ticker)
+    
+    if sa and not ed:
+        return sa
+    if ed and not sa:
+        return ed
+    if not sa and not ed:
+        return None
+        
+    fin = copy.deepcopy(sa)
+    fin["source"] = "stockanalysis+edgar"
+    
+    sa_stmts = sa.get("statements", {})
+    ed_stmts = ed.get("statements", {})
+    
+    sa_years = sa_stmts.get("years_annual", [])
+    ed_years = ed_stmts.get("years_annual", [])
+    unified_years = sorted(list(set(sa_years) | set(ed_years)))
+    fin["statements"]["years_annual"] = unified_years
+    
+    sa_annual = sa_stmts.get("annual", {})
+    ed_annual = ed_stmts.get("annual", {})
+    
+    def _merge_dict(category):
+        sa_cat = sa_annual.get(category, {})
+        ed_cat = ed_annual.get(category, {})
+        keys = set(sa_cat.keys()) | set(ed_cat.keys())
+        merged_cat = {}
+        for k in keys:
+            merged_arr = []
+            for y in unified_years:
+                val = None
+                if y in sa_years and k in sa_cat:
+                    idx = sa_years.index(y)
+                    val = sa_cat[k][idx]
+                if val is None and y in ed_years and k in ed_cat:
+                    idx = ed_years.index(y)
+                    val = ed_cat[k][idx]
+                merged_arr.append(val)
+            merged_cat[k] = merged_arr
+        return merged_cat
+        
+    if "annual" not in fin["statements"]:
+        fin["statements"]["annual"] = {}
+        
+    fin["statements"]["annual"]["profit_loss"] = _merge_dict("profit_loss")
+    fin["statements"]["annual"]["balance_sheet"] = _merge_dict("balance_sheet")
+    fin["statements"]["annual"]["cash_flow"] = _merge_dict("cash_flow")
+    
+    if "ratios" in sa_stmts:
+        merged_ratios = {}
+        for k, arr in sa_stmts["ratios"].items():
+            merged_ratios[k] = [arr[sa_years.index(y)] if y in sa_years else None for y in unified_years]
+        fin["statements"]["ratios"] = merged_ratios
+        
+    if ed and "data_quality_warnings" in ed and "data_quality_warnings" not in fin:
+        fin["data_quality_warnings"] = ed["data_quality_warnings"]
+        
+    return fin
+
 def fetch_financials(ticker: str) -> dict:
     """Returns Sidwell's standard financials dict.
     Dispatches to screener.in for Indian tickers (.NS / .BO) and SEC EDGAR for US tickers.
@@ -290,23 +356,30 @@ def fetch_financials(ticker: str) -> dict:
     if is_india:
         from data.scrapers.screener import fetch_screener_financials
         return fetch_screener_financials(ticker)
+        
+    from data.scrapers.macrotrends import fetch_macrotrends_financials
+    fin = fetch_macrotrends_financials(ticker)
+    if fin and fin.get("statements", {}).get("years_annual"):
+        logger.info(f"fetch_financials: served {ticker} from macrotrends")
     else:
-        from data.scrapers.macrotrends import fetch_macrotrends_financials
-        fin = fetch_macrotrends_financials(ticker)
-        if fin and fin.get("statements", {}).get("years_annual"):
-            logger.info(f"fetch_financials: served {ticker} from macrotrends")
-            return fin
-        logger.warning(f"macrotrends failed for {ticker}; falling back to EDGAR")
-        
-        from data.scrapers.edgar import fetch_edgar_financials
-        fin = fetch_edgar_financials(ticker)
-        if fin and fin.get("statements", {}).get("years_annual"):
-            logger.info(f"fetch_financials: served {ticker} from EDGAR")
-            return fin
-        logger.warning(f"EDGAR failed for {ticker}; falling back to stockanalysis")
-        
-        from data.scrapers.stockanalysis import fetch_stockanalysis_financials
-        return fetch_stockanalysis_financials(ticker)
+        logger.warning(f"macrotrends failed for {ticker}; building merged Cloud path")
+        fin = _merge_us_cloud_financials(ticker)
+        if fin:
+            logger.info(f"fetch_financials: served {ticker} from merged Cloud path")
+        else:
+            logger.error(f"fetch_financials: ALL SOURCES FAILED for {ticker}")
+
+    # Fetch yfinance consensus and attach to fin for US only, best-effort
+    if fin:
+        try:
+            from data.scrapers.yfinance_consensus import fetch_analyst_consensus
+            consensus = fetch_analyst_consensus(ticker)
+            if consensus:
+                fin["analyst_consensus"] = consensus
+        except Exception as e:
+            logger.warning(f"Failed to fetch analyst consensus for {ticker}: {e}")
+            
+    return fin
 
 def fetch_risk_free_rate(ticker: str) -> float:
     """
