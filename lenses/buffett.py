@@ -67,14 +67,16 @@ def evaluate_buffett_lens(
     # Test: stdev(gross_margin, ddof=1) < 0.03
     hist_gross_margins = [gp / rev if gp is not None and rev is not None and rev > 0 else 0.0 for gp, rev in zip(hist_gross_profit, hist_revenue)]
     hist_gm_std = np.std(hist_gross_margins, ddof=1) if len(hist_gross_margins) > 1 else 0.0
+    GM_STD_MAX = 0.03
     checks["1_moat"] = {
         "name": "Durable competitive advantage (moat)",
         "metric_name": "Gross Margin Std Dev",
         "value": hist_gm_std,
         "threshold_str": "< 3.0%",
-        "passed": hist_gm_std < 0.03,
+        "passed": hist_gm_std < GM_STD_MAX,
+        "proximity": _scoring.proximity(hist_gm_std, GM_STD_MAX, "below"),
         "detail": (
-            f"stdev = {hist_gm_std*100:.2f}% < 3%" if hist_gm_std < 0.03
+            f"stdev = {hist_gm_std*100:.2f}% < 3%" if hist_gm_std < GM_STD_MAX
             else f"stdev = {hist_gm_std*100:.2f}% >= 3%"
         ),
         "part": "A",
@@ -96,14 +98,16 @@ def evaluate_buffett_lens(
         hist_roic_list.append(roic_val)
 
     hist_roic_avg = np.mean(hist_roic_list) if hist_roic_list else 0.0
+    ROIC_MIN = 0.15
     checks["2_roic"] = {
         "name": "High return on invested capital",
         "metric_name": "Average ROIC",
         "value": hist_roic_avg,
         "threshold_str": "> 15.0%",
-        "passed": hist_roic_avg > 0.15,
+        "passed": hist_roic_avg > ROIC_MIN,
+        "proximity": _scoring.proximity(hist_roic_avg, ROIC_MIN, "above"),
         "detail": (
-            f"4y avg = {hist_roic_avg*100:.2f}% > 15%" if hist_roic_avg > 0.15
+            f"4y avg = {hist_roic_avg*100:.2f}% > 15%" if hist_roic_avg > ROIC_MIN
             else f"4y avg = {hist_roic_avg*100:.2f}% <= 15%"
         ),
         "part": "A",
@@ -224,9 +228,10 @@ def evaluate_buffett_lens(
     # 8. Anti-dilution discipline
     # Test: shares_latest / shares_4y_ago <= 1.02
     historical_shares = financials.get("historical_shares", [])
+    SHARE_GROWTH_MAX = 1.02
     if len(historical_shares) >= 4 and historical_shares[0] > 0 and historical_shares[-1] > 0:
         share_growth = historical_shares[-1] / historical_shares[0]
-        check_8_passed = share_growth <= 1.02
+        check_8_passed = share_growth <= SHARE_GROWTH_MAX
         detail_8 = f"Share count growth (4y): {(share_growth - 1) * 100:+.2f}% (threshold: <= +2%)"
     else:
         check_8_passed = True  # Default PASS if data unavailable
@@ -235,9 +240,13 @@ def evaluate_buffett_lens(
     checks["8_anti_dilution"] = {
         "name": "Anti-dilution discipline",
         "metric_name": "Share count growth (4y)",
-        "value": historical_shares,
+        "value": share_growth,
         "threshold_str": "<= 2% growth over 4y",
         "passed": check_8_passed,
+        # Proximity on the growth-delta scale (0% vs +2% allowed), not the raw
+        # ratio (1.00 vs 1.02) — normalizing by a ~1.0 threshold would compress a
+        # comfortable 0%-dilution pass to a misleading "+0.02 knife-edge".
+        "proximity": _scoring.proximity(share_growth - 1.0, SHARE_GROWTH_MAX - 1.0, "below") if share_growth is not None else None,
         "detail": detail_8,
         "part": "C",
     }
@@ -346,6 +355,7 @@ def evaluate_buffett_lens(
     # intrinsic_value is None: mark the check N/A (applicable=False) so it is
     # excluded from the denominator. It auto-activates once ddm_results supplies
     # an intrinsic value.
+    MOS_MIN = 0.25
     if intrinsic_value is None:
         checks["12_margin_of_safety"] = {
             "name": "Margin of safety",
@@ -376,7 +386,8 @@ def evaluate_buffett_lens(
             "metric_name": "Discount to Intrinsic Value",
             "value": mos,
             "threshold_str": "> 25.0%",
-            "passed": mos > 0.25,
+            "passed": mos > MOS_MIN,
+            "proximity": _scoring.proximity(mos, MOS_MIN, "above"),
             "detail": mos_detail,
             "part": "D",
         }

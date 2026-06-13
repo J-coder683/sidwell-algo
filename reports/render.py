@@ -745,7 +745,23 @@ def _render_lens_table(md: list, lens_results: dict, current_price: float, intri
         
         icon = "⏸️" if expl["status"] == "na" else ("✅" if expl["status"] == "pass" else "❌")
         
-        md.append(f"#### {icon} {expl['title']}")
+        proximity = c.get("proximity")
+        badge = ""
+        if proximity is not None:
+            if proximity >= 0.10:
+                label = "Strong Pass" if proximity >= 0.25 else "Pass"
+            elif proximity >= 0:
+                label = "Narrow Pass"
+            elif proximity >= -0.10:
+                label = "Narrow Miss"
+            else:
+                label = "Clear Miss"
+            prox_str = ("+∞" if proximity == float("inf")
+                        else "-∞" if proximity == float("-inf")
+                        else f"{proximity:+.2f}")
+            badge = f" `[{label}: {prox_str}]`"
+        
+        md.append(f"#### {icon} {expl['title']}{badge}")
         if expl['what_why']:
             md.append(f"- **What this measures**: {expl['what_why']}")
         if expl['finding']:

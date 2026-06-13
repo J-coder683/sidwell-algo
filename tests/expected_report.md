@@ -130,12 +130,12 @@ All 14 checks per Warren Buffett's framework across 4 Parts (frameworks/buffett.
 
 ### Part A — Business Quality
 
-#### ✅ 1. Durable competitive advantage (moat)
+#### ✅ 1. Durable competitive advantage (moat) `[Strong Pass: +1.00]`
 - **What this measures**: Stable gross margins through input-cost cycles indicate pricing power — a moat lets the company hold price while costs swing. Volatile margins indicate a commodity-like business. This is a proxy; a richer moat assessment would include market share stability, brand premium, and pricing actions, but stability of gross margin captures the most economically meaningful signal in publicly available data.
 - **This company**: stdev = 0.00% < 3%
 - **Verdict**: Passed — the result clears the bar (< 3.0%).
 
-#### ✅ 2. High return on invested capital
+#### ✅ 2. High return on invested capital `[Strong Pass: +0.48]`
 - **What this measures**: ROIC > cost of capital sustainably is value creation. Buffett targets >15% pre-tax consistently. A company that earns 12% ROIC while reinvesting heavily compounds slower than one earning 25% ROIC; the spread compounds.
 - **This company**: 4y avg = 22.26% > 15%
 - **Verdict**: Passed — the result clears the bar (> 15.0%).
@@ -175,7 +175,7 @@ _Part B — Financial Health: **3/3 passed**_
 
 ### Part C — Management & Capital Allocation
 
-#### ✅ 8. Anti-dilution discipline
+#### ✅ 8. Anti-dilution discipline `[Strong Pass: +1.00]`
 - **What this measures**: Buffett's most consistent management screen is the share-count test. "Mistakes of that kind are deadly. Trading shares of a wonderful business — which Berkshire most certainly is — for ownership of a so-so business irreparably destroys value." A company whose share count grows >2% per year is either issuing equity to fund operations (a tell) or making acquisitions with overvalued stock (the Buffett-Dexter mistake). A company shrinking its share count — and especially one buying back below intrinsic value — is acting like an owner-operator.
 - **This company**: Share count growth (4y): +0.00% (threshold: <= +2%)
 - **Verdict**: Passed — the result clears the bar (<= 2% growth over 4y).
@@ -200,7 +200,7 @@ _Part C — Management & Capital Allocation: **4/4 passed**_
 
 ### Part D — Margin of Safety & Holdability
 
-#### ✅ 12. Margin of safety
+#### ✅ 12. Margin of safety `[Strong Pass: +3.00]`
 - **What this measures**: Graham's 25% discount to intrinsic value, retained by Buffett throughout. This is the price gate. A wonderful business is still a bad investment if you overpay. Buffett's preferred margin is wider than Graham's in many cases, but 25% is the published floor.
 - **This company**: mos = 100.00% (Price: 50.00, Intrinsic: 33291521.00)
 - **Verdict**: Passed — the result clears the bar (> 25.0%).
@@ -227,22 +227,22 @@ All 14 checks per Howard Marks's risk-first framework (frameworks/marks.md):
 
 ### Part A — Margin of Safety & Asymmetric Payoff
 
-#### ✅ 1. Deep margin of safety
+#### ✅ 1. Deep margin of safety `[Strong Pass: +1.50]`
 - **What this measures**: Marks's margin of safety is deeper than Graham's 25%. "The most important thing in investing isn't return; it's risk." A wider entry discount is the primary tool for risk control — it converts ordinary returns into above-average returns and provides cushion for errors in the intrinsic-value estimate itself. 40% is the published Oaktree distressed-investing threshold; for non-distressed equity it remains the appropriate floor because the intrinsic-value estimate is itself uncertain.
 - **This company**: MoS = +100.00% > 40%
 - **Verdict**: Passed — the result clears the bar (> 40%).
 
-#### ✅ 2. Asymmetric upside-to-downside payoff
+#### ✅ 2. Asymmetric upside-to-downside payoff `[Strong Pass: +∞]`
 - **What this measures**: Marks's "asymmetric returns" framing: the shape of the payoff matters more than the central estimate. A 30% upside with 10% downside is a Marks trade; a 50% upside with 50% downside is not, regardless of expected value. "It's not what you buy, it's what you pay." Note: this check requires scenario modeling not yet implemented in v0.2 — for now, defaults to using ±20% bands on intrinsic value as a placeholder; tighten in v0.4 with explicit scenario inputs.
 - **This company**: Asymmetry ratio = inf > 3.0
 - **Verdict**: Passed — the result clears the bar (> 3.0x).
 
-#### ❌ 3. Downside protection (tangible book)
+#### ❌ 3. Downside protection (tangible book) `[Clear Miss: -0.47]`
 - **What this measures**: Marks's distressed roots: "The price you pay is the price." In a workout or liquidation scenario, what's the recovery? Tangible book is the simplest universal floor. For asset-heavy businesses (banks, REITs, industrials), this can be the dominant valuation reference rather than DCF. For asset-light businesses (software, services), the test still applies but with a lower threshold — the floor is goodwill of customer relationships, not balance-sheet assets. Default threshold of 30% tangible book to market cap is intentionally permissive for high-quality businesses; tighter check for cyclicals.
 - **This company**: Equity/MCap = 15.97% (<= 30%)
 - **Verdict**: Rejected — the result misses the bar (> 30%).
 
-#### ✅ 4. Multiple expansion not exhausted
+#### ✅ 4. Multiple expansion not exhausted `[Strong Pass: +0.28]`
 - **What this measures**: Marks wants to enter when multiples are compressed, not expanded. "Most things prove to be cyclical." Buying a company at 30× P/E when its history is 18× and its sector trades at 16× means future returns must come from operating growth alone — multiple expansion is exhausted. Marks's typical entry is when current multiple is at the LOWER end of historical/peer range — leaving multiple expansion as an additional return driver alongside operating performance.
 - **This company**: Trailing P/E = 18.0x (< 25x)
 - **Verdict**: Passed — the result clears the bar (< 25x (v0.3 placeholder; sector comp in v0.4)).
@@ -257,7 +257,7 @@ _Part A — Margin of Safety & Asymmetric Payoff: **3/4 passed**_
 - **This company**: Signal: mid_cycle (confidence: high). Evidence: "Utilization at 72%, pricing flat for two quarters [fixture_concall.pdf]" Capacity utilization mid-band; pricing actions modest; no signs of peak-cycle euphoria.
 - **Verdict**: Passed — the result clears the bar (trough | early_recovery | mid_cycle).
 
-#### ✅ 6. Company earnings vs cyclical peak
+#### ✅ 6. Company earnings vs cyclical peak `[Strong Pass: +0.43]`
 - **What this measures**: This catches the "company-cycle" position separately from "sector-cycle." A company at 50% of its own peak earnings has obvious mean-reversion optionality if the underlying business is intact. A company at 100% of its own peak is — by construction — running at the high end of its operating cycle, and forward returns require either secular growth or continued cycle strength. The 70% threshold flags companies in the bottom 30% of their own historical earnings — Marks's preferred entry zone for cyclicals.
 - **This company**: Latest NI / Peak NI = 100.0%
 - **Verdict**: Passed — the result clears the bar (> 70% of peak).
@@ -282,7 +282,7 @@ _Part B — Cycle Position: **3/3 passed**_
 - **This company**: 4y FCF: [11.5, 12.8, 14.23, 15.8]
 - **Verdict**: Passed — the result clears the bar (All 4 years positive FCF).
 
-#### ✅ 10. Volatility / beta
+#### ✅ 10. Volatility / beta `[Strong Pass: +0.43]`
 - **What this measures**: Marks invests in distressed credit which is structurally high-volatility, but for equity application he wants the equity to be moderately defensive. Beta > 1.5 indicates the stock will compound losses in a market drawdown — incompatible with risk-first investing. The threshold is more permissive than a pure defensive screen (which might require beta < 1.0) because Marks accepts cyclicality at the right cycle position. This check works in tandem with Part B: high-beta acceptable IF at cyclical trough; not acceptable at cyclical peak.
 - **This company**: Beta = 0.85 (< 1.5)
 - **Verdict**: Passed — the result clears the bar (< 1.5).
@@ -324,22 +324,22 @@ All 15 checks per KKR's operating playbook framework (frameworks/kkr.md):
 
 ### Part A — LBO Viability
 
-#### ❌ 1. EBITDA Scale
+#### ❌ 1. EBITDA Scale `[Clear Miss: -1.00]`
 - **What this measures**: KKR doesn't do small-cap. The Americas flagship is now ~$20B; the typical check size is $500M-$2B equity into businesses with $200M+ EBITDA. India is different — smaller market, lower thresholds, but the principle holds: scale matters because the operational improvement playbook has fixed costs (Capstone team support, board recruiting, M&A sourcing) that don't make sense for small-cap targets.
 - **This company**: Latest EBITDA fails scale check.
 - **Verdict**: Rejected — the result misses the bar (> ₹4.0B).
 
-#### ✅ 2. FCF Conversion
+#### ✅ 2. FCF Conversion `[Strong Pass: +0.30]`
 - **What this measures**: An LBO loads 4-6× EBITDA of debt onto the company; debt service requires real cash, not accounting earnings. KKR underwrites cash generation, not GAAP earnings. 60% conversion of after-tax EBIT into FCF is the threshold for KKR-style buyouts.
 - **This company**: Average conversion is 78.0%.
 - **Verdict**: Passed — the result clears the bar (> 60.00%).
 
-#### ✅ 3. Leverage Capacity
+#### ✅ 3. Leverage Capacity `[Strong Pass: +0.78]`
 - **What this measures**: A KKR LBO typically targets 4-6× net debt / EBITDA at close. If the target is already at 3× pre-buyout, there isn't room to load the additional debt that makes the LBO math work. Companies with very low debt (Asian Paints at 0.36×) are ideal LBO targets — KKR can add 3-4 turns of leverage and the math becomes tractable.
 - **This company**: Leverage is 0.65x.
 - **Verdict**: Passed — the result clears the bar (< 3.0x).
 
-#### ✅ 4. EBITDA Margin
+#### ✅ 4. EBITDA Margin `[Strong Pass: +0.53]`
 - **What this measures**: An LBO must service its debt through cycle troughs. 15% EBITDA margin gives meaningful operating cushion before debt-service problems emerge.
 - **This company**: Margin is 23.0%.
 - **Verdict**: Passed — the result clears the bar (> 15.00%).
@@ -349,7 +349,7 @@ _Part A — LBO Viability: **3/4 passed**_
 
 ### Part B — Operational Upside
 
-#### ❌ 5. Margin Improvement Room
+#### ❌ 5. Margin Improvement Room `[Narrow Miss: -0.05]`
 - **What this measures**: A company at its own all-time peak EBIT margin offers KKR limited upside. A company whose margin has compressed (input cost inflation, suboptimal pricing, operating bloat) is where KKR's playbook can capture step-changes via the Capstone team's sourcing/operations/pricing toolkit. Weisenbeck's Capsugel transformation is the canonical case.
 - **This company**: Already at/near peak margin.
 - **Verdict**: Rejected — the result misses the bar (Current < 95% of Peak).
@@ -409,7 +409,7 @@ _Part C — Strategic Fit: **1/2 passed**_
 - **This company**: Signal: mid_cycle (confidence: high). Evidence: "Utilization at 72%, pricing flat for two quarters [fixture_concall.pdf]"
 - **Verdict**: Passed — the result clears the bar (Not peak/late).
 
-#### ❌ 15. 7-Year IRR
+#### ❌ 15. 7-Year IRR `[Clear Miss: -0.10]`
 - **What this measures**: A KKR LBO needs to clear ~20% gross IRR at the deal level. The simplified estimator embeds "12 is the new 5" (EBITDA doubles), conservative exit multiple, and standard 40% takeover premium. Companies at very high entry multiples (Asian Paints at ~50× P/E) typically fail because exit multiple compression overwhelms EBITDA growth.
 - **This company**: Entry mult 17.0x -> Exit mult 14.4x.
 - **Verdict**: Rejected — the result misses the bar (> 18.00%).
@@ -456,7 +456,7 @@ All 14 checks per Blackstone's thematic framework (frameworks/blackstone.md):
 - **This company**: Stdev 0.0pp, Mean 40.0%.
 - **Verdict**: Passed — the result clears the bar (Stdev < 4pp & > 35%).
 
-#### ✅ 3. Recurring Revenue
+#### ✅ 3. Recurring Revenue `[Strong Pass: +1.00]`
 - **What this measures**: Gray's third criterion: "businesses that have recurring revenues as opposed to having to start over every year." Quantitative proxy: revenue growth predictability. A company whose revenue grew 12% one year, 6% the next, 18% the third, 4% the fourth has volatile demand patterns — not recurring. A company at 8/9/10/11% has predictable recurring revenue. The 8 percentage point threshold on growth-rate stdev is calibrated for service/subscription-style businesses (typically 3-6 pp stdev) vs industrial cyclicals (often >12 pp). Soft LLM signal supplements when revenue patterns are ambiguous (e.g., one-time large contracts can create misleading volatility in otherwise recurring businesses).
 - **This company**: YoY growth stdev is 0.0pp.
 - **Verdict**: Passed — the result clears the bar (< 8pp).
@@ -511,7 +511,7 @@ _Part C — Downside Protection: **3/3 passed**_
 
 ### Part D — Scale Fit & Hold Economics
 
-#### ❌ 11. Blackstone-Scale Deal
+#### ❌ 11. Blackstone-Scale Deal `[Clear Miss: -1.00]`
 - **What this measures**: Blackstone is the world's largest alternatives manager. Small-cap deals consume the same Investment Committee time as large-cap but generate far less return in absolute dollars. They will not do a deal where $500M-$2B can't be deployed meaningfully. This excludes most mid-cap and all small-cap companies from the lens — which is correct: Blackstone doesn't compete in that segment.
 - **This company**: Market cap is too small.
 - **Verdict**: Rejected — the result misses the bar (> ₹150B).
@@ -563,7 +563,7 @@ All 15 checks per Apollo's credit & complexity framework (frameworks/apollo.md):
 - **This company**: Avg FCF 13.6, Hyp Cov 13.3x.
 - **Verdict**: Passed — the result clears the bar (>0 FCF, >1.5x Cov).
 
-#### ❌ 4. Deployment Scale
+#### ❌ 4. Deployment Scale `[Clear Miss: -1.00]`
 - **What this measures**: Apollo deploys $309B/year. A company with EV below $500M generates deal economics that don't scale: the credit analysis cost, legal documentation, and ongoing monitoring of a private credit position are largely fixed regardless of deal size. Apollo's minimum meaningful credit position for a direct investment is typically $50–100M; to arrive there at standard portfolio concentration limits (1–3% of relevant fund), the company must be meaningful scale. Sub-$500M EV companies are micro-cap situations that do not generate enough absolute return for Apollo's infrastructure costs.
 - **This company**: EV is 520.0.
 - **Verdict**: Rejected — the result misses the bar (> ₹20B).
@@ -628,7 +628,7 @@ _Part C — Athene Permanent Capital Fit: **2/2 passed**_
 - **This company**: Min EBIT 20.0, Avg Cov 11.6x.
 - **Verdict**: Passed — the result clears the bar (Min EBIT>0, Cov>1.5x).
 
-#### ✅ 14. Tangible Collateral
+#### ✅ 14. Tangible Collateral `[Strong Pass: +1.37]`
 - **What this measures**: ABF requires tangible collateral. Apollo's origination platforms — aircraft leases (Atlas SP), consumer personal finance (Athene Funding 1), fleet financing (Wheels/Donlen), home-improvement loans (Aqua Finance) — are all secured by specific, identifiable, tangible assets that can be repossessed and liquidated in a default to recover principal. A company whose value is primarily in brand, intellectual property, goodwill, or customer relationships is NOT an ABF target — in default, these assets cannot easily be seized and sold to recover credit principal. The 40% tangible asset ratio is the minimum floor for Apollo to have meaningful collateral backing. Companies with ratios of 60–80%+ (asset-heavy industrials, transportation, real estate, specialty finance) are strongly preferred for ABF-style origination.
 - **This company**: Ratio 94.7%.
 - **Verdict**: Passed — the result clears the bar (> 40%).

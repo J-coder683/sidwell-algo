@@ -83,7 +83,8 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
     # 3. Recurring revenue
     rev_yoy = [rev_4y[i] / rev_4y[i-1] - 1 for i in range(1, 4)] if rev_4y[0] > 0 else []
     rev_yoy_stdev = np.std(rev_yoy, ddof=1) if len(rev_yoy) > 1 else 0
-    pass_3 = rev_yoy_stdev < 0.08
+    YOY_STDEV_MAX = 0.08
+    pass_3 = rev_yoy_stdev < YOY_STDEV_MAX
     checks["3_recurring_revenue"] = {
         "part": "A",
         "name": "Recurring Revenue",
@@ -91,6 +92,7 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
         "value": rev_yoy_stdev,
         "threshold_str": "< 8pp",
         "passed": pass_3,
+        "proximity": _scoring.proximity(rev_yoy_stdev, YOY_STDEV_MAX, "below"),
         "detail": f"YoY growth stdev is {rev_yoy_stdev*100:.1f}pp."
     }
     
@@ -214,8 +216,8 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
     
     # --- PART D: Scale Fit & Hold ---
     # 11. Blackstone-scale
-    threshold_cap = 1.5e11 if is_india else 5e9
-    pass_11 = market_cap > threshold_cap
+    CAP_MIN = 1.5e11 if is_india else 5e9
+    pass_11 = market_cap > CAP_MIN
     checks["11_scale"] = {
         "part": "D",
         "name": "Blackstone-Scale Deal",
@@ -223,6 +225,7 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
         "value": market_cap,
         "threshold_str": f"> {'₹150B' if is_india else '$5B'}",
         "passed": pass_11,
+        "proximity": _scoring.proximity(market_cap, CAP_MIN, "above"),
         "detail": f"Market cap is {'adequate' if pass_11 else 'too small'}."
     }
     

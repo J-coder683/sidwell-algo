@@ -748,11 +748,35 @@ def _render_check(check_id: str, check_dict: dict):
         tag_pts = "0 pts"
         title_opacity = "1"
 
+    proximity = check_dict.get("proximity")
+    badge_html = ""
+    if proximity is not None:
+        if proximity >= 0.25:
+            prox_color = "var(--pos)"
+        elif proximity >= 0.10:
+            prox_color = "var(--pos)"
+        elif proximity >= 0:
+            prox_color = "var(--warn)"
+        elif proximity >= -0.10:
+            prox_color = "orange"
+        else:
+            prox_color = "var(--neg)"
+            
+        prox_str = ("+∞" if proximity == float("inf")
+                    else "-∞" if proximity == float("-inf")
+                    else f"{proximity:+.2f}")
+        badge_html = (
+            f'<span style="margin-left: 8px; font-size: 0.75rem; padding: 2px 6px; '
+            f'border-radius: 4px; background: {prox_color}; color: white; '
+            f'font-weight: 600; opacity: 0.9;">'
+            f'{prox_str}</span>'
+        )
+
     st.markdown(
         f'<div class="check-row-container">'
         f'<div class="check-dot {dot_class}"></div>'
         f'<div style="font-weight: 500; font-family: var(--font-ui); color: var(--ink); opacity: {title_opacity};">'
-        f'{expl["title"]} <span style="opacity:0.6; font-style:italic; font-weight:400; margin-left:6px;">— {tag_pts}</span></div>'
+        f'{expl["title"]} {badge_html}<span style="opacity:0.6; font-style:italic; font-weight:400; margin-left:6px;">— {tag_pts}</span></div>'
         f'</div>',
         unsafe_allow_html=True
     )

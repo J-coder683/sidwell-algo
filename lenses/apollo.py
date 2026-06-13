@@ -142,8 +142,8 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
     }
     
     # 4. Capital deployment scale
-    threshold_scale = 20e9 if is_india else 500e6
-    pass_4 = entry_ev > threshold_scale
+    SCALE_MIN = 20e9 if is_india else 500e6
+    pass_4 = entry_ev > SCALE_MIN
     checks["4_capital_deployment_scale"] = {
         "part": "A",
         "name": "Deployment Scale",
@@ -151,6 +151,7 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
         "value": entry_ev,
         "threshold_str": f"> {'₹20B' if is_india else '$500M'}",
         "passed": pass_4,
+        "proximity": _scoring.proximity(entry_ev, SCALE_MIN, "above"),
         "detail": f"EV is {entry_ev:.1f}."
     }
     
@@ -333,7 +334,8 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
     # 14. Tangible asset / collateral base
     tangible_assets = latest_total_assets - latest_intangibles - latest_goodwill
     tangible_ratio = tangible_assets / latest_total_assets
-    pass_14 = tangible_ratio > 0.40
+    TANGIBLE_RATIO_MIN = 0.40
+    pass_14 = tangible_ratio > TANGIBLE_RATIO_MIN
     checks["14_collateral_base"] = {
         "part": "D",
         "name": "Tangible Collateral",
@@ -341,6 +343,7 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
         "value": tangible_ratio,
         "threshold_str": "> 40%",
         "passed": pass_14,
+        "proximity": _scoring.proximity(tangible_ratio, TANGIBLE_RATIO_MIN, "above"),
         "detail": f"Ratio {tangible_ratio*100:.1f}%."
     }
     

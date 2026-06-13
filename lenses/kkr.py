@@ -66,8 +66,8 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
     
     # --- PART A: LBO Viability ---
     # 1. EBITDA scale
-    threshold_ebitda = 4e9 if is_india else 200e6
-    pass_1 = latest_ebitda > threshold_ebitda
+    EBITDA_MIN = 4e9 if is_india else 200e6
+    pass_1 = latest_ebitda > EBITDA_MIN
     checks["1_ebitda_scale"] = {
         "part": "A",
         "name": "EBITDA Scale",
@@ -75,6 +75,7 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": latest_ebitda,
         "threshold_str": f"> {'₹4.0B' if is_india else '$200M'}",
         "passed": pass_1,
+        "proximity": _scoring.proximity(latest_ebitda, EBITDA_MIN, "above"),
         "detail": f"Latest EBITDA {'passes' if pass_1 else 'fails'} scale check."
     }
     
@@ -86,7 +87,8 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
     mean_fcf = np.mean(fcf_4y)
     mean_eat = np.mean(ebit_after_tax_4y)
     fcf_conv = mean_fcf / mean_eat if mean_eat > 0 else 0
-    pass_2 = fcf_conv > 0.60
+    FCF_CONV_MIN = 0.60
+    pass_2 = fcf_conv > FCF_CONV_MIN
     checks["2_fcf_conversion"] = {
         "part": "A",
         "name": "FCF Conversion",
@@ -94,12 +96,14 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": fcf_conv,
         "threshold_str": "> 60.00%",
         "passed": pass_2,
+        "proximity": _scoring.proximity(fcf_conv, FCF_CONV_MIN, "above"),
         "detail": f"Average conversion is {fcf_conv*100:.1f}%."
     }
     
     # 3. Leverage capacity
     lev = debt / latest_ebitda if latest_ebitda > 0 else 999.0
-    pass_3 = lev < 3.0
+    LEV_MAX = 3.0
+    pass_3 = lev < LEV_MAX
     checks["3_leverage_capacity"] = {
         "part": "A",
         "name": "Leverage Capacity",
@@ -107,11 +111,13 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": lev,
         "threshold_str": "< 3.0x",
         "passed": pass_3,
+        "proximity": _scoring.proximity(lev, LEV_MAX, "below"),
         "detail": f"Leverage is {lev:.2f}x."
     }
     
     # 4. EBITDA margin
-    pass_4 = latest_ebitda_margin > 0.15
+    EBITDA_MARGIN_MIN = 0.15
+    pass_4 = latest_ebitda_margin > EBITDA_MARGIN_MIN
     checks["4_ebitda_margin"] = {
         "part": "A",
         "name": "EBITDA Margin",
@@ -119,13 +125,15 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": latest_ebitda_margin,
         "threshold_str": "> 15.00%",
         "passed": pass_4,
+        "proximity": _scoring.proximity(latest_ebitda_margin, EBITDA_MARGIN_MIN, "above"),
         "detail": f"Margin is {latest_ebitda_margin*100:.1f}%."
     }
     
     # --- PART B: Operational Upside ---
     # 5. Margin improvement room
     max_ebit_margin = max(ebit_margin_4y) if ebit_margin_4y else 0
-    pass_5 = latest_ebit_margin < (max_ebit_margin * 0.95)
+    MARGIN_IMPROVEMENT_MAX = max_ebit_margin * 0.95
+    pass_5 = latest_ebit_margin < MARGIN_IMPROVEMENT_MAX
     checks["5_margin_improvement"] = {
         "part": "B",
         "name": "Margin Improvement Room",
@@ -133,6 +141,7 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": (latest_ebit_margin, max_ebit_margin),
         "threshold_str": "Current < 95% of Peak",
         "passed": pass_5,
+        "proximity": _scoring.proximity(latest_ebit_margin, MARGIN_IMPROVEMENT_MAX, "below"),
         "detail": "Margin compression exists." if pass_5 else "Already at/near peak margin."
     }
     
@@ -341,7 +350,8 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
     if entry_equity > 0 and exit_equity > 0:
         irr_7y = (exit_equity / entry_equity) ** (1/7) - 1
         
-    pass_15 = irr_7y > 0.18
+    IRR_7Y_MIN = 0.18
+    pass_15 = irr_7y > IRR_7Y_MIN
     checks["15_irr_feasibility"] = {
         "part": "D",
         "name": "7-Year IRR",
@@ -349,6 +359,7 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
         "value": irr_7y,
         "threshold_str": "> 18.00%",
         "passed": pass_15,
+        "proximity": _scoring.proximity(irr_7y, IRR_7Y_MIN, "above"),
         "detail": f"Entry mult {entry_multiple:.1f}x -> Exit mult {exit_multiple:.1f}x."
     }
     

@@ -87,13 +87,15 @@ def evaluate_marks_lens(
             mos = (intrinsic_value - current_price) / intrinsic_value
         else:
             mos = -1.0
-        check_1_passed = mos > 0.40
+        MOS_MIN = 0.40
+        check_1_passed = mos > MOS_MIN
         checks["1_deep_mos"] = {
             "name": "Deep margin of safety",
             "metric_name": "MoS (Marks 40% threshold)",
             "value": mos,
             "threshold_str": "> 40%",
             "passed": check_1_passed,
+            "proximity": _scoring.proximity(mos, MOS_MIN, "above"),
             "detail": (
                 f"MoS = {mos*100:+.2f}% > 40%"
                 if check_1_passed
@@ -129,9 +131,11 @@ def evaluate_marks_lens(
                 asymmetry_ratio = 0.0
             else:
                 asymmetry_ratio = (upside_scenario - current_price) / max(current_price - downside_scenario, 1e-9)
-            check_2_passed = asymmetry_ratio > 3.0
+            ASYMMETRY_MIN = 3.0
+            check_2_passed = asymmetry_ratio > ASYMMETRY_MIN
         else:
             asymmetry_ratio = 0.0
+            ASYMMETRY_MIN = 3.0
             check_2_passed = False
         checks["2_asymmetric_payoff"] = {
             "name": "Asymmetric upside-to-downside payoff",
@@ -139,6 +143,7 @@ def evaluate_marks_lens(
             "value": asymmetry_ratio,
             "threshold_str": "> 3.0x",
             "passed": check_2_passed,
+            "proximity": _scoring.proximity(asymmetry_ratio, ASYMMETRY_MIN, "above"),
             "detail": (
                 f"Asymmetry ratio = {asymmetry_ratio:.2f} > 3.0"
                 if check_2_passed
@@ -155,13 +160,15 @@ def evaluate_marks_lens(
         tangible_book_ratio = latest_equity / market_cap
     else:
         tangible_book_ratio = 0.0
-    check_3_passed = tangible_book_ratio > 0.30
+    TB_RATIO_MIN = 0.30
+    check_3_passed = tangible_book_ratio > TB_RATIO_MIN
     checks["3_downside_protection"] = {
         "name": "Downside protection (tangible book)",
         "metric_name": "Equity / Market Cap (proxy for tangible book)",
         "value": tangible_book_ratio,
         "threshold_str": "> 30%",
         "passed": check_3_passed,
+        "proximity": _scoring.proximity(tangible_book_ratio, TB_RATIO_MIN, "above"),
         "detail": f"Equity/MCap = {tangible_book_ratio*100:.2f}% ({'>' if check_3_passed else '<='} 30%)",
         "part": "A",
     }
@@ -169,8 +176,9 @@ def evaluate_marks_lens(
     # 4. Multiple expansion not exhausted
     # v0.3 placeholder: trailing P/E < 25x (sector comp deferred to v0.4)
     trailing_pe = financials.get("trailing_pe")
+    PE_MAX = 25.0
     if trailing_pe is not None and trailing_pe > 0:
-        check_4_passed = trailing_pe < 25.0
+        check_4_passed = trailing_pe < PE_MAX
         detail_4 = f"Trailing P/E = {trailing_pe:.1f}x ({'< 25x' if check_4_passed else '>= 25x'})"
     else:
         check_4_passed = True  # Default PASS when P/E unavailable
@@ -181,6 +189,7 @@ def evaluate_marks_lens(
         "value": trailing_pe,
         "threshold_str": "< 25x (v0.3 placeholder; sector comp in v0.4)",
         "passed": check_4_passed,
+        "proximity": _scoring.proximity(trailing_pe, PE_MAX, "below") if trailing_pe is not None and trailing_pe > 0 else None,
         "detail": detail_4,
         "part": "A",
     }
@@ -219,9 +228,10 @@ def evaluate_marks_lens(
 
     # 6. Company earnings vs cyclical peak
     # Test: latest_net_income / max(4y_net_income) > 0.70
+    EPS_VS_PEAK_MIN = 0.70
     if hist_net_income and max(hist_net_income) > 0:
         eps_vs_peak = hist_net_income[-1] / max(hist_net_income)
-        check_6_passed = eps_vs_peak > 0.70
+        check_6_passed = eps_vs_peak > EPS_VS_PEAK_MIN
     else:
         eps_vs_peak = 0.0
         check_6_passed = False
@@ -231,6 +241,7 @@ def evaluate_marks_lens(
         "value": eps_vs_peak,
         "threshold_str": "> 70% of peak",
         "passed": check_6_passed,
+        "proximity": _scoring.proximity(eps_vs_peak, EPS_VS_PEAK_MIN, "above"),
         "detail": f"Latest NI / Peak NI = {eps_vs_peak*100:.1f}%",
         "part": "B",
     }
@@ -302,13 +313,15 @@ def evaluate_marks_lens(
     # 10. Volatility / beta within Marks's range
     # Test: stock_beta < 1.5
     beta = financials.get("stock_beta", 1.0)
-    check_10_passed = beta < 1.5
+    BETA_MAX = 1.5
+    check_10_passed = beta < BETA_MAX
     checks["10_beta"] = {
         "name": "Volatility / beta",
         "metric_name": "Stock beta",
         "value": beta,
         "threshold_str": "< 1.5",
         "passed": check_10_passed,
+        "proximity": _scoring.proximity(beta, BETA_MAX, "below"),
         "detail": f"Beta = {beta:.2f} ({'<' if check_10_passed else '>='} 1.5)",
         "part": "C",
     }

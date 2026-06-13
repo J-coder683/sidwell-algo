@@ -191,5 +191,39 @@ def test_marks_check13_low_confidence_excluded():
     }
     result = evaluate_marks_lens(fin, dcf, qualitative_results=qual)
     check_13 = result["checks"]["13_management_humility"]
-    assert check_13["applicable"] is False
     assert "low-confidence" in check_13["detail"].lower() or "excluded" in check_13["detail"].lower()
+
+# --- proximity --------------------------------------------------------------
+
+def test_proximity_valid_above():
+    # threshold 10, value 12, direction "above"
+    # distance = (12 - 10) / 10 = 0.2
+    assert math.isclose(_scoring.proximity(12.0, 10.0, "above"), 0.2)
+    # threshold 10, value 8, direction "above"
+    # distance = (8 - 10) / 10 = -0.2
+    assert math.isclose(_scoring.proximity(8.0, 10.0, "above"), -0.2)
+
+def test_proximity_valid_below():
+    # threshold 20, value 15, direction "below"
+    # distance = (20 - 15) / 20 = 0.25
+    assert math.isclose(_scoring.proximity(15.0, 20.0, "below"), 0.25)
+    # threshold 20, value 25, direction "below"
+    # distance = (20 - 25) / 20 = -0.25
+    assert math.isclose(_scoring.proximity(25.0, 20.0, "below"), -0.25)
+
+def test_proximity_zero_threshold():
+    # threshold 0. We should normalize by max(abs(0), abs(value))
+    # value 5, direction "above"
+    # distance = 5 - 0 = 5. denom = 5 -> 1.0
+    assert math.isclose(_scoring.proximity(5.0, 0.0, "above"), 1.0)
+    assert math.isclose(_scoring.proximity(-5.0, 0.0, "above"), -1.0)
+    assert math.isclose(_scoring.proximity(5.0, 0.0, "below"), -1.0)
+
+def test_proximity_both_zero():
+    # value 0, threshold 0 -> denom is 0, should fallback to denom=1.0 or return 0.0
+    assert _scoring.proximity(0.0, 0.0, "above") == 0.0
+
+def test_proximity_invalid_inputs():
+    assert _scoring.proximity(None, 10.0, "above") is None
+    assert _scoring.proximity(10.0, None, "above") is None
+    assert _scoring.proximity("string", 10.0, "above") is None

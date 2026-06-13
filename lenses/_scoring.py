@@ -82,3 +82,29 @@ def proportional_gate(levers, base_passed=4, base_total=6):
     threshold = math.ceil(base_passed / base_total * n) if n > 0 else 0
     gate_passed = n > 0 and passed >= threshold
     return passed, n, threshold, gate_passed
+
+
+def proximity(value, threshold, direction, *, eps=1e-9):
+    """
+    Signed normalized distance from a numeric check's value to its threshold.
+
+    direction="above": check passes when value >= threshold (higher is better)
+    direction="below": check passes when value <= threshold (lower is better)
+
+    Returns a signed float:
+      > 0  value is on the passing side (magnitude = how comfortably)
+      ~ 0  knife-edge
+      < 0  value failed (magnitude = how badly)
+    Returns None if value or threshold is None.
+
+    Normalization: raw_gap / abs(threshold). When abs(threshold) < eps, fall
+    back to abs(value). When both are ~0, return the raw absolute gap.
+    """
+    if value is None or threshold is None:
+        return None
+    try:
+        raw_gap = (float(value) - float(threshold)) if direction == "above" else (float(threshold) - float(value))
+        denom = abs(float(threshold)) if abs(float(threshold)) > eps else (abs(float(value)) if abs(float(value)) > eps else None)
+        return raw_gap if denom is None else raw_gap / denom
+    except (TypeError, ValueError):
+        return None
