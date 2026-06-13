@@ -7,8 +7,11 @@ class SharesEngine:
     def calculate(fin: Dict[str, Any], ajp: AJP) -> Dict[str, Any]:
         """Calculates diluted shares using the treasury stock method."""
         
-        current_price = fin.get("current_price", 0.0)
-        market_cap = fin.get("market_cap", 0.0)
+        # `.get(k, 0.0)` does NOT coerce an explicit None (market_cap/current_price can be
+        # None when price or shares were unavailable from the source) — `or 0.0` does, so the
+        # arithmetic below stays safe.
+        current_price = fin.get("current_price") or 0.0
+        market_cap = fin.get("market_cap") or 0.0
 
         # Basic share count. market_cap / price is unreliable when the two are from
         # different split/bonus-adjustment states, so prefer the definitional inverse
@@ -23,8 +26,11 @@ class SharesEngine:
             if prof and eps and eps != 0:
                 shares_from_eps = (prof * 1e7) / eps                 # crore→₹ ÷ EPS = shares
                 break
-        mcap_shares = (market_cap / current_price) if (current_price and current_price > 0) else 0.0
-        scraped_basic_shares = shares_from_eps if shares_from_eps else mcap_shares
+        mcap_shares = (market_cap / current_price) if (market_cap > 0 and current_price > 0) else 0.0
+        # Priority: EPS-derived shares (India/screener) -> market_cap/price -> the directly
+        # scraped shares_outstanding (US adapters set this). A None/0 market_cap must never
+        # zero out the share count or crash the engine.
+        scraped_basic_shares = shares_from_eps or mcap_shares or (fin.get("shares_outstanding") or 0.0)
         
         options_val = AJPLoader.get_assumption_or_fallback(
             ajp, "options_outstanding", None, "Scraped basic shares fallback"
