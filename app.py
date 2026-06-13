@@ -146,6 +146,16 @@ def _peer_options() -> dict:
         
     return opts
 
+@st.cache_data(ttl=86_400, show_spinner=False)
+def _fetch_price_history(ticker: str):
+    from data.stooq import fetch_price_history
+    return fetch_price_history(ticker)
+
+@st.cache_data(ttl=86_400, show_spinner=False)
+def _build_variables(ticker: str):
+    from analysis.metric_lab import build_variables
+    return build_variables(ticker)
+
 @st.cache_data(ttl=86400, show_spinner=False)
 def _get_fun_fact(ticker: str) -> str:
     import os
@@ -885,6 +895,123 @@ def _render_lens_tab(lens_results: dict, lens_key: str, financials: dict,
     except Exception as e:
         st.error(f"PDF export error: {e}")
 
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Metric Lab Tab
+# ---------------------------------------------------------------------------
+
+def _render_metric_lab_tab(peer_opts: dict):
+    import altair as alt
+    import pandas as pd
+    from analysis.metric_lab import evaluate_formula, list_variables
+    
+    st.header("🧪 Metric Lab")
+    
+    st.subheader("Part A: Price History")
+    selected_price_labels = st.multiselect("Select Companies for Price Chart", options=list(peer_opts.keys()), key="ml_price_select")
+    
+    if selected_price_labels:
+        dfs = []
+        for label in selected_price_labels:
+            tkr = peer_opts[label]
+            df = _fetch_price_history(tkr)
+            if not df.empty:
+                df = df.copy()
+                df["Ticker"] = tkr
+                dfs.append(df)
+        
+        if dfs:
+            merged_df = pd.concat(dfs, ignore_index=True)
+            brush = alt.selection_interval(bind='scales', encodings=['x'])
+            chart = alt.Chart(merged_df).mark_line().encode(
+                x='Date:T',
+                y='Close:Q',
+                color='Ticker:N',
+                tooltip=['Date', 'Close', 'Ticker']
+            ).add_params(brush).properties(height=400)
+            st.altair_chart(chart, use_container_width=True)
+        else:
+            st.warning("No price history found for selected companies.")
+            
+    st.divider()
+    
+    st.subheader("Part B: Metric Builder")
+    if "ml_graphs" not in st.session_state:
+        st.session_state.ml_graphs = [{"id": 0, "formula": "", "tickers": []}]
+        
+    def add_graph():
+        next_id = max([g["id"] for g in st.session_state.ml_graphs] + [-1]) + 1
+        st.session_state.ml_graphs.append({"id": next_id, "formula": "", "tickers": []})
+        
+    def remove_graph(g_id):
+        st.session_state.ml_graphs = [g for g in st.session_state.ml_graphs if g["id"] != g_id]
+        if not st.session_state.ml_graphs:
+            add_graph()
+
+    for idx, graph_config in enumerate(st.session_state.ml_graphs):
+        gid = graph_config["id"]
+        with st.container(border=True):
+            cols = st.columns([11, 1])
+            with cols[0]:
+                formula = st.text_input(f"Formula", value=graph_config["formula"], key=f"ml_form_{gid}")
+                with st.expander("Help / Available Variables"):
+                    st.write("**Examples:** `ccc`, `inventory/cogs`, `cogs[t-2]/sales`, `ccc*beta^2 + (inventory/cogs)^2`, `pe`, `(operating_profit+depreciation)/sales`, `debt/equity*100`")
+                    if graph_config["tickers"]:
+                        # Show tokens for the first selected ticker
+                        tkr = peer_opts[graph_config["tickers"][0]]
+                        grouped_tokens = list_variables(tkr)
+                        st.write(f"Tokens available for {tkr}:")
+                        for group_name, tokens in grouped_tokens.items():
+                            st.markdown(f"**{group_name}**")
+                            st.write(", ".join([f"`{t}`" for t in tokens]))
+                    else:
+                        st.write("Select a company below to see available tokens.")
+                        
+                tickers = st.multiselect(f"Companies", options=list(peer_opts.keys()), default=graph_config["tickers"], key=f"ml_tkrs_{gid}")
+            with cols[1]:
+                st.write("")
+                st.write("")
+                if st.button("✕", key=f"ml_rm_{gid}"):
+                    remove_graph(gid)
+                    st.rerun()
+            
+            # Save state
+            graph_config["formula"] = formula
+            graph_config["tickers"] = tickers
+            
+            if formula and tickers:
+                series_data = []
+                has_error = False
+                for label in tickers:
+                    tkr = peer_opts[label]
+                    vars_dict = _build_variables(tkr)
+                    if not vars_dict:
+                        continue
+                    try:
+                        res_series = evaluate_formula(formula, vars_dict)
+                        if not res_series.empty:
+                            df = res_series.reset_index()
+                            df.columns = ["Year", "Value"]
+                            df["Ticker"] = tkr
+                            series_data.append(df)
+                    except ValueError as e:
+                        has_error = True
+                        st.warning(f"{tkr}: {str(e)}")
+                
+                if series_data and not has_error:
+                    merged_df = pd.concat(series_data, ignore_index=True)
+                    # Convert Year to integer so altair plots it nicely without commas
+                    merged_df["Year"] = merged_df["Year"].astype(int)
+                    chart = alt.Chart(merged_df).mark_line(point=True).encode(
+                        x=alt.X('Year:O', axis=alt.Axis(format="d")),
+                        y=alt.Y('Value:Q'),
+                        color='Ticker:N',
+                        tooltip=['Year', 'Value', 'Ticker']
+                    ).properties(height=300)
+                    st.altair_chart(chart, use_container_width=True)
+
+    st.button("➕ Add another graph", on_click=add_graph)
 
 # ---------------------------------------------------------------------------
 # DCF tab
@@ -1689,6 +1816,7 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
         "KKR",
         "Blackstone",
         "Apollo",
+        "🧪 Metric Lab",
     ])
 
     with tabs[0]:
@@ -1708,3 +1836,6 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
 
     with tabs[5]:
         _render_lens_tab(apollo_results, "apollo", financials, dcf_results)
+
+    with tabs[6]:
+        _render_metric_lab_tab(_peer_options())
