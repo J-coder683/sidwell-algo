@@ -14,15 +14,34 @@ from analysis.qualitative import (
 # pdfplumber are mocked so the suite never makes a network or LLM call.
 
 
-def _mock_openai(content: str):
+def _make_stream_chunks(content: str, n_chunks: int):
+    """Split `content` into n streaming chunks shaped like the OpenAI SDK emits:
+    each chunk has choices[0].delta.content. A trailing chunk with delta.content
+    is None mimics the real finish marker — exercising _call_deepseek's None-skip."""
+    chunks = []
+    if content:
+        n = max(1, min(n_chunks, len(content)))
+        size = (len(content) + n - 1) // n
+        for i in range(0, len(content), size):
+            delta = MagicMock(); delta.content = content[i:i + size]
+            choice = MagicMock(); choice.delta = delta
+            ch = MagicMock(); ch.choices = [choice]
+            chunks.append(ch)
+    fin_delta = MagicMock(); fin_delta.content = None
+    fin_choice = MagicMock(); fin_choice.delta = fin_delta
+    fin = MagicMock(); fin.choices = [fin_choice]
+    chunks.append(fin)
+    return chunks
+
+
+def _mock_openai(content: str, n_chunks: int = 3):
     """Build (OpenAI_class_mock, client_mock) whose
-    client.chat.completions.create(...) returns a response carrying `content`
-    at choices[0].message.content — the shape _call_deepseek reads."""
-    msg = MagicMock(); msg.content = content
-    choice = MagicMock(); choice.message = msg
-    resp = MagicMock(); resp.choices = [choice]
+    client.chat.completions.create(..., stream=True) returns an iterable of chunks
+    carrying `content` across choices[0].delta.content — the streaming shape
+    _call_deepseek now reads. A list is used (re-iterable) rather than a generator."""
+    chunks = _make_stream_chunks(content, n_chunks)
     client = MagicMock()
-    client.chat.completions.create.return_value = resp
+    client.chat.completions.create.return_value = chunks
     return MagicMock(return_value=client), client
 
 
@@ -111,6 +130,29 @@ def test_deepseek_valid_response_is_parsed_and_cached(mock_pdfplumber, mock_get,
     assert result["coherence_assessment"]["verdict"] == "coherent"
     assert "extraction_metadata" in result
     assert len(written_cache) == 1
+
+
+@patch("analysis.qualitative.requests.get")
+@patch("analysis.qualitative.pdfplumber.open")
+def test_streaming_assembles_chunks_and_emits_heartbeat(mock_pdfplumber, mock_get, monkeypatch):
+    """Multi-chunk delta stream is reassembled into the full JSON, stream=True is
+    requested, and the stream_cb heartbeat fires with the final char count."""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "fake")
+    _mock_pdf(mock_pdfplumber, mock_get)
+    payload = json.dumps(_VALID_PAYLOAD)
+    cls, client = _mock_openai(payload, n_chunks=5)
+
+    seen = []
+    with patch("data.cache.get_json", return_value=None), \
+         patch("analysis.qualitative.OpenAI", cls), \
+         patch("data.cache.set_json"):
+        result = extract_qualitative("TEST.NS", _DOCS, stream_cb=lambda c: seen.append(c))
+
+    assert result["status"] == "available"
+    assert result["coherence_assessment"]["verdict"] == "coherent"  # full JSON reassembled
+    _, kwargs = client.chat.completions.create.call_args
+    assert kwargs.get("stream") is True
+    assert seen and seen[-1] == len(payload)  # final heartbeat lands on the true total
 
 
 def test_cache_hit_skips_deepseek_call(monkeypatch):

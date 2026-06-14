@@ -309,11 +309,20 @@ def _select_documents(documents: list, has_research: bool) -> list:
 
 # ─── DeepSeek client ──────────────────────────────────────────────────────────
 
-def _call_deepseek(documents_text: str, ticker: str, historical_context: str = "") -> dict:
+def _call_deepseek(documents_text: str, ticker: str, historical_context: str = "",
+                   stream_cb=None) -> dict:
     """Invoke DeepSeek V4 Pro for structured qualitative extraction.
 
     historical_context: optional Markdown block (from build_historical_context_md)
     prepended before the prompt template so the model sees real numbers first.
+
+    stream_cb: optional callable(chars_received:int). The response is streamed and
+    deltas are assembled into the same JSON string parsed before. On a throttled
+    (~1/sec) cadence the running character count is reported via stream_cb. This
+    surfaces progress and — critically — keeps the Streamlit browser↔server
+    websocket warm during the multi-minute call, avoiding the 1011 keepalive
+    ping-timeout that silently dropped long runs before the lenses could render.
+    The callback is best-effort: any exception inside it is swallowed.
     """
     try:
         import streamlit as st
@@ -334,6 +343,7 @@ def _call_deepseek(documents_text: str, ticker: str, historical_context: str = "
     hist_prefix = f"{historical_context}\n\n" if historical_context else ""
     prompt = f"{hist_prefix}{prompt_template}\n\n## Documents for {ticker}\n\n{documents_text}"
 
+    chars = 0  # running response char count (referenced in logging/except)
     try:
         client = OpenAI(
             api_key=api_key,
@@ -341,31 +351,66 @@ def _call_deepseek(documents_text: str, ticker: str, historical_context: str = "
             timeout=600.0,  # 10 min — DeepSeek V4 Pro can be slow on large multi-doc payloads
         )
         _t0 = time.perf_counter()
-        resp = client.chat.completions.create(
+        stream = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
                 {"role": "system", "content": "You are a top-tier Wall Street buy-side analyst. Output ONLY valid JSON."},
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            stream=True,
         )
+
+        parts = []
+        _last_emit = 0.0
+        for chunk in stream:
+            # Defensive: real streams emit a final chunk whose delta.content is None,
+            # and tool/role-only chunks may carry no choices. Skip anything empty.
+            choices = getattr(chunk, "choices", None) or []
+            if not choices:
+                continue
+            delta = getattr(choices[0], "delta", None)
+            piece = getattr(delta, "content", None) if delta is not None else None
+            if not piece:
+                continue
+            parts.append(piece)
+            chars += len(piece)
+            # Throttled heartbeat (~1/sec): enough to keep the websocket alive and
+            # animate progress, without flooding Streamlit with reruns per token.
+            if stream_cb is not None:
+                now = time.perf_counter()
+                if now - _last_emit >= 1.0:
+                    _last_emit = now
+                    try:
+                        stream_cb(chars)
+                    except Exception:
+                        pass  # UI heartbeat must never break the pipeline
+
+        # Final flush so the UI lands on the true total even for short/fast responses.
+        if stream_cb is not None:
+            try:
+                stream_cb(chars)
+            except Exception:
+                pass
+
         _elapsed = time.perf_counter() - _t0
         # Duration logging so the timeout can be sized from real data (not a guess).
         logger.info(
-            f"DeepSeek call for {ticker} completed in {_elapsed:.1f}s "
-            f"(model={MODEL_NAME}, prompt_chars={len(prompt)})"
+            f"DeepSeek stream for {ticker} completed in {_elapsed:.1f}s "
+            f"(model={MODEL_NAME}, prompt_chars={len(prompt)}, response_chars={chars})"
         )
 
-        content = resp.choices[0].message.content.strip()
+        content = "".join(parts).strip()
         if content.startswith("```json"):
             content = content.split("```json")[1].rsplit("```", 1)[0].strip()
         elif content.startswith("```"):
             content = content.split("```")[1].rsplit("```", 1)[0].strip()
-            
+
         return json.loads(content)
     except json.JSONDecodeError as e:
+        logger.error(f"DeepSeek stream for {ticker} returned invalid JSON after {chars} chars: {e}")
         return _unavailable(f"DeepSeek response not valid JSON: {e}")
     except Exception as e:
-        logger.error(f"DeepSeek call failed for {ticker}: {e}")
+        logger.error(f"DeepSeek call failed for {ticker} after {chars} chars: {e}")
         return _unavailable(f"DeepSeek error: {type(e).__name__}: {e}")
 
 
@@ -378,6 +423,7 @@ def extract_qualitative(
     documents: list,
     historical_context: str = "",
     research_docs: list | None = None,
+    stream_cb=None,
 ) -> dict:
     """
     Run DeepSeek V4 Pro extraction across the documents.
@@ -545,7 +591,8 @@ def extract_qualitative(
     )
 
     logger.info(f"Sending {len(documents_text)} chars to DeepSeek for analysis. This may take a few minutes...")
-    result = _call_deepseek(documents_text, ticker, historical_context=historical_context)
+    result = _call_deepseek(documents_text, ticker, historical_context=historical_context,
+                            stream_cb=stream_cb)
     if result.get("status") == "unavailable":
         return result
 

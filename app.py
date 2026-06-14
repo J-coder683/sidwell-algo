@@ -1799,6 +1799,14 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
     def _on_progress(step, total, label):
         status_ui.update(label=f"Step {step}/{total} — {label}")
 
+    def _on_stream(chars):
+        # Animates the Step 2 label as DeepSeek streams; the websocket traffic this
+        # generates keeps the connection alive through the multi-minute call.
+        status_ui.update(
+            label=f"Step 2/5 — Reading filings & qualitative signals… "
+                  f"{chars/1000:.1f}k chars analyzed"
+        )
+
     # Run analyze() directly (NOT through the @st.cache_data wrapper) so the stage
     # callbacks flush to the UI live. The cached wrapper both skipped emits on a
     # cache hit and buffered UI updates on a miss, so stages never animated. A
@@ -1810,6 +1818,7 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
         status_ui.update(label=f"Analysis complete — {ticker}", state="complete", expanded=False)
     else:
         value.set_progress_callback(_on_progress)
+        value.set_stream_callback(_on_stream)
         try:
             research_docs = [{"filename": n, "bytes": b} for n, b in research_tuple] or None
             results = analyze(ticker, research_docs=research_docs)
@@ -1833,6 +1842,7 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
             st.stop()
         finally:
             value.set_progress_callback(None)
+            value.set_stream_callback(None)
 
     financials = results["financials"]
     dcf_results = results["dcf_results"]

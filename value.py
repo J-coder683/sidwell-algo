@@ -40,6 +40,23 @@ def _emit_progress(step, total, label):
             pass  # progress reporting must never break the pipeline
 
 
+_STREAM_CALLBACK = None
+
+def set_stream_callback(cb):
+    """Register a UI heartbeat callback fired during the streamed DeepSeek call:
+    cb(chars_received:int). Pass None to clear. Keeps the Streamlit websocket warm
+    on long qualitative runs and animates progress."""
+    global _STREAM_CALLBACK
+    _STREAM_CALLBACK = cb
+
+def _emit_stream(chars):
+    if _STREAM_CALLBACK is not None:
+        try:
+            _STREAM_CALLBACK(chars)
+        except Exception:
+            pass  # heartbeat must never break the pipeline
+
+
 def load_dotenv():
     """
     Manually load .env file if it exists to avoid external library dependencies.
@@ -178,7 +195,8 @@ def analyze(
             logger.warning(f"API Ninjas calendar unavailable for {ticker}: {e}")
 
     qualitative_results = qualitative.extract_qualitative(
-        ticker, docs, historical_context=hist_ctx, research_docs=(research_docs or None)
+        ticker, docs, historical_context=hist_ctx, research_docs=(research_docs or None),
+        stream_cb=_emit_stream,
     )
 
     _emit_progress(3, 5, "Running DCF valuation")
