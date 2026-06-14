@@ -173,4 +173,47 @@ def build_historical_context_md(financials: dict) -> str:
             f"| {fy} | {_fmt(ar_v)} | {_fmt(inv_v)} | {_fmt(ap_v)} | {_fmt(cogs_v)} |"
         )
 
+    # Phase 2: Quarterly Trend
+    q_data = financials.get("quarterly")
+    if q_data and len(q_data.get("periods", [])) >= 4:
+        from analysis.quarterly import derive_quarterly_signals
+        q_sigs = derive_quarterly_signals(q_data)
+        
+        lines += [
+            "",
+            "### Quarterly Trend (most recent quarters — use for cycle position, momentum, seasonality)",
+            "| Quarter | Revenue | YoY % | OPM % |",
+            "|---|---|---|---|",
+        ]
+        
+        q_pers = q_data["periods"]
+        q_revs = q_data["revenue"]
+        q_opms = q_data.get("opm", [])
+        
+        for i, qp in enumerate(q_pers):
+            r_v = q_revs[i] if i < len(q_revs) else None
+            r_v_prev = q_revs[i-4] if i >= 4 and (i-4) < len(q_revs) else None
+            if r_v is not None and r_v_prev is not None and r_v_prev != 0:
+                yoy_q = f"{(r_v / r_v_prev - 1) * 100:.1f}%"
+            else:
+                yoy_q = "—"
+                
+            opm_v = q_opms[i] if i < len(q_opms) else None
+            
+            lines.append(f"| {qp} | {_fmt(r_v)} | {yoy_q} | {_pct1(opm_v)} |")
+            
+        def _fmt_sig_pct(v): return "—" if v is None else f"{v:+.1%}"
+        def _fmt_sig_acc(v):
+            if v == 1: return "accelerating"
+            if v == -1: return "decelerating"
+            if v == 0: return "flat"
+            return "—"
+        def _fmt_sig_seas(v):
+            if v is True: return "yes"
+            if v is False: return "no"
+            return "—"
+            
+        lines.append("")
+        lines.append(f"**Quarterly signals**: TTM YoY {_fmt_sig_pct(q_sigs.get('ttm_yoy_growth'))} | latest-Q YoY {_fmt_sig_pct(q_sigs.get('latest_q_yoy_growth'))} | momentum {_fmt_sig_acc(q_sigs.get('qoq_accel_sign'))} | seasonality {_fmt_sig_seas(q_sigs.get('seasonality_flag'))}")
+
     return "\n".join(lines)

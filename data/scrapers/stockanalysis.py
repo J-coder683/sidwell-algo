@@ -346,6 +346,52 @@ def fetch_stockanalysis_financials(ticker: str) -> dict | None:
             "years": years_annual[-4:] if len(years_annual) >= 4 else years_annual
         }
         
+        # Phase 1: Quarterly data extraction (graceful)
+        try:
+            q_url = f"https://stockanalysis.com/stocks/{t.lower()}/financials/?p=quarterly"
+            r_q = requests.get(q_url, headers=HEADERS, timeout=15)
+            if r_q.status_code == 200:
+                q_dfs = pd.read_html(io.StringIO(r_q.text))
+                if q_dfs:
+                    q_df = sorted(q_dfs, key=lambda x: x.size, reverse=True)[0]
+                    if isinstance(q_df.columns, pd.MultiIndex):
+                        q_df.columns = q_df.columns.get_level_values(0)
+                    
+                    label_col = q_df.columns[0]
+                    q_df.set_index(label_col, inplace=True)
+                    
+                    q_cols = [c for c in q_df.columns if str(c) not in ("TTM", "Current")][:12]
+                    q_cols.reverse()
+                    
+                    def _get_q_row(label):
+                        for idx in q_df.index:
+                            if str(idx).strip().lower() == label.lower():
+                                row = q_df.loc[idx]
+                                if isinstance(row, pd.DataFrame):
+                                    row = row.iloc[0]
+                                return [_parse_float(row[c]) for c in q_cols]
+                        return [None] * len(q_cols)
+                    
+                    q_rev = _get_q_row("Revenue")
+                    q_op = _get_q_row("Operating Income")
+                    q_net = _get_q_row("Net Income")
+                    q_opm = []
+                    for r, o in zip(q_rev, q_op):
+                        if r and o and r != 0:
+                            q_opm.append(o / r)
+                        else:
+                            q_opm.append(None)
+                    
+                    fin["quarterly"] = {
+                        "periods": q_cols,
+                        "revenue": q_rev,
+                        "operating_profit": q_op,
+                        "net_income": q_net,
+                        "opm": q_opm
+                    }
+        except Exception as e:
+            logger.warning(f"Failed to parse quarterly data for {ticker}: {e}")
+        
         _HIST_NUMERIC_KEYS = (
             "revenue", "gross_profit", "ebit", "interest_expense", "tax_provision",
             "pretax_income", "net_income", "total_assets", "total_equity", "cash",

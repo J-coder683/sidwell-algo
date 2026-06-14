@@ -33,7 +33,7 @@ QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
 # v0.7.6.4: Swapped Gemini 3.5 Flash → DeepSeek V4 Pro.
 # DeepSeek provides superior reasoning for qualitative metrics with a 1M token window.
 MODEL_NAME = "deepseek-v4-pro"
-PROMPT_VERSION = "v0.12"  # v0.12: evidence_quote + confidence fields added to all verdict-bearing soft signals
+PROMPT_VERSION = "v0.13"  # v0.13: added quarterly-trend context to Historical Anchor section
 
 # Maximum characters sent to Gemini for annual reports (smart-extracted).
 # Concalls use full-text — they are typically short (20-60 pages).

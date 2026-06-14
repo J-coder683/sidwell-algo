@@ -1216,6 +1216,32 @@ def _render_dcf_tab(results: dict):
         else:
             st.caption("Projection data unavailable.")
 
+    # ---- Quarterly Trend Chart ----
+    q_data = financials.get("quarterly")
+    if q_data and len(q_data.get("periods", [])) >= 4:
+        st.markdown("### Quarterly Trend")
+        import altair as alt
+        import pandas as pd
+        
+        q_df = pd.DataFrame({
+            "Quarter": q_data["periods"],
+            "Revenue": q_data["revenue"],
+            "OPM %": [opm if opm is not None else 0.0 for opm in q_data.get("opm", [])]
+        })
+        
+        base_bar = alt.Chart(q_df).mark_bar(opacity=0.7, color="#8fa6c0").encode(
+            x=alt.X("Quarter:N", sort=None, title="Quarter"),
+            y=alt.Y("Revenue:Q", title=f"Revenue ({currency})")
+        )
+
+        line_overlay = alt.Chart(q_df).mark_line(color="#7fa987", point=True).encode(
+            x=alt.X("Quarter:N", sort=None),
+            y=alt.Y("OPM %:Q", title="OPM %", axis=alt.Axis(format='%'))
+        )
+        
+        st.altair_chart(alt.layer(base_bar, line_overlay).resolve_scale(y='independent').properties(height=300), use_container_width=True)
+        st.divider()
+
     # ---- Live sensitivity sliders (offline re-run via overrides hook) ----
     from valuation import dcf as _dcf
 

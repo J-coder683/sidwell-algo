@@ -599,6 +599,30 @@ def fetch_screener_financials(ticker: str) -> dict:
     fin["source"] = "Screener.in"
     fin["book_value_per_share"] = (fin["total_equity"][-1] / shares_out) if shares_out and shares_out > 0 and len(fin["total_equity"]) > 0 and fin["total_equity"][-1] is not None else 0.0
 
+    # Phase 1: Quarterly data extraction (graceful)
+    try:
+        if q_table:
+            q_ths = q_table.find('thead').find_all('th')
+            # First th is empty, rest are quarters like "Dec 2023"
+            q_periods = [th.text.strip() for th in q_ths[1:]]
+            
+            q_sales = _get_row_data(q_table, ["Sales", "Revenue"])
+            q_op_profit = _get_row_data(q_table, ["Operating Profit", "Financing Profit"])
+            q_net_profit = _get_row_data(q_table, "Net Profit")
+            q_opm = _get_row_data(q_table, ["OPM %", "Financing Margin %"])
+            
+            n_q = len(q_periods)
+            if n_q > 0:
+                fin["quarterly"] = {
+                    "periods": q_periods,
+                    "revenue": _crore_to_rupee(q_sales[:n_q]),
+                    "operating_profit": _crore_to_rupee(q_op_profit[:n_q]),
+                    "net_income": _crore_to_rupee(q_net_profit[:n_q]),
+                    "opm": [(v / 100.0) if v is not None else None for v in q_opm[:n_q]]
+                }
+    except Exception as e:
+        logger.warning(f"Failed to parse quarterly data for {ticker}: {e}")
+
     # Derive COGS 10-year series
     is_it_service = any(
         kw in (s or "").lower() for s in (scraped_sector, scraped_broad_industry, scraped_industry)

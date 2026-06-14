@@ -144,3 +144,37 @@ def test_blank_ratio_displays_dash():
         assert cols[2] == "—", f"DIO (blank) should be '—', got '{cols[2]}'"
         # DSO and DPO are non-zero → should NOT be '—'
         assert cols[1] != "—", f"DSO should be a number, got '{cols[1]}'"
+
+# ---------------------------------------------------------------------------
+# Test 6: Quarterly trend block added when quarterly data is present
+# ---------------------------------------------------------------------------
+def test_quarterly_trend_block_present():
+    fin = _base_financials()
+    # Add quarterly data
+    fin["quarterly"] = {
+        "periods": ["Q1", "Q2", "Q3", "Q4", "Q5"],
+        "revenue": [1000.0, 1100.0, 1200.0, 1300.0, 1400.0],
+        "operating_profit": [100.0, 110.0, 120.0, 130.0, 140.0],
+        "opm": [0.1, 0.1, 0.1, 0.1, 0.1]
+    }
+    md = build_historical_context_md(fin)
+    
+    assert "### Quarterly Trend (most recent quarters" in md
+    assert "**Quarterly signals**:" in md
+    
+    # Check YoY calculation: Q5 (1400) vs Q1 (1000) -> 40.0%
+    assert "40.0%" in md
+    assert "10.0%" in md  # OPM
+    
+def test_quarterly_trend_absent_safe():
+    fin = _base_financials()
+    md = build_historical_context_md(fin)
+    assert "### Quarterly Trend" not in md
+    
+    # Also if fewer than 4 periods
+    fin["quarterly"] = {
+        "periods": ["Q1", "Q2", "Q3"],
+        "revenue": [1000.0, 1100.0, 1200.0]
+    }
+    md2 = build_historical_context_md(fin)
+    assert "### Quarterly Trend" not in md2
