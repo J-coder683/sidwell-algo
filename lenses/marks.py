@@ -426,29 +426,46 @@ def evaluate_marks_lens(
     }
 
     # 14. Patient opportunism — why now?
-    # Test: LLM verdict = "dislocation_present". Excluded (N/A) when unavailable, unclear, or low-confidence.
+    # Hybrid check: Hard path (drawdown >= 20% from 1y high) OR Soft path (LLM dislocation_present)
+    DISLOCATION_MIN = 0.20
+    price_high = financials.get("price_high_1y")
+    current_price = financials.get("current_price", 0)
+    hard_available = price_high is not None and current_price > 0
+    drawdown = (price_high - current_price) / price_high if hard_available else None
+    hard_dislocation = (drawdown is not None and drawdown >= DISLOCATION_MIN)
+
     wn = (qualitative_results or {}).get("why_now_signal", {}) or {}
     wn_verdict = wn.get("verdict")
     wn_confidence = wn.get("confidence")
-    wn_quote = (wn.get("evidence_quote") or "")[:300]
-    wn_event = (wn.get("specific_event") or "")[:200]
-    wn_notes = (wn.get("notes") or "")[:500]
-    wn_quote_str = f' Evidence: "{wn_quote}"' if wn_quote else ""
-    wn_conf_str = f" (confidence: {wn_confidence})" if wn_confidence else ""
-    check_14_passed, check_14_applicable, detail_14 = _scoring.resolve_soft(
-        q_status, wn_verdict, {"dislocation_present"},
-        confidence=wn_confidence,
-        pass_detail=f"Signal: {wn_verdict}{wn_conf_str}.{wn_quote_str} Event: {wn_event}. {wn_notes}",
-        fail_detail=f"Signal: {wn_verdict}{wn_conf_str}.{wn_quote_str} Event: {wn_event}. {wn_notes}",
-    )
+    llm_dislocation = (wn_verdict == "dislocation_present")
+    qual_available_for_check = (q_status == "available" and wn_verdict is not None and wn_confidence != "low" and wn_verdict not in ["unclear", "unknown", ""])
+
+    applicable = hard_available or qual_available_for_check
+    passed = applicable and (hard_dislocation or (qual_available_for_check and llm_dislocation))
+    proximity = _scoring.proximity(drawdown, DISLOCATION_MIN, "above") if hard_available else None
+
+    detail_parts = []
+    if hard_available:
+        detail_parts.append(f"Drawdown {drawdown*100:.1f}% from 1y high.")
+    if qual_available_for_check:
+        wn_quote = (wn.get("evidence_quote") or "")[:300]
+        wn_event = (wn.get("specific_event") or "")[:200]
+        wn_notes = (wn.get("notes") or "")[:500]
+        wn_quote_str = f' Evidence: "{wn_quote}"' if wn_quote else ""
+        wn_conf_str = f" (confidence: {wn_confidence})" if wn_confidence else ""
+        detail_parts.append(f"Qual: {wn_verdict}{wn_conf_str}.{wn_quote_str} Event: {wn_event}. {wn_notes}")
+        
+    detail = " ".join(detail_parts).strip() if applicable else "N/A — no price history and qualitative signal unavailable/unclear; excluded from denominator"
+
     checks["14_why_now"] = {
         "name": "Patient opportunism (why now)",
-        "metric_name": "LLM dislocation check",
-        "value": wn_verdict,
-        "threshold_str": "verdict = dislocation_present",
-        "passed": check_14_passed,
-        "applicable": check_14_applicable,
-        "detail": detail_14,
+        "metric_name": "Drawdown or LLM dislocation",
+        "value": f"{drawdown*100:.1f}% / {wn_verdict}" if hard_available and qual_available_for_check else (f"{drawdown*100:.1f}%" if hard_available else wn_verdict),
+        "threshold_str": ">= 20% drawdown OR verdict = dislocation_present",
+        "passed": passed,
+        "applicable": applicable,
+        "proximity": proximity,
+        "detail": detail,
         "part": "D",
     }
 

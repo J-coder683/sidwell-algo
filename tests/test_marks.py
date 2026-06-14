@@ -357,30 +357,54 @@ def test_check13_management_humility_unavailable_excluded():
     assert check13["passed"] is False
 
 
-def test_check14_why_now_pass():
-    """LLM verdict = dislocation_present → PASS."""
+def test_check14_why_now_hard_only_pass():
+    """No qual, but price_high_1y gives >=20% drawdown -> PASS & applicable."""
+    fin = get_base_financials()
+    fin["current_price"] = 75.0
+    fin["price_high_1y"] = 100.0  # 25% drawdown
+    dcf = get_base_dcf()
+    res = evaluate_marks_lens(fin, dcf)
+    check = res["checks"]["14_why_now"]
+    assert check["applicable"] is True
+    assert check["passed"] is True
+    assert "Drawdown 25.0%" in check["detail"]
+
+
+def test_check14_why_now_soft_only_pass():
+    """No price_high_1y, but LLM dislocation_present -> PASS & applicable."""
     fin = get_base_financials()
     dcf = get_base_dcf()
     qual = _make_full_qualitative(why_now_verdict="dislocation_present")
     res = evaluate_marks_lens(fin, dcf, qualitative_results=qual)
-    assert res["checks"]["14_why_now"]["passed"] is True
+    check = res["checks"]["14_why_now"]
+    assert check["applicable"] is True
+    assert check["passed"] is True
+    assert "Qual: dislocation_present" in check["detail"]
 
 
-def test_check14_why_now_fail():
-    """LLM verdict = normal_cycle → FAIL."""
+def test_check14_why_now_both_pass():
+    """Both hard and soft paths pass."""
     fin = get_base_financials()
+    fin["current_price"] = 70.0
+    fin["price_high_1y"] = 100.0
     dcf = get_base_dcf()
-    qual = _make_full_qualitative(why_now_verdict="normal_cycle")
+    qual = _make_full_qualitative(why_now_verdict="dislocation_present")
     res = evaluate_marks_lens(fin, dcf, qualitative_results=qual)
-    assert res["checks"]["14_why_now"]["passed"] is False
+    check = res["checks"]["14_why_now"]
+    assert check["applicable"] is True
+    assert check["passed"] is True
+    assert "Drawdown 30.0%" in check["detail"]
+    assert "Qual: dislocation_present" in check["detail"]
 
 
-def test_check14_why_now_unavailable_defaults_fail():
-    """No qualitative → why-now defaults FAIL."""
+def test_check14_why_now_neither_excluded():
+    """No qual, and no hard path -> N/A excluded."""
     fin = get_base_financials()
     dcf = get_base_dcf()
     res = evaluate_marks_lens(fin, dcf)
-    assert res["checks"]["14_why_now"]["passed"] is False
+    check = res["checks"]["14_why_now"]
+    assert check["applicable"] is False
+    assert check["passed"] is False
 
 
 # ---------------------------------------------------------------------------

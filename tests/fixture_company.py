@@ -12,6 +12,7 @@ FIXTURE_MACRO = {
 FIXTURE_INPUTS = {
     "ticker": "FICTITIOUS.NS",
     "current_price": 50.0,
+    "price_high_1y": 65.0,  # 23% drawdown to trigger Marks check 14 hard path
     "shares_outstanding": 10.0,
     "market_cap": 500.0,
     "years": ["2022-12-31", "2023-12-31", "2024-12-31", "2025-12-31"],

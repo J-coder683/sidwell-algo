@@ -307,10 +307,10 @@ _Part C — Risk Architecture: **4/4 passed**_
 - **This company**: Signal: humble (confidence: high). Evidence: "We cannot give you a 3-year number with integrity [fixture_concall.pdf]" Management declines multi-year forecast; acknowledges raw material visibility limited to 2 quarters; references two past allocation errors by name.
 - **Verdict**: Passed — the result clears the bar (verdict = humble).
 
-#### ✅ 14. Patient opportunism (why now)
+#### ✅ 14. Patient opportunism (why now) `[Pass: +0.15]`
 - **What this measures**: Marks's "best returns follow chaos" (echoed by Marc Rowan at Apollo). The Marks lens does not just want a cheap company — it wants a cheap company AT THE RIGHT MOMENT. Buying a quality business 25% off in a normal market is a Buffett trade. Buying it 50% off in a panic when the seller is forced is a Marks trade. This check is the temporal version of "why now" — and is the most important of the three soft checks. Skip this and the lens becomes generic value investing.
-- **This company**: Signal: dislocation_present (confidence: high). Evidence: "Sector de-rated 25% in 12 months on input cost fears [fixture_concall.pdf]" Event: Post-Q3 FY26 commodity-cost shock has compressed multiples temporarily.. Sector has de-rated 25% in trailing 12 months; entry timing favorable due to forced selling from FII redemptions, not fundamental deterioration.
-- **Verdict**: Passed — the result clears the bar (verdict = dislocation_present).
+- **This company**: Drawdown 23.1% from 1y high. Qual: dislocation_present (confidence: high). Evidence: "Sector de-rated 25% in 12 months on input cost fears [fixture_concall.pdf]" Event: Post-Q3 FY26 commodity-cost shock has compressed multiples temporarily.. Sector has de-rated 25% in trailing 12 months; entry timing favorable due to forced selling from FII redemptions, not fundamental deterioration.
+- **Verdict**: Passed — the result clears the bar (>= 20% drawdown OR verdict = dislocation_present).
 
 
 _Part D — Second-Level Thinking & Contrarianism: **3/3 passed**_

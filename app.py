@@ -730,7 +730,7 @@ def _verdict_pill_html(verdict: str) -> str:
     return f'<span class="verdict-pill {css}">{verdict or "?"}</span>'
 
 
-def _render_check(check_id: str, check_dict: dict):
+def _render_check(check_id: str, check_dict: dict, ticker: str = None):
     """Render a single check row using the 3-part explanation card."""
     from reports.explain import build_check_explanation
     expl = build_check_explanation(check_id, check_dict)
@@ -772,11 +772,25 @@ def _render_check(check_id: str, check_dict: dict):
             f'{prox_str}</span>'
         )
 
+    prob_badge_html = ""
+    if ticker and check_id in ("12_margin_of_safety", "1_deep_mos"):
+        mc = st.session_state.get(f"mc_{ticker}")
+        if mc and mc.get("applicable"):
+            prob = mc.get("prob_intrinsic_gt_price")
+            if prob is not None:
+                prob_badge_html = (
+                    f'<span style="margin-left: 8px; font-size: 0.75rem; padding: 2px 6px; '
+                    f'border-radius: 4px; background: var(--surface-2); color: var(--ink); '
+                    f'border: 1px solid var(--border); '
+                    f'font-weight: 500;">'
+                    f'P(intrinsic &gt; price) = {prob:.0%}</span>'
+                )
+
     st.markdown(
         f'<div class="check-row-container">'
         f'<div class="check-dot {dot_class}"></div>'
         f'<div style="font-weight: 500; font-family: var(--font-ui); color: var(--ink); opacity: {title_opacity};">'
-        f'{expl["title"]} {badge_html}<span style="opacity:0.6; font-style:italic; font-weight:400; margin-left:6px;">— {tag_pts}</span></div>'
+        f'{expl["title"]} {badge_html}{prob_badge_html}<span style="opacity:0.6; font-style:italic; font-weight:400; margin-left:6px;">— {tag_pts}</span></div>'
         f'</div>',
         unsafe_allow_html=True
     )
@@ -893,7 +907,7 @@ def _render_lens_tab(lens_results: dict, lens_key: str, financials: dict,
         na_suffix = f" &nbsp;·&nbsp; {na_count} N/A" if na_count else ""
         st.markdown(f"**Part {part_id}** &nbsp; {passed_count}/{total_count} checks passed{na_suffix}")
         for check_id, check_dict in part_checks:
-            _render_check(check_id, check_dict)
+            _render_check(check_id, check_dict, ticker)
 
     # ---- PDF export ----
     st.divider()
@@ -1118,6 +1132,8 @@ def _render_dcf_tab(results: dict):
                 qualitative_results=qual,
                 n=500  # fast offline default
             )
+            
+            st.session_state[f"mc_{ticker}"] = mc
             
             if not mc.get("applicable"):
                 st.info(f"N/A — {mc.get('reason')}")

@@ -126,10 +126,10 @@ These checks answer: *do I have variant perception, and is the trade contrarian-
 **Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine hubris read counts as a failure.
 
 #### 14. Patient opportunism — is now actually the right time?
-**Test (soft, LLM-based):** Gemini synthesizes Parts A, B, and the qualitative input to answer: *is now the moment of forced selling or temporary dislocation that creates opportunity, or is this just normal-cycle consensus pricing?* PASS if specific dislocation present (post-shock, post-distress, post-management-change, post-regulatory event). FAIL if entry would be at "normal" valuations during normal markets.
+**Test (hybrid):** Hard path: `(price_high_1y - current_price) / price_high_1y >= 0.20` (drawdown >= 20% from 1y high). Soft path (LLM-based): Gemini synthesizes Parts A, B, and the qualitative input to answer: *is now the moment of forced selling or temporary dislocation that creates opportunity, or is this just normal-cycle consensus pricing?* PASS if either the hard drawdown test passes OR specific qualitative dislocation present (post-shock, post-distress, post-management-change, post-regulatory event). FAIL if neither fires and the qualitative read explicitly says "normal" valuations during normal markets.
 **Logic:** Marks's *"best returns follow chaos"* (echoed by Marc Rowan at Apollo). The Marks lens does not just want a cheap company — it wants a cheap company AT THE RIGHT MOMENT. Buying a quality business 25% off in a normal market is a Buffett trade. Buying it 50% off in a panic when the seller is forced is a Marks trade. This check is the temporal version of "why now" — and is the most important of the three soft checks. *Skip this and the lens becomes generic value investing.*
 **Source:** Oaktree memo "On Bubble Watch" (2024); Master_Investment_Compendium.md Part 7.6 ("the discipline of why now"); Knowledge at Wharton, Marc Rowan (2009).
-**Determinism note:** LLM-dependent. Excluded from the denominator (marked N/A) when qualitative unavailable or unclear. A genuine "no dislocation" read counts as a failure.
+**Determinism note:** Hybrid check. If price history is available, the quantitative drawdown is measured directly and the check scores. If price history is absent, it falls back to LLM-dependent read. Excluded from the denominator (marked N/A) only when BOTH price history is missing AND qualitative is unavailable or unclear.
 
 ---
 

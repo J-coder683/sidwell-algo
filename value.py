@@ -101,6 +101,15 @@ def analyze(
     # Step 1: Fetch Financials and Market Pricing
     financials = public.fetch_financials(ticker)
 
+    try:
+        from data.stooq import fetch_price_history
+        _ph = fetch_price_history(ticker)            # DataFrame[Date, Close], empty on failure
+        if _ph is not None and not _ph.empty:
+            _closes = _ph["Close"].tail(252)         # ~1 trading year
+            financials["price_high_1y"] = float(_closes.max())
+    except Exception as e:
+        logger.warning(f"Price history unavailable for {ticker}: {e}")
+
     # Step 2: Fetch Risk-Free Rate from FRED
     rf_rate = public.fetch_risk_free_rate(ticker)
 

@@ -155,6 +155,7 @@ def test_marks_non_bank_denominator():
     res = evaluate_marks_lens(
         _non_bank_financials(), dcf, qualitative_results=_make_unavailable_qualitative()
     )
-    # Soft 5,11,12,13,14 N/A with qualitative unavailable → 14 - 5 = 9.
-    assert res["max_score"] == 9
+    # Soft 5,11,12,13 N/A with qualitative unavailable -> 14 - 4 = 10.
+    # (Check 14 now applies because price_high_1y is in FIXTURE_INPUTS).
+    assert res["max_score"] == 10
     assert "applicable" not in res["checks"]["1_deep_mos"]
