@@ -3,10 +3,22 @@ import time
 import json
 import logging
 
+from data import remote_cache
+
 CACHE_DIR = os.path.expanduser("~/.sidwell/cache")
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 logger = logging.getLogger("sidwell.cache")
+
+# Keys eligible for the remote (L2) persistence tier. Only the expensive
+# DeepSeek qualitative result is persisted remotely for now; every other entry
+# is a sub-second scrape that stays in the local file cache. Widen this tuple to
+# extend L2 coverage (e.g. add "financials_") — no other change required.
+_REMOTE_PREFIXES = ("qualitative_",)
+
+
+def _remote_eligible(key: str) -> bool:
+    return key.startswith(_REMOTE_PREFIXES)
 
 def get_cache_path(key: str) -> str:
     """
@@ -53,19 +65,41 @@ def set_bytes(key: str, data: bytes) -> str:
 def get_json(key: str, ttl_seconds: int) -> dict | None:
     """
     Retrieve JSON data from cache if it exists and is not expired.
+
+    Two-tier: the local file cache (L1) is checked first. On an L1 miss for a
+    remote-eligible key, the Supabase L2 tier is consulted; a remote hit is
+    written through to L1 so subsequent reads in the same container are local.
+    L2 is a no-op when unconfigured, so this reduces to file-only behavior.
     """
     raw = get_bytes(key, ttl_seconds)
-    if raw is None:
-        return None
-    try:
-        return json.loads(raw.decode("utf-8"))
-    except Exception as e:
-        logger.warning(f"Failed to decode cached JSON for key {key}: {e}")
-        return None
+    if raw is not None:
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except Exception as e:
+            logger.warning(f"Failed to decode cached JSON for key {key}: {e}")
+            return None
+
+    # L1 miss → try the remote tier for eligible keys.
+    if _remote_eligible(key):
+        remote_val = remote_cache.get(key, ttl_seconds)
+        if remote_val is not None:
+            # Write through to L1 only (set_bytes, not set_json) so we don't echo
+            # the value straight back to L2.
+            try:
+                set_bytes(key, json.dumps(remote_val, indent=2, default=str).encode("utf-8"))
+            except Exception as e:
+                logger.warning(f"Write-through to L1 failed for {key}: {e}")
+            return remote_val
+
+    return None
 
 def set_json(key: str, data: dict) -> str:
     """
-    Save dict as JSON to cache.
+    Save dict as JSON to cache (L1), and mirror to the remote L2 tier for
+    remote-eligible keys. The remote write is best-effort and never raises.
     """
     raw = json.dumps(data, indent=2, default=str).encode("utf-8")
-    return set_bytes(key, raw)
+    path = set_bytes(key, raw)
+    if _remote_eligible(key):
+        remote_cache.set(key, data)
+    return path
