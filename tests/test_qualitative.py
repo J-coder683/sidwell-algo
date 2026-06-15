@@ -8,7 +8,15 @@ from analysis.qualitative import (
     PROMPT_VERSION,
     _extract_html,
     _select_documents,
+    _safe_json_loads,
 )
+
+
+def test_safe_json_loads_strict_and_lenient():
+    assert _safe_json_loads('{"a": 1}') == {"a": 1}                    # strict path
+    assert _safe_json_loads('{"a": 1,}') == {"a": 1}                   # trailing comma
+    assert _safe_json_loads('{\n  // note\n  "a": [1, 2,]\n}') == {"a": [1, 2]}  # // line + trailing comma
+    assert _safe_json_loads('{"u": "https://x.com/y"}') == {"u": "https://x.com/y"}  # URL // preserved
 
 # All tests are OFFLINE: the OpenAI/DeepSeek client, PDF fetch (requests) and
 # pdfplumber are mocked so the suite never makes a network or LLM call.

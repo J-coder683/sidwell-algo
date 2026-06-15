@@ -1,4 +1,4 @@
-# Stage 1 Qualitative Extraction Prompt v0.15
+# Stage 1 Qualitative Extraction Prompt v0.16
 
 You are an investment analyst extracting structured insights from company
 documents. Read all the documents provided below. Return ONLY a JSON object
@@ -189,6 +189,7 @@ If a "Quarterly Trend" table is present, use it to ground `cycle_position` with 
 - Cite source documents by filename exactly as provided.
 - Keep text fields concise. Max 2 sentences for items; max 5 sentences for paragraphs. EXCEPTION: the `evidence_pack` fields must be comprehensive (5-10 sentences each, richly quoted) — the lens analysts see nothing else.
 - Do NOT include any text outside the JSON object.
+- **STRICT JSON — this is critical, a single mistake breaks the entire parse**: Return strictly valid RFC-8259 JSON. Inside any string value (especially verbatim quotes and `key_quotes`), do NOT use literal double-quote characters `"` — render quoted phrases with single quotes `'` instead. Do NOT emit `//` comments, trailing commas, or literal newlines inside string values.
 
 ## Documents
 

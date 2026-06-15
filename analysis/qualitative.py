@@ -14,6 +14,7 @@ couldn't complete without a credit/debit card on file. Gemini spend cap raised
 work preserved — only the LLM client layer reverts.
 """
 import os
+import re
 import time
 import json
 import logging
@@ -29,11 +30,24 @@ from data import cache
 
 logger = logging.getLogger("sidwell.analysis.qualitative")
 
+
+def _safe_json_loads(content: str):
+    """Parse model JSON, tolerating two things DeepSeek occasionally emits:
+    trailing commas before } or ], and // line-comments on their OWN line
+    (URL-safe: only strips lines whose first non-space chars are //). Tries strict
+    first. Raises json.JSONDecodeError if still unparseable so callers degrade."""
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        cleaned = re.sub(r"(?m)^[ \t]*//.*$", "", content)          # whole-line // comments only
+        cleaned = re.sub(r",(\s*[}\]])", r"\1", cleaned)            # trailing commas
+        return json.loads(cleaned)
+
 QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
 # v0.7.6.4: Swapped Gemini 3.5 Flash → DeepSeek V4 Pro.
 # DeepSeek provides superior reasoning for qualitative metrics with a 1M token window.
 MODEL_NAME = "deepseek-v4-pro"
-PROMPT_VERSION = "v0.15"  # v0.15: comprehensive evidence_pack (stage-2 lenses see only this)
+PROMPT_VERSION = "v0.16"  # v0.16: strict-JSON rule (single quotes inside strings) to stop parse breaks
 
 def _get_mode() -> str:
     try:
@@ -416,7 +430,7 @@ def _call_deepseek(documents_text: str, ticker: str, historical_context: str = "
         elif content.startswith("```"):
             content = content.split("```")[1].rsplit("```", 1)[0].strip()
 
-        return json.loads(content)
+        return _safe_json_loads(content)
     except json.JSONDecodeError as e:
         logger.error(f"DeepSeek stream for {ticker} returned invalid JSON after {chars} chars: {e}")
         return _unavailable(f"DeepSeek response not valid JSON: {e}")
@@ -501,7 +515,7 @@ def _call_stage1(documents_text: str, ticker: str, historical_context: str = "",
         elif content.startswith("```"):
             content = content.split("```")[1].rsplit("```", 1)[0].strip()
 
-        return json.loads(content)
+        return _safe_json_loads(content)
     except json.JSONDecodeError as e:
         logger.error(f"Stage 1 stream for {ticker} returned invalid JSON after {chars} chars: {e}")
         return _unavailable(f"Stage 1 response not valid JSON: {e}")
@@ -556,7 +570,7 @@ def _call_stage2(lens: str, evidence_pack: dict, ticker: str, historical_context
         elif content.startswith("```"):
             content = content.split("```")[1].rsplit("```", 1)[0].strip()
 
-        return json.loads(content)
+        return _safe_json_loads(content)
     except Exception as e:
         logger.error(f"Stage 2 call failed for {lens}/{ticker}: {e}")
         return {}
