@@ -1905,7 +1905,7 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
     is_india_hero = ticker.endswith(".NS") or ticker.endswith(".BO")
     cur_str = "₹" if is_india_hero else "$"
     price_val = dcf_results["current_price"]
-    mcap_val = financials.get("market_cap", 0) / 1e9
+    mcap_val = (financials.get("market_cap") or 0) / 1e9  # market_cap may be None (GOOGL on Cloud)
 
     st.markdown(
         f'<div class="hero-band">'
