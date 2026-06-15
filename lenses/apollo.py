@@ -51,7 +51,7 @@ def evaluate_apollo_lens(financials: dict, dcf_results: dict, qualitative_result
     ebit_4y = financials["ebit"]
     fcf_4y = financials["fcf"]
     debt = financials["debt"][-1]
-    market_cap = financials["market_cap"]
+    market_cap = financials["market_cap"] or 0  # may be None (e.g. GOOGL on Cloud)
     target_industry = dcf_results["assumptions"].get("target_industry", "Unknown")
     
     ebitda_4y = [(ebit_4y[i] or 0.0) + (financials["depreciation"][i] or 0.0) for i in range(4)]

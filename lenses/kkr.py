@@ -36,7 +36,7 @@ def evaluate_kkr_lens(financials: dict, dcf_results: dict, qualitative_results: 
     tax_4y = financials["tax_provision"]
     pretax_4y = financials["pretax_income"]
     debt = financials["debt"][-1]
-    market_cap = financials["market_cap"]
+    market_cap = financials["market_cap"] or 0  # may be None (e.g. GOOGL on Cloud)
     target_industry = dcf_results["assumptions"].get("target_industry", "Unknown")
     
     # Calculate EBITDA

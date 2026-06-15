@@ -156,9 +156,11 @@ def evaluate_marks_lens(
     # v0.3 simplified: use latest total equity as proxy for tangible book.
     # Test: equity / market_cap > 0.30
     latest_equity = hist_total_equity[-1]
-    if market_cap > 0:
+    if market_cap and market_cap > 0:
         tangible_book_ratio = latest_equity / market_cap
     else:
+        # market_cap can be None (e.g. GOOGL on Streamlit Cloud, where the scraper
+        # returns no market cap) — treat as unavailable and degrade, don't crash.
         tangible_book_ratio = 0.0
     TB_RATIO_MIN = 0.30
     check_3_passed = tangible_book_ratio > TB_RATIO_MIN

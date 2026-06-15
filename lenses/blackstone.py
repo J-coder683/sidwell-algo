@@ -28,7 +28,7 @@ def evaluate_blackstone_lens(financials: dict, dcf_results: dict, qualitative_re
     fcf_4y = financials["fcf"]
     gp_4y = financials["gross_profit"]
     debt = financials["debt"][-1]
-    market_cap = financials["market_cap"]
+    market_cap = financials["market_cap"] or 0  # may be None (e.g. GOOGL on Cloud)
     target_industry = dcf_results["assumptions"].get("target_industry", "Unknown")
     
     ebitda_4y = [(ebit_4y[i] or 0.0) + (financials["depreciation"][i] or 0.0) for i in range(4)]
