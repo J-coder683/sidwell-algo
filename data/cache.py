@@ -14,7 +14,7 @@ logger = logging.getLogger("sidwell.cache")
 # DeepSeek qualitative result is persisted remotely for now; every other entry
 # is a sub-second scrape that stays in the local file cache. Widen this tuple to
 # extend L2 coverage (e.g. add "financials_") — no other change required.
-_REMOTE_PREFIXES = ("qualitative_",)
+_REMOTE_PREFIXES = ("qualitative_", "qualpack_", "quallens_")
 
 
 def _remote_eligible(key: str) -> bool:

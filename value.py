@@ -196,7 +196,7 @@ def analyze(
 
     qualitative_results = qualitative.extract_qualitative(
         ticker, docs, historical_context=hist_ctx, research_docs=(research_docs or None),
-        stream_cb=_emit_stream,
+        stream_cb=_emit_stream, lenses_to_run=lenses_to_run
     )
 
     _emit_progress(3, 5, "Running DCF valuation")

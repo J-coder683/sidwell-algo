@@ -1702,6 +1702,22 @@ with st.sidebar:
 
     st.divider()
 
+    # ---- Lens Selection ----
+    _lens_options = {"buffett": "Buffett", "marks": "Howard Marks", "kkr": "KKR", "blackstone": "Blackstone", "apollo": "Apollo"}
+    _all_lenses = list(_lens_options.keys())
+    
+    st.multiselect(
+        "Lenses to run",
+        options=_all_lenses,
+        default=st.session_state.get("selected_lenses", _all_lenses),
+        format_func=lambda x: _lens_options.get(x, x),
+        key="_lens_ui"
+    )
+    selected_lenses = st.session_state.get("_lens_ui", _all_lenses)
+    if not selected_lenses:
+        selected_lenses = _all_lenses
+    st.session_state["selected_lenses"] = selected_lenses
+
     research_files = st.file_uploader(
         "Equity research report (optional, max 2 PDFs)",
         type=["pdf"],
@@ -1812,7 +1828,7 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
     # cache hit and buffered UI updates on a miss, so stages never animated. A
     # session-state cache keeps repeat runs of the same ticker instant; the backend's
     # own file caches (prices 24h, qualitative 30d) still prevent re-scrape / re-LLM.
-    _pl_key = (ticker, research_tuple)
+    _pl_key = (ticker, research_tuple, tuple(sorted(selected_lenses)))
     if st.session_state.get("_pl_key") == _pl_key and st.session_state.get("_pl_result") is not None:
         results = st.session_state["_pl_result"]
         status_ui.update(label=f"Analysis complete — {ticker}", state="complete", expanded=False)
@@ -1821,7 +1837,7 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
         value.set_stream_callback(_on_stream)
         try:
             research_docs = [{"filename": n, "bytes": b} for n, b in research_tuple] or None
-            results = analyze(ticker, research_docs=research_docs)
+            results = analyze(ticker, lenses_to_run=selected_lenses, research_docs=research_docs)
             st.session_state["_pl_key"] = _pl_key
             st.session_state["_pl_result"] = results
             status_ui.update(label=f"Analysis complete — {ticker}", state="complete", expanded=False)
@@ -1861,11 +1877,11 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
         except Exception as e:
             st.warning(f"Could not apply your assumptions ({e}); showing Sidwell's base case.")
     qualitative_results = results["qualitative_results"]
-    buffett_results = results["buffett_results"]
-    marks_results = results["marks_results"]
-    kkr_results = results["kkr_results"]
-    blackstone_results = results["blackstone_results"]
-    apollo_results = results["apollo_results"]
+    buffett_results = results.get("buffett_results")
+    marks_results = results.get("marks_results")
+    kkr_results = results.get("kkr_results")
+    blackstone_results = results.get("blackstone_results")
+    apollo_results = results.get("apollo_results")
 
     # ---- Qualitative status banner ----
     if qualitative_results.get("status") == "available":
@@ -1948,33 +1964,46 @@ if analyze_btn or ("_last_ticker" in st.session_state and st.session_state["_las
     st.markdown(sc_html, unsafe_allow_html=True)
 
     # ---- Tabs ----
-    tabs = st.tabs([
-        "DCF Valuation",
-        "Buffett",
-        "Marks",
-        "KKR",
-        "Blackstone",
-        "Apollo",
-        "🧪 Metric Lab",
-    ])
-
+    tab_labels = ["DCF Valuation"]
+    lens_names = {"buffett": "Buffett", "marks": "Marks", "kkr": "KKR", "blackstone": "Blackstone", "apollo": "Apollo"}
+    
+    active_lenses = [k for k in ["buffett", "marks", "kkr", "blackstone", "apollo"] if k in selected_lenses]
+    
+    for l_key in active_lenses:
+        tab_labels.append(lens_names[l_key])
+        
+    tab_labels.append("🧪 Metric Lab")
+    
+    tabs = st.tabs(tab_labels)
+    
     with tabs[0]:
         _render_dcf_tab(results)
 
-    with tabs[1]:
-        _render_lens_tab(buffett_results, "buffett", financials, dcf_results)
+    tab_idx = 1
+    if "buffett" in active_lenses:
+        with tabs[tab_idx]:
+            _render_lens_tab(buffett_results, "buffett", financials, dcf_results)
+        tab_idx += 1
 
-    with tabs[2]:
-        _render_lens_tab(marks_results, "marks", financials, dcf_results)
+    if "marks" in active_lenses:
+        with tabs[tab_idx]:
+            _render_lens_tab(marks_results, "marks", financials, dcf_results)
+        tab_idx += 1
 
-    with tabs[3]:
-        _render_lens_tab(kkr_results, "kkr", financials, dcf_results)
+    if "kkr" in active_lenses:
+        with tabs[tab_idx]:
+            _render_lens_tab(kkr_results, "kkr", financials, dcf_results)
+        tab_idx += 1
 
-    with tabs[4]:
-        _render_lens_tab(blackstone_results, "blackstone", financials, dcf_results)
+    if "blackstone" in active_lenses:
+        with tabs[tab_idx]:
+            _render_lens_tab(blackstone_results, "blackstone", financials, dcf_results)
+        tab_idx += 1
 
-    with tabs[5]:
-        _render_lens_tab(apollo_results, "apollo", financials, dcf_results)
+    if "apollo" in active_lenses:
+        with tabs[tab_idx]:
+            _render_lens_tab(apollo_results, "apollo", financials, dcf_results)
+        tab_idx += 1
 
-    with tabs[6]:
+    with tabs[tab_idx]:
         _render_metric_lab_tab(_peer_options())

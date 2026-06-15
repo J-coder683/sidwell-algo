@@ -33,7 +33,18 @@ QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
 # v0.7.6.4: Swapped Gemini 3.5 Flash → DeepSeek V4 Pro.
 # DeepSeek provides superior reasoning for qualitative metrics with a 1M token window.
 MODEL_NAME = "deepseek-v4-pro"
-PROMPT_VERSION = "v0.13"  # v0.13: added quarterly-trend context to Historical Anchor section
+PROMPT_VERSION = "v0.14"
+
+def _get_mode() -> str:
+    try:
+        import streamlit as st
+        m = st.secrets.get("QUALITATIVE_MODE")
+        if m: return m
+    except Exception:
+        pass
+    return os.getenv("QUALITATIVE_MODE", "monolithic")
+
+QUALITATIVE_MODE = _get_mode()
 
 # Maximum characters sent to Gemini for annual reports (smart-extracted).
 # Concalls use full-text — they are typically short (20-60 pages).
@@ -414,6 +425,143 @@ def _call_deepseek(documents_text: str, ticker: str, historical_context: str = "
         return _unavailable(f"DeepSeek error: {type(e).__name__}: {e}")
 
 
+
+def _call_stage1(documents_text: str, ticker: str, historical_context: str = "",
+                 stream_cb=None) -> dict:
+    try:
+        import streamlit as st
+        api_key = st.secrets.get("DEEPSEEK_API_KEY")
+    except Exception:
+        api_key = None
+        
+    if not api_key:
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+
+    if not api_key:
+        return _unavailable("DEEPSEEK_API_KEY not configured")
+
+    prompt_path = Path(__file__).parent / "prompts" / "stage1_extraction.md"
+    prompt_template = prompt_path.read_text(encoding="utf-8")
+    hist_prefix = f"{historical_context}\n\n" if historical_context else ""
+    prompt = f"{hist_prefix}{prompt_template}\n\n## Documents for {ticker}\n\n{documents_text}"
+
+    chars = 0
+    try:
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.deepseek.com",
+            timeout=600.0,
+        )
+        _t0 = time.perf_counter()
+        stream = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": "You are a top-tier Wall Street buy-side analyst. Output ONLY valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            stream=True,
+        )
+
+        parts = []
+        _last_emit = 0.0
+        for chunk in stream:
+            choices = getattr(chunk, "choices", None) or []
+            if not choices:
+                continue
+            delta = getattr(choices[0], "delta", None)
+            piece = getattr(delta, "content", None) if delta is not None else None
+            if not piece:
+                continue
+            parts.append(piece)
+            chars += len(piece)
+            if stream_cb is not None:
+                now = time.perf_counter()
+                if now - _last_emit >= 1.0:
+                    _last_emit = now
+                    try:
+                        stream_cb(chars)
+                    except Exception:
+                        pass
+
+        if stream_cb is not None:
+            try:
+                stream_cb(chars)
+            except Exception:
+                pass
+
+        _elapsed = time.perf_counter() - _t0
+        logger.info(
+            f"Stage 1 stream for {ticker} completed in {_elapsed:.1f}s "
+            f"(model={MODEL_NAME}, prompt_chars={len(prompt)}, response_chars={chars})"
+        )
+
+        content = "".join(parts).strip()
+        if content.startswith("```json"):
+            content = content.split("```json")[1].rsplit("```", 1)[0].strip()
+        elif content.startswith("```"):
+            content = content.split("```")[1].rsplit("```", 1)[0].strip()
+
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        logger.error(f"Stage 1 stream for {ticker} returned invalid JSON after {chars} chars: {e}")
+        return _unavailable(f"Stage 1 response not valid JSON: {e}")
+    except Exception as e:
+        logger.error(f"Stage 1 call failed for {ticker} after {chars} chars: {e}")
+        return _unavailable(f"Stage 1 error: {type(e).__name__}: {e}")
+
+def _call_stage2(lens: str, evidence_pack: dict, ticker: str, historical_context: str = "") -> dict:
+    try:
+        import streamlit as st
+        api_key = st.secrets.get("DEEPSEEK_API_KEY")
+    except Exception:
+        api_key = None
+        
+    if not api_key:
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+
+    if not api_key:
+        return {}
+
+    prompt_path = Path(__file__).parent / "prompts" / f"stage2_{lens}.md"
+    prompt_template = prompt_path.read_text(encoding="utf-8")
+    
+    evidence_pack_json = json.dumps(evidence_pack, indent=2)
+    prompt = prompt_template.replace("{evidence_pack_json}", evidence_pack_json).replace("{historical_context}", historical_context)
+
+    try:
+        client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.deepseek.com",
+            timeout=300.0,
+        )
+        _t0 = time.perf_counter()
+        resp = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": "You are a top-tier Wall Street buy-side analyst. Output ONLY valid JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            stream=False,
+        )
+        
+        content = resp.choices[0].message.content.strip()
+        _elapsed = time.perf_counter() - _t0
+        logger.info(
+            f"Stage 2 {lens} for {ticker} completed in {_elapsed:.1f}s "
+            f"(model={MODEL_NAME})"
+        )
+
+        if content.startswith("```json"):
+            content = content.split("```json")[1].rsplit("```", 1)[0].strip()
+        elif content.startswith("```"):
+            content = content.split("```")[1].rsplit("```", 1)[0].strip()
+
+        return json.loads(content)
+    except Exception as e:
+        logger.error(f"Stage 2 call failed for {lens}/{ticker}: {e}")
+        return {}
+
+
 # ─── Public API ───────────────────────────────────────────────────────────────
 
 MIN_USABLE_DOCS = 1
@@ -424,6 +572,7 @@ def extract_qualitative(
     historical_context: str = "",
     research_docs: list | None = None,
     stream_cb=None,
+    lenses_to_run: list | None = None,
 ) -> dict:
     """
     Run DeepSeek V4 Pro extraction across the documents.
@@ -482,10 +631,20 @@ def extract_qualitative(
     combined = hashlib.sha256(url_src.encode() + research_src).hexdigest()[:16]
     cache_key = f"qualitative_{ticker}_{combined}_{PROMPT_VERSION}.json"
 
-    cached = cache.get_json(cache_key, QUALITATIVE_CACHE_TTL)
-    if cached is not None:
-        logger.info(f"Loaded qualitative analysis for {ticker} from cache")
-        return cached
+    # Add selected lenses to cache key so we don't return a monolithic cache 
+    # that doesn't have the newly requested lenses if we change selection.
+    # Wait, the spec says "The new keys reuse the same `combined` doc-hash so selection changes reuse cached stage-1 + per-lens results." 
+    # It does not say to add lenses_to_run to the qualitative_ cache key. 
+    # I will stick to the exact cache_key as before, but if using monolithic fallback, it's just the combined hash.
+    # In two_stage mode the per-stage caches (qualpack_/quallens_) are the cache.
+    # The lens-agnostic monolithic cache_key would wrongly return a partial result
+    # built for a DIFFERENT lens selection (unselected lenses' signals = None), so
+    # skip it here and let the per-stage caches handle reuse.
+    if QUALITATIVE_MODE != "two_stage":
+        cached = cache.get_json(cache_key, QUALITATIVE_CACHE_TTL)
+        if cached is not None:
+            logger.info(f"Loaded qualitative analysis for {ticker} from cache")
+            return cached
 
     extracted_docs = []
     extraction_metadata_docs = []
@@ -591,8 +750,66 @@ def extract_qualitative(
     )
 
     logger.info(f"Sending {len(documents_text)} chars to DeepSeek for analysis. This may take a few minutes...")
-    result = _call_deepseek(documents_text, ticker, historical_context=historical_context,
-                            stream_cb=stream_cb)
+    
+    result = None
+    if QUALITATIVE_MODE == "two_stage":
+        try:
+            import concurrent.futures
+            
+            l2r = lenses_to_run if lenses_to_run is not None else ["buffett", "marks", "kkr", "blackstone", "apollo"]
+            
+            pack_key = f"qualpack_{ticker}_{combined}_{PROMPT_VERSION}.json"
+            stage1_res = cache.get_json(pack_key, QUALITATIVE_CACHE_TTL)
+            if not stage1_res:
+                stage1_res = _call_stage1(documents_text, ticker, historical_context=historical_context, stream_cb=stream_cb)
+                if stage1_res.get("status") != "unavailable":
+                    cache.set_json(pack_key, stage1_res)
+
+            if stage1_res.get("status") == "unavailable":
+                raise Exception("Stage 1 unavailable")
+
+            evidence_pack = stage1_res.get("evidence_pack", {})
+            
+            lens_results = {}
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                future_to_lens = {}
+                for lens in l2r:
+                    lens_key = f"quallens_{lens}_{ticker}_{combined}_{PROMPT_VERSION}.json"
+                    cached_lens = cache.get_json(lens_key, QUALITATIVE_CACHE_TTL)
+                    if cached_lens:
+                        lens_results[lens] = cached_lens
+                    else:
+                        future_to_lens[executor.submit(_call_stage2, lens, evidence_pack, ticker, historical_context)] = (lens, lens_key)
+                
+                for future in concurrent.futures.as_completed(future_to_lens):
+                    lens, lens_key = future_to_lens[future]
+                    res = future.result()
+                    if not res:
+                        raise Exception(f"Stage 2 failed to produce results for {lens}")
+                    lens_results[lens] = res
+                    cache.set_json(lens_key, res)
+
+            result = _unavailable("")
+            for k, v in stage1_res.items():
+                if k in result and k != "status" and k != "reason" and k != "evidence_pack":
+                    result[k] = v
+            
+            for lens, res in lens_results.items():
+                if res:
+                    for k, v in res.items():
+                        if k in result:
+                            result[k] = v
+                            
+            result["status"] = "available"
+            
+        except Exception as e:
+            logger.warning(f"Two-stage pipeline failed, falling back to monolithic: {e}")
+            result = None
+
+    if result is None or result.get("status") == "unavailable":
+        result = _call_deepseek(documents_text, ticker, historical_context=historical_context,
+                                stream_cb=stream_cb)
+
     if result.get("status") == "unavailable":
         return result
 
@@ -600,7 +817,10 @@ def extract_qualitative(
     result["model"] = MODEL_NAME
     result["documents_used"] = [d["filename"] for d in extracted_docs]
     result["extraction_metadata"] = {"documents": extraction_metadata_docs}
-    cache.set_json(cache_key, result)
+    # Only the monolithic path writes the lens-agnostic cache_key; two_stage relies
+    # on its per-stage caches so a selection change can't read back a stale partial.
+    if QUALITATIVE_MODE != "two_stage":
+        cache.set_json(cache_key, result)
     logger.info(f"Cached fresh qualitative analysis for {ticker} (DeepSeek/{MODEL_NAME})")
     return result
 
