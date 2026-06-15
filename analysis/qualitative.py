@@ -33,7 +33,7 @@ QUALITATIVE_CACHE_TTL = 30 * 24 * 60 * 60  # 30 days
 # v0.7.6.4: Swapped Gemini 3.5 Flash → DeepSeek V4 Pro.
 # DeepSeek provides superior reasoning for qualitative metrics with a 1M token window.
 MODEL_NAME = "deepseek-v4-pro"
-PROMPT_VERSION = "v0.14"
+PROMPT_VERSION = "v0.15"  # v0.15: comprehensive evidence_pack (stage-2 lenses see only this)
 
 def _get_mode() -> str:
     try:

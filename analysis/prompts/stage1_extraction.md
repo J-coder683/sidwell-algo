@@ -1,4 +1,4 @@
-# Stage 1 Qualitative Extraction Prompt v0.14
+# Stage 1 Qualitative Extraction Prompt v0.15
 
 You are an investment analyst extracting structured insights from company
 documents. Read all the documents provided below. Return ONLY a JSON object
@@ -26,12 +26,29 @@ matching the schema below — no preamble, no commentary, no markdown wrappers.
     "notes": "one paragraph (3-5 sentences)"
   },
   "evidence_pack": {
-    "governance_and_rpt": "neutral facts/quotes regarding related party transactions, promoter governance, etc. (max 3 sentences)",
-    "cyclical_indicators": "neutral facts/quotes regarding capacity utilization, pricing trends, demand (max 3 sentences)",
-    "capital_structure": "neutral facts/quotes regarding debt levels, liquidity, covenants, etc. (max 3 sentences)",
-    "workforce_model": "neutral facts/quotes regarding labor intensity, employee costs, unionization (max 3 sentences)",
-    "ma_and_fragmentation": "neutral facts/quotes regarding M&A strategy, industry consolidation, target availability (max 3 sentences)",
-    "capital_allocation": "neutral facts/quotes regarding dividends, buybacks, capex strategy (max 3 sentences)"
+    // CRITICAL: downstream per-lens analysts receive ONLY this evidence_pack — they
+    // NEVER see the source documents. So be COMPREHENSIVE and richly quoted, NOT terse.
+    // The "max sentences" limits in the Rules section do NOT apply to evidence_pack.
+    // Each field below should be a detailed paragraph (aim 5-10 sentences) packed with
+    // SPECIFIC facts, figures, and verbatim quotes (each quote followed by [filename]).
+    // State only neutral evidence — NO verdicts/scores (the lens analysts decide those).
+    // If the documents genuinely don't address a field, set it to "" — do not invent.
+    "business_model_and_moat": "What the company does; revenue mix and key customers; sources of competitive advantage (brand, network effects, switching costs, scale, regulatory barriers, IP); evidence of pricing power; how durable the model is against 20-year disruption/disintermediation.",
+    "competitive_position": "Market share and key competitors; where it is gaining or losing; structural threats (substitution, technology shifts, new entrants, regulation).",
+    "management_quality_and_candor": "Specific language patterns: partnership/owner framing, candor about mistakes, long-term vs short-term focus; whether they evade analyst Q&A, refuse specific guidance, blame macro, or make bold unprovable predictions; humility vs hubris. Quote the most telling lines.",
+    "governance_and_rpt": "Related-party transactions, promoter/insider ownership and behavior, board independence, ownership structure, alignment with minority holders, any governance red flags.",
+    "capital_allocation": "Dividend and buyback policy and history, capex strategy, M&A track record, reinvestment discipline, ROIC/returns commentary, any change in capital-return framework.",
+    "capital_structure_and_liquidity": "Debt levels and maturities, covenants, liquidity, refinancing risk, credit-rating commentary; for stressed names, the capital-structure tranches / which security is the fulcrum, and covenant-control potential.",
+    "cyclical_position": "Capacity utilization, pricing and volume trends, demand commentary, inventory, order book, sector M&A activity, and where the sector AND the company sit in their cycles.",
+    "structural_tailwinds": "Demographic, regulatory, or technology shifts that durably help or hurt the business; secular demand drivers and their evidence.",
+    "ma_and_fragmentation": "Industry consolidation/fragmentation, roll-up runway, target availability, and management's stated M&A appetite / platform ambitions.",
+    "workforce_model": "Labor intensity, employee cost as % of revenue, headcount trends, unionization, and operational-leverage potential from workforce/productivity changes.",
+    "working_capital": "Receivables/inventory/payables dynamics, customer advances, cash-conversion cycle, and any stated working-capital optimization plans.",
+    "multi_product_and_cross_sell": "Product/segment breadth, cross-sell/upsell and land-and-expand evidence, customer multi-product adoption.",
+    "variant_perception": "What analyst/market consensus believes about the company vs management's actual stated outlook; any specific non-consensus operational or financial mechanism (not a generic 'tailwind').",
+    "catalysts_and_dislocation": "Any why-now event — post-shock, post-distress, post-management-change, regulatory shift, special situation, forced selling — or explicitly 'no specific dislocation'.",
+    "seller_motivation": "Founder succession, corporate carve-out, distress, or other ownership-change signals, if present.",
+    "key_quotes": ["8-15 SHORT verbatim quotes (max 1 sentence each), each followed by [filename], that are the most decision-relevant lines across strategy, outlook, risk, governance, and capital allocation."]
   },
   "ajp": {
     "meta": {
@@ -170,7 +187,7 @@ If a "Quarterly Trend" table is present, use it to ground `cycle_position` with 
     - "low" = weak or indirect evidence; the documents barely address this topic
 - If a section has no findings, return an empty array (for list fields) or "unclear" / null (for verdict fields).
 - Cite source documents by filename exactly as provided.
-- Keep text fields concise. Max 2 sentences for items; max 5 sentences for paragraphs.
+- Keep text fields concise. Max 2 sentences for items; max 5 sentences for paragraphs. EXCEPTION: the `evidence_pack` fields must be comprehensive (5-10 sentences each, richly quoted) — the lens analysts see nothing else.
 - Do NOT include any text outside the JSON object.
 
 ## Documents
