@@ -60,6 +60,63 @@ def _get_mode() -> str:
 
 QUALITATIVE_MODE = _get_mode()
 
+
+# ─── Model router ─────────────────────────────────────────────────────────────
+# Per-stage model selection. Defaults keep stage-1 and stage-2 on DeepSeek-direct.
+# Override any stage — or any individual lens — via a secret WITHOUT a redeploy:
+#   MODEL_ROUTE_STAGE1        = "deepseek:deepseek-v4-pro"
+#   MODEL_ROUTE_STAGE2        = "nim:deepseek-ai/deepseek-v4"   (free on NVIDIA NIM)
+#   MODEL_ROUTE_STAGE2_APOLLO = "nim:qwen/qwen3.5"              (per-lens override)
+# Value format is "endpoint:model"; endpoint keys are defined in _ENDPOINTS below.
+# The monolithic fallback (_call_deepseek) is intentionally NOT routed — it stays
+# the known-good DeepSeek safety net so a bad route can never lose a result.
+_ENDPOINTS = {
+    # endpoint name -> (base_url, secret/env var holding its API key)
+    "deepseek": ("https://api.deepseek.com", "DEEPSEEK_API_KEY"),
+    "nim": ("https://integrate.api.nvidia.com/v1", "NVIDIA_NIM_API_KEY"),
+}
+_DEFAULT_ROUTES = {
+    "stage1": f"deepseek:{MODEL_NAME}",
+    "stage2": f"deepseek:{MODEL_NAME}",
+}
+
+
+def _get_secret(name: str):
+    """Read a secret from st.secrets (Streamlit Cloud / local) then env."""
+    try:
+        import streamlit as st
+        v = st.secrets.get(name)
+        if v:
+            return v
+    except Exception:
+        pass
+    return os.getenv(name)
+
+
+def _resolve_route(stage: str):
+    """Return (base_url, api_key, model, endpoint) for a pipeline stage.
+    For 'stage2_<lens>' the lookup is MODEL_ROUTE_STAGE2_<LENS> ->
+    MODEL_ROUTE_STAGE2 -> default; otherwise MODEL_ROUTE_<STAGE> -> default."""
+    spec = _get_secret(f"MODEL_ROUTE_{stage.upper()}")
+    default_key = stage
+    if not spec and stage.startswith("stage2_"):
+        spec = _get_secret("MODEL_ROUTE_STAGE2")
+        default_key = "stage2"
+    if not spec:
+        spec = _DEFAULT_ROUTES.get(default_key, _DEFAULT_ROUTES["stage1"])
+    endpoint, _, model = spec.partition(":")
+    base_url, key_name = _ENDPOINTS.get(endpoint, _ENDPOINTS["deepseek"])
+    return base_url, _get_secret(key_name), model, endpoint
+
+
+def _route_client(stage: str):
+    """Return (client_or_None, model, endpoint) for a stage. client is None when
+    the endpoint's API key is not configured."""
+    base_url, api_key, model, endpoint = _resolve_route(stage)
+    if not api_key:
+        return None, model, endpoint
+    return OpenAI(api_key=api_key, base_url=base_url, timeout=600.0), model, endpoint
+
 # Maximum characters sent to Gemini for annual reports (smart-extracted).
 # Concalls use full-text — they are typically short (20-60 pages).
 MAX_DOC_CHARS = 200_000
@@ -442,17 +499,9 @@ def _call_deepseek(documents_text: str, ticker: str, historical_context: str = "
 
 def _call_stage1(documents_text: str, ticker: str, historical_context: str = "",
                  stream_cb=None) -> dict:
-    try:
-        import streamlit as st
-        api_key = st.secrets.get("DEEPSEEK_API_KEY")
-    except Exception:
-        api_key = None
-        
-    if not api_key:
-        api_key = os.getenv("DEEPSEEK_API_KEY")
-
-    if not api_key:
-        return _unavailable("DEEPSEEK_API_KEY not configured")
+    client, model, endpoint = _route_client("stage1")
+    if client is None:
+        return _unavailable(f"API key not configured for endpoint '{endpoint}'")
 
     prompt_path = Path(__file__).parent / "prompts" / "stage1_extraction.md"
     prompt_template = prompt_path.read_text(encoding="utf-8")
@@ -461,14 +510,9 @@ def _call_stage1(documents_text: str, ticker: str, historical_context: str = "",
 
     chars = 0
     try:
-        client = OpenAI(
-            api_key=api_key,
-            base_url="https://api.deepseek.com",
-            timeout=600.0,
-        )
         _t0 = time.perf_counter()
         stream = client.chat.completions.create(
-            model=MODEL_NAME,
+            model=model,
             messages=[
                 {"role": "system", "content": "You are a top-tier Wall Street buy-side analyst. Output ONLY valid JSON."},
                 {"role": "user", "content": prompt}
@@ -506,7 +550,7 @@ def _call_stage1(documents_text: str, ticker: str, historical_context: str = "",
         _elapsed = time.perf_counter() - _t0
         logger.info(
             f"Stage 1 stream for {ticker} completed in {_elapsed:.1f}s "
-            f"(model={MODEL_NAME}, prompt_chars={len(prompt)}, response_chars={chars})"
+            f"(model={model}@{endpoint}, prompt_chars={len(prompt)}, response_chars={chars})"
         )
 
         content = "".join(parts).strip()
@@ -524,16 +568,8 @@ def _call_stage1(documents_text: str, ticker: str, historical_context: str = "",
         return _unavailable(f"Stage 1 error: {type(e).__name__}: {e}")
 
 def _call_stage2(lens: str, evidence_pack: dict, ticker: str, historical_context: str = "") -> dict:
-    try:
-        import streamlit as st
-        api_key = st.secrets.get("DEEPSEEK_API_KEY")
-    except Exception:
-        api_key = None
-        
-    if not api_key:
-        api_key = os.getenv("DEEPSEEK_API_KEY")
-
-    if not api_key:
+    client, model, endpoint = _route_client(f"stage2_{lens}")
+    if client is None:
         return {}
 
     prompt_path = Path(__file__).parent / "prompts" / f"stage2_{lens}.md"
@@ -543,14 +579,9 @@ def _call_stage2(lens: str, evidence_pack: dict, ticker: str, historical_context
     prompt = prompt_template.replace("{evidence_pack_json}", evidence_pack_json).replace("{historical_context}", historical_context)
 
     try:
-        client = OpenAI(
-            api_key=api_key,
-            base_url="https://api.deepseek.com",
-            timeout=300.0,
-        )
         _t0 = time.perf_counter()
         resp = client.chat.completions.create(
-            model=MODEL_NAME,
+            model=model,
             messages=[
                 {"role": "system", "content": "You are a top-tier Wall Street buy-side analyst. Output ONLY valid JSON."},
                 {"role": "user", "content": prompt}
@@ -562,7 +593,7 @@ def _call_stage2(lens: str, evidence_pack: dict, ticker: str, historical_context
         _elapsed = time.perf_counter() - _t0
         logger.info(
             f"Stage 2 {lens} for {ticker} completed in {_elapsed:.1f}s "
-            f"(model={MODEL_NAME})"
+            f"(model={model}@{endpoint})"
         )
 
         if content.startswith("```json"):

@@ -9,7 +9,24 @@ from analysis.qualitative import (
     _extract_html,
     _select_documents,
     _safe_json_loads,
+    _resolve_route,
 )
+
+
+def test_model_router_defaults_and_overrides(monkeypatch):
+    for k in ("MODEL_ROUTE_STAGE1", "MODEL_ROUTE_STAGE2", "MODEL_ROUTE_STAGE2_APOLLO"):
+        monkeypatch.delenv(k, raising=False)
+    # Default: stage-1 stays on DeepSeek-direct.
+    base, _key, _model, ep = _resolve_route("stage1")
+    assert ep == "deepseek" and "deepseek.com" in base
+    # stage2 override routes to NVIDIA NIM; a lens with no specific route inherits it.
+    monkeypatch.setenv("MODEL_ROUTE_STAGE2", "nim:deepseek-ai/deepseek-v4")
+    base, _key, model, ep = _resolve_route("stage2_buffett")
+    assert ep == "nim" and model == "deepseek-ai/deepseek-v4" and "nvidia.com" in base
+    # A per-lens override beats the stage2 default.
+    monkeypatch.setenv("MODEL_ROUTE_STAGE2_APOLLO", "nim:qwen/qwen3.5")
+    _base, _key, model, _ep = _resolve_route("stage2_apollo")
+    assert model == "qwen/qwen3.5"
 
 
 def test_safe_json_loads_strict_and_lenient():
